@@ -1,0 +1,408 @@
+/* no-text-wall design system — see the no-text-wall design decisions
+   #17 palette ownership, #18 token/component split, #19 theme, #20 toggle contract.
+
+   Token budget: 12 custom properties. No spacing or type-scale tokens are
+   exposed — every knob here is a document component, not a utility, so a
+   template author picks a component, not a set of properties (#18).
+
+   Theme contract (#20, read by page-level JS, not by this file):
+     - root attribute `data-theme="light"` or `data-theme="dark"` overrides
+       the OS preference; absence of the attribute follows the OS.
+     - persisted under the shared localStorage key `no-text-wall:theme`.
+   Print always forces light (#19) regardless of `data-theme`.
+*/
+
+:root {
+  --ntw-bg: #fafaf9;
+  --ntw-bg-elevated: #ffffff;
+  --ntw-fg: #1c1c1a;
+  --ntw-fg-muted: #6b6b66;
+  --ntw-border: #e0e0dc;
+  --ntw-accent: #2f6f4f;       /* neutral decorative accent — muted forest green, distinct from --ntw-success (#17: accent vs. success must not collide) */
+  --ntw-accent-contrast: #ffffff;
+  --ntw-success: #16a34a;
+  --ntw-warning: #b45309;
+  --ntw-danger: #dc2626;
+  --ntw-info: #2563eb;
+  --ntw-radius: 8px;
+  --ntw-verdict-bg: #eef6f1;
+  --ntw-code-bg: #f2f1ee;
+
+  /* Categorical series — charts only, never reused for semantic meaning (#17). */
+  --ntw-cat-1: #2563eb;
+  --ntw-cat-2: #d97706;
+  --ntw-cat-3: #7c3aed;
+  --ntw-cat-4: #0891b2;
+  --ntw-cat-5: #be185d;
+  --ntw-cat-6: #65a30d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ntw-bg: #1a1a18;
+    --ntw-bg-elevated: #242422;
+    --ntw-fg: #e8e8e4;
+    --ntw-fg-muted: #a3a39c;
+    --ntw-border: #3a3a36;
+    --ntw-accent: #6fbf94;
+    --ntw-accent-contrast: #0d1f16;
+    --ntw-success: #4ade80;
+    --ntw-warning: #fbbf24;
+    --ntw-danger: #f87171;
+    --ntw-info: #60a5fa;
+    --ntw-verdict-bg: #163022;
+    --ntw-code-bg: #1e1e1c;
+
+    --ntw-cat-1: #60a5fa;
+    --ntw-cat-2: #fbbf24;
+    --ntw-cat-3: #a78bfa;
+    --ntw-cat-4: #22d3ee;
+    --ntw-cat-5: #f472b6;
+    --ntw-cat-6: #a3e635;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ntw-bg: #1a1a18;
+  --ntw-bg-elevated: #242422;
+  --ntw-fg: #e8e8e4;
+  --ntw-fg-muted: #a3a39c;
+  --ntw-border: #3a3a36;
+  --ntw-accent: #6fbf94;
+  --ntw-accent-contrast: #0d1f16;
+  --ntw-success: #4ade80;
+  --ntw-warning: #fbbf24;
+  --ntw-danger: #f87171;
+  --ntw-info: #60a5fa;
+  --ntw-verdict-bg: #163022;
+  --ntw-code-bg: #1e1e1c;
+
+  --ntw-cat-1: #60a5fa;
+  --ntw-cat-2: #fbbf24;
+  --ntw-cat-3: #a78bfa;
+  --ntw-cat-4: #22d3ee;
+  --ntw-cat-5: #f472b6;
+  --ntw-cat-6: #a3e635;
+}
+
+@media print {
+  :root {
+    --ntw-bg: #ffffff;
+    --ntw-bg-elevated: #ffffff;
+    --ntw-fg: #1c1c1a;
+    --ntw-fg-muted: #4a4a46;
+    --ntw-border: #cfcfc9;
+    --ntw-accent: #2f6f4f;
+    --ntw-accent-contrast: #ffffff;
+    --ntw-success: #166534;
+    --ntw-warning: #92400e;
+    --ntw-danger: #991b1b;
+    --ntw-info: #1e40af;
+    --ntw-verdict-bg: #eef6f1;
+    --ntw-code-bg: #f2f1ee;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 24px 16px;
+  background: var(--ntw-bg);
+  color: var(--ntw-fg);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+/* 1. Card — the base container every template's content sections use. */
+.card {
+  background: var(--ntw-bg-elevated);
+  border: 1px solid var(--ntw-border);
+  border-radius: var(--ntw-radius);
+  padding: 16px 20px;
+  margin-block-end: 16px;
+}
+
+/* Structural rule (#12/#18): exactly one body paragraph per card. */
+.card > [data-role="body"] {
+  margin: 0;
+}
+
+/* 2. Badge — colour follows the severity axis only (#22); every other
+      axis (category, source, etc.) renders neutral regardless of value. */
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 0.8em;
+  font-weight: 600;
+  border: 1px solid var(--ntw-border);
+  color: var(--ntw-fg-muted);
+  background: transparent;
+}
+/* Literal tint pairs, not color-mix(): #17/#18 keep these internal to the
+   component (not exposed tokens), and dropping color-mix() removes a
+   browser-support assumption this repo hadn't verified. Each pair is a
+   known-AA-safe combination (>7:1), not derived from --ntw-success/etc. —
+   deriving fg and bg from the same variable is what caused the 1:1
+   collision this replaces. */
+.badge[data-axis="severity"][data-value="success"] {
+  color: #065f46;
+  border-color: #065f46;
+  background: #d1fae5;
+}
+.badge[data-axis="severity"][data-value="warning"] {
+  color: #92400e;
+  border-color: #92400e;
+  background: #fef3c7;
+}
+.badge[data-axis="severity"][data-value="danger"] {
+  color: #991b1b;
+  border-color: #991b1b;
+  background: #fee2e2;
+}
+.badge[data-axis="severity"][data-value="info"] {
+  color: #1e40af;
+  border-color: #1e40af;
+  background: #dbeafe;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge[data-axis="severity"][data-value="success"] {
+    color: #6ee7b7; border-color: #6ee7b7; background: #064e3b;
+  }
+  .badge[data-axis="severity"][data-value="warning"] {
+    color: #fcd34d; border-color: #fcd34d; background: #78350f;
+  }
+  .badge[data-axis="severity"][data-value="danger"] {
+    color: #fca5a5; border-color: #fca5a5; background: #7f1d1d;
+  }
+  .badge[data-axis="severity"][data-value="info"] {
+    color: #93c5fd; border-color: #93c5fd; background: #1e3a8a;
+  }
+}
+:root[data-theme="dark"] .badge[data-axis="severity"][data-value="success"] {
+  color: #6ee7b7; border-color: #6ee7b7; background: #064e3b;
+}
+:root[data-theme="dark"] .badge[data-axis="severity"][data-value="warning"] {
+  color: #fcd34d; border-color: #fcd34d; background: #78350f;
+}
+:root[data-theme="dark"] .badge[data-axis="severity"][data-value="danger"] {
+  color: #fca5a5; border-color: #fca5a5; background: #7f1d1d;
+}
+:root[data-theme="dark"] .badge[data-axis="severity"][data-value="info"] {
+  color: #93c5fd; border-color: #93c5fd; background: #1e3a8a;
+}
+
+/* 3. Provenance meta line (#28) — record path, record mtime, view gen time. */
+.meta {
+  color: var(--ntw-fg-muted);
+  font-size: 0.85em;
+  margin-block-end: 20px;
+  padding-block-end: 8px;
+  border-bottom: 1px solid var(--ntw-border);
+}
+
+/* 4. Verdict — the headline block; its text doubles as the terminal line (#30). */
+[data-role="verdict"] {
+  background: var(--ntw-verdict-bg);
+  border: 1px solid var(--ntw-accent);
+  border-radius: var(--ntw-radius);
+  padding: 16px 20px;
+  margin-block-end: 20px;
+  font-weight: 600;
+}
+
+/* 5. Table (`table` template + any card that embeds one). */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+th, td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ntw-border);
+}
+th {
+  color: var(--ntw-fg-muted);
+  font-weight: 600;
+  border-bottom: 2px solid var(--ntw-border);
+}
+/* Sort direction, set by TEMPLATES.md's table-sort script via th.dataset.dir
+   — without this a sorted column gives no visual cue which way it's sorted. */
+th[data-sort][data-dir="asc"]::after {
+  content: " \25B2";
+  color: var(--ntw-accent);
+  font-size: 0.8em;
+}
+th[data-sort][data-dir="desc"]::after {
+  content: " \25BC";
+  color: var(--ntw-accent);
+  font-size: 0.8em;
+}
+tbody tr:hover {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+/* 6. Enumerated list — the `steps` template, where the number itself is
+      load-bearing (order matters, not just count). */
+.list-enumerated {
+  list-style: none;
+  counter-reset: ntw-step;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.list-enumerated > li {
+  counter-increment: ntw-step;
+  position: relative;
+  border: 1px solid var(--ntw-border);
+  border-radius: var(--ntw-radius);
+  padding: 8px 12px 8px 40px;
+}
+.list-enumerated > li::before {
+  content: counter(ntw-step);
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast);
+  font-size: 0.75em;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 7. Timeline (`timeline` template). */
+.timeline {
+  position: relative;
+  padding-inline-start: 28px;
+  border-inline-start: 2px solid var(--ntw-border);
+}
+.timeline-item {
+  position: relative;
+  margin-block-end: 18px;
+}
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -34px;
+  top: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ntw-accent);
+  border: 2px solid var(--ntw-bg);
+}
+/* The event date reuses .meta's muted/small text but not its page-footer
+   styling (border-bottom, 20px margin) — that would put a heavy divider
+   under every single event instead of the page's one provenance line. */
+.timeline-item .meta {
+  border-bottom: none;
+  padding-block-end: 0;
+  margin-block-end: 4px;
+}
+
+/* 8. Annotated code block (`annotated-code` template). */
+.code-block {
+  background: var(--ntw-code-bg);
+  border: 1px solid var(--ntw-border);
+  border-radius: var(--ntw-radius);
+  padding: 12px 14px;
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.9em;
+}
+/* Sibling of .code-block in the markup (TEMPLATES.md), not nested inside it
+   — a descendant selector here would silently never match. */
+.annotation {
+  color: var(--ntw-fg-muted);
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 0.85em;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--ntw-accent);
+  margin-block: 4px 10px;
+}
+
+/* 9. Deck (`deck` template) — one slide visible at a time. */
+.deck-slide {
+  display: none;
+}
+.deck-slide.is-active {
+  display: block;
+}
+.deck-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-block-start: 16px;
+}
+.deck-nav button {
+  border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated);
+  color: var(--ntw-fg);
+  border-radius: var(--ntw-radius);
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
+/* 10. Sticky table of contents (`data-role="nav"`). */
+[data-role="nav"] {
+  position: sticky;
+  top: 0;
+  background: var(--ntw-bg);
+  padding-block: 8px;
+  margin-block-end: 16px;
+  border-bottom: 1px solid var(--ntw-border);
+  z-index: 1;
+}
+[data-role="nav"] a {
+  color: var(--ntw-fg-muted);
+  text-decoration: none;
+  margin-inline-end: 16px;
+  font-size: 0.9em;
+}
+[data-role="nav"] a.is-current {
+  color: var(--ntw-accent);
+  font-weight: 600;
+}
+
+/* 11. Sources / footer (`data-role="sources"`). */
+[data-role="sources"] {
+  color: var(--ntw-fg-muted);
+  font-size: 0.85em;
+  margin-block-start: 24px;
+  padding-block-start: 12px;
+  border-top: 1px solid var(--ntw-border);
+}
+
+/* Theme toggle button — present on every tier-1 page (#20, tier-1 whitelist in #25). */
+.theme-toggle {
+  border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated);
+  color: var(--ntw-fg-muted);
+  border-radius: var(--ntw-radius);
+  padding: 4px 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+@media print {
+  .theme-toggle,
+  [data-role="nav"],
+  .deck-nav {
+    display: none;
+  }
+  .deck-slide {
+    display: block !important;
+  }
+}
