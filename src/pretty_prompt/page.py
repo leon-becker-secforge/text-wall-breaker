@@ -153,7 +153,7 @@ tbody tr:last-child td { border-bottom: none; }
 .pp-option-label { font-family: var(--pp-font-mono); font-weight: 500; font-size: 0.9em; }
 .pp-option-chevron { margin-inline-start: auto; flex: none; color: var(--ntw-fg-muted);
   transition: transform .15s; }
-.pp-option-chevron::before { content: "\203A"; }
+.pp-option-chevron::before { content: "\\203A"; }
 .pp-option-drawer[open] .pp-option-chevron { transform: rotate(90deg); }
 .pp-option-body { color: var(--ntw-fg-muted); font-size: 0.88em; margin: 8px 0 0 26px; }
 .pp-option-body > :first-child { margin-block-start: 0; }
