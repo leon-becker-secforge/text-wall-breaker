@@ -3,6 +3,45 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-09-20
+
+### Added
+
+- `questions` (prototype): ask several questions on one page instead of one, presented
+  as a wizard — one question per screen, a progress bar, Back/Next — chosen over an
+  all-at-once stack and an accordion in a visual A/B/C. Returns
+  `{"answers": [{"selected", "free_text"}, ...]}` instead of `{"selected", "free_text"}`.
+  Mutually exclusive with `question`/`options`/`multi_select`/`allow_free_text`.
+- GFM pipe tables in the Markdown subset, with `:--`/`:-:`/`--:` alignment.
+- Tab reuse (prototype): a process-lifetime shared browser tab answers sequential `ask`
+  calls in place instead of opening a new tab each time; a call that finds the shared
+  tab already busy still gets its own one-off tab, so overlapping calls stay safe.
+- The tab title gets a checkmark or cross prefix once a question is answered or
+  cancelled, so an answered tab left open (or waiting its turn, with tab reuse) is
+  identifiable without switching to it.
+- The last chosen theme is remembered across processes/browsers/profiles (a small state
+  file next to XDG's other per-user state), not only in the browser's own `localStorage`,
+  and is baked into the very first paint instead of corrected after the fact by script.
+- ` ```diff ` fenced blocks render with a minimal style: colored left-edge rule, `+`/`-`
+  markers, and a struck-through removed line — picked over a GitHub-style full-line
+  background and gutter badges in a visual A/B/C.
+- Two or more image-bearing options auto-switch to a widened, grid gallery layout
+  instead of the stacked list, so several screenshots can be compared at a glance rather
+  than one at a time behind a drawer.
+- Every image (in a question, an option body, or a gallery) is click-to-zoom: it expands
+  full-size in a lightbox, dismissed by clicking again or Escape.
+
+### Changed
+
+- Light mode's background softened from pure white to base.css's own off-white; cards
+  and inputs stay pure white so they still lift off the page.
+
+### Fixed
+
+- The drawer's chevron (`›`) rendered as a stray control byte: its CSS `content: "\203A"`
+  sat in a normal Python string, so Python's own escape parsing consumed the backslash
+  before the browser ever saw the CSS.
+
 ## [0.1.0] - 2026-09-18
 
 Initial release.
