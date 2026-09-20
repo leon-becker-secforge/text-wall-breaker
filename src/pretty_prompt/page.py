@@ -165,6 +165,14 @@ code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--nt
 pre.code-block { font-family: var(--pp-font-mono); }
 pre.code-block code { background: none; padding: 0; border-radius: 0; }
 
+/* Picked in a four-way visual A/B/C/D over an accent rule (with and without a tint
+   background) and a bordered card — neutral border, no fill, so a quote reads as
+   de-emphasised source text rather than a highlighted callout. */
+blockquote { border-inline-start: 4px solid var(--ntw-border); color: var(--ntw-fg-muted);
+  margin: 0.6em 0; padding-inline-start: 14px; }
+blockquote > p:first-child { margin-block-start: 0; }
+blockquote > p:last-child { margin-block-end: 0; }
+
 /* Picked over a bordered grid and a zebra-striped card in a three-way visual A/B/C —
    see the "table style" pick in project history. No vertical rules, a single accent
    rule under the header instead of a shaded background. */
