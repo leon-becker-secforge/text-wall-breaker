@@ -94,3 +94,35 @@ def test_raw_html_is_escaped_everywhere():
 def test_quotes_are_escaped_in_alt_text():
     out = render_inline('![a" onerror="x](file:///tmp/x.png)')
     assert 'onerror="x"' not in out
+
+
+def test_table_renders_header_and_body():
+    out = render_markdown("| A | B |\n| --- | --- |\n| 1 | 2 |")
+    assert out == (
+        "<table><thead><tr><th>A</th><th>B</th></tr></thead>"
+        "<tbody><tr><td>1</td><td>2</td></tr></tbody></table>"
+    )
+
+
+def test_table_alignment_markers_become_inline_styles():
+    out = render_markdown("| A | B | C |\n| :-- | :-: | --: |\n| 1 | 2 | 3 |")
+    assert '<th style="text-align:left">A</th>' in out
+    assert '<th style="text-align:center">B</th>' in out
+    assert '<th style="text-align:right">C</th>' in out
+
+
+def test_table_cells_render_inline_markdown():
+    out = render_markdown("| A |\n| --- |\n| **bold** |")
+    assert "<td><strong>bold</strong></td>" in out
+
+
+def test_table_ends_at_a_blank_line_or_non_table_line():
+    out = render_markdown("| A |\n| --- |\n| 1 |\n\nafter")
+    assert out == (
+        "<table><thead><tr><th>A</th></tr></thead>"
+        "<tbody><tr><td>1</td></tr></tbody></table><p>after</p>"
+    )
+
+
+def test_a_pipe_without_a_separator_row_is_not_a_table():
+    assert render_markdown("a | b") == "<p>a | b</p>"

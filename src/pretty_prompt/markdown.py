@@ -34,6 +34,11 @@ _FENCE = re.compile(r"^```\s*([A-Za-z0-9_+-]*)\s*$")
 _BULLET = re.compile(r"^[-*]\s+(.*)$")
 _ORDERED = re.compile(r"^\d+[.)]\s+(.*)$")
 
+# A GFM pipe-table separator cell: optional colons around one or more dashes, e.g. `---`,
+# `:---`, `---:` or `:---:`. The row this belongs to is what tells a table apart from a
+# paragraph that merely contains a `|` — no header row on its own is enough.
+_TABLE_SEPARATOR_CELL = re.compile(r"^:?-+:?$")
+
 # One alternation over the raw source: whatever does not match is escaped as literal
 # text. Order matters — code spans come first so that `**` inside backticks stays
 # literal, and `**` precedes `*` so bold is not mis-read as two italics.
@@ -103,6 +108,49 @@ def _render_match(match: re.Match[str]) -> str:
     return f"<em>{render_inline(match.group('i_text'))}</em>"
 
 
+def _split_row(line: str) -> list[str]:
+    """Split one `| a | b |` row into its cell texts, stripping the outer pipes."""
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [cell.strip() for cell in stripped.split("|")]
+
+
+def _table_alignment(cell: str) -> str | None:
+    left, right = cell.startswith(":"), cell.endswith(":")
+    if left and right:
+        return "center"
+    if right:
+        return "right"
+    if left:
+        return "left"
+    return None
+
+
+def _is_table_separator(line: str) -> bool:
+    if "|" not in line and "-" not in line:
+        return False
+    cells = _split_row(line)
+    return bool(cells) and all(_TABLE_SEPARATOR_CELL.match(cell) for cell in cells)
+
+
+def _render_table_row(tag: str, cells: list[str], aligns: list[str | None]) -> str:
+    rendered = []
+    for index, cell in enumerate(cells):
+        align = aligns[index] if index < len(aligns) else None
+        style = f' style="text-align:{align}"' if align else ""
+        rendered.append(f"<{tag}{style}>{render_inline(cell)}</{tag}>")
+    return "<tr>" + "".join(rendered) + "</tr>"
+
+
+def _render_table(header: list[str], aligns: list[str | None], rows: list[list[str]]) -> str:
+    thead = f"<thead>{_render_table_row('th', header, aligns)}</thead>"
+    tbody = "<tbody>" + "".join(_render_table_row("td", row, aligns) for row in rows) + "</tbody>"
+    return f"<table>{thead}{tbody}</table>"
+
+
 def render_markdown(text: str) -> str:
     """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input."""
     if not text or not text.strip():
@@ -163,6 +211,21 @@ def render_markdown(text: str) -> str:
             level = len(heading.group(1))
             out.append(f"<h{level}>{render_inline(heading.group(2))}</h{level}>")
             index += 1
+            continue
+
+        # A table is a header row immediately followed by a separator row — checking the
+        # next line is what tells it apart from a paragraph that just happens to contain
+        # a `|`, since neither row is identifiable from itself alone.
+        if "|" in line and index + 1 < len(lines) and _is_table_separator(lines[index + 1]):
+            flush_all()
+            header = _split_row(line)
+            aligns = [_table_alignment(cell) for cell in _split_row(lines[index + 1])]
+            index += 2
+            body_rows: list[list[str]] = []
+            while index < len(lines) and lines[index].strip() and "|" in lines[index]:
+                body_rows.append(_split_row(lines[index]))
+                index += 1
+            out.append(_render_table(header, aligns, body_rows))
             continue
 
         bullet = _BULLET.match(line)

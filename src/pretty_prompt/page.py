@@ -112,6 +112,16 @@ code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--nt
 pre.code-block { font-family: var(--pp-font-mono); }
 pre.code-block code { background: none; padding: 0; border-radius: 0; }
 
+/* Picked over a bordered grid and a zebra-striped card in a three-way visual A/B/C —
+   see the "table style" pick in project history. No vertical rules, a single accent
+   rule under the header instead of a shaded background. */
+table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size: 0.9em; }
+th, td { padding: 6px 10px; text-align: left; border: none;
+  border-bottom: 1px solid var(--ntw-border); }
+thead th { border-bottom: 2px solid var(--ntw-accent); color: var(--ntw-accent);
+  font-weight: 600; text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.03em; }
+tbody tr:last-child td { border-bottom: none; }
+
 #pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
   background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
   font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
