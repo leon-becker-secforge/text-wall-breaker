@@ -20,7 +20,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
-from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, run_ask
+from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, Question, run_ask
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 
 __all__ = ["accent_config_problem", "environment_problem", "main", "server"]
@@ -46,11 +46,17 @@ Markdown image syntax with an absolute file:// URL, e.g. `![diagram](file:///tmp
 
 Returns exactly one of:
   {"selected": ["<option id>", ...], "free_text": "..."}  the user answered
+  {"answers": [{"selected": [...], "free_text": "..."}, ...]}  answered `questions`
   {"cancelled": true}                                      the user pressed Cancel
   {"timed_out": true}                                      nothing arrived in time
 
 Selecting an option and writing free text are additive, not exclusive, so `selected` and
-`free_text` can both be populated."""
+`free_text` can both be populated.
+
+`questions` (prototype) puts several questions on one page instead of one — set it
+instead of `question`/`options`/`multi_select`/`allow_free_text`, never alongside them.
+The user answers all of them before sending, and the result's `answers` list is in the
+same order, one `{selected, free_text}` per question."""
 
 
 def environment_problem() -> str | None:
@@ -86,7 +92,10 @@ def accent_config_problem() -> str | None:
 
 @server.tool(name="ask", description=_ASK_DESCRIPTION)
 async def ask(
-    question: Annotated[str, Field(description="The question, as Markdown.")],
+    question: Annotated[
+        str,
+        Field(description="The question, as Markdown. Leave unset when `questions` is used."),
+    ] = "",
     options: Annotated[
         list[Option] | None,
         Field(description="The choices to offer. May be omitted only if allow_free_text is true."),
@@ -100,6 +109,14 @@ async def ask(
     timeout_seconds: Annotated[
         float, Field(description="Give up after this many seconds with no activity on the page.")
     ] = 300.0,
+    questions: Annotated[
+        list[Question] | None,
+        Field(
+            description="Prototype: ask several questions on one page instead of one. "
+            "When set, question/options/multi_select/allow_free_text are ignored, and "
+            'the result is {"answers": [...]} instead of {"selected", "free_text"}.'
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     request = AskRequest(
         question=question,
@@ -107,6 +124,7 @@ async def ask(
         multi_select=multi_select,
         allow_free_text=allow_free_text,
         timeout_seconds=timeout_seconds,
+        questions=questions,
     )
     try:
         request.validated()

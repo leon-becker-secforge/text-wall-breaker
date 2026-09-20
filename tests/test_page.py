@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from pretty_prompt.page import InvalidAccent, build_page, parse_accent
+from pretty_prompt.page import InvalidAccent, build_multi_page, build_page, parse_accent
 
 
 @pytest.mark.parametrize("value", ["#1f7a4c", "1f7a4c", "#1F7A4C", " #1f7a4c "])
@@ -115,3 +115,87 @@ def test_a_drawer_input_has_an_accessible_name():
     # implicit accessible name, so this has to come from aria-label instead.
     body = _body(_page(options=[_option(label="Postgres", body="x " * 250)]))
     assert 'aria-label="Postgres"' in body
+
+
+def _multi_page(**overrides):
+    overrides.setdefault(
+        "questions",
+        [
+            {"question": "first", "options": [_option(id="a", label="A")]},
+            {"question": "second", "options": [_option(id="b", label="B")]},
+        ],
+    )
+    overrides.setdefault("timeout_seconds", 300.0)
+    return build_multi_page(submit_url="http://127.0.0.1:1/submit", **overrides)
+
+
+def test_multi_page_renders_every_question():
+    # Every step's markup is in the page even though only one is shown at a time — the
+    # wizard toggles visibility with CSS, it doesn't omit the other steps.
+    body = _body(_multi_page())
+    assert "first" in body
+    assert "second" in body
+    assert 'data-option-id="a"' in body
+    assert 'data-option-id="b"' in body
+
+
+def test_multi_page_shows_a_shared_progress_label_and_bar():
+    body = _body(_multi_page())
+    assert 'id="pp-progress-label">Question 1 of 2<' in body
+    assert "width: 50%" in body
+
+
+def test_multi_page_only_the_first_step_starts_active():
+    body = _body(_multi_page())
+    assert 'class="pp-step pp-step-active" data-step-index="0"' in body
+    assert 'class="pp-step" data-step-index="1"' in body
+
+
+def test_multi_page_single_question_starts_with_send_as_the_next_label():
+    body = _body(_multi_page(questions=[{"question": "only", "options": [_option()]}]))
+    assert 'id="pp-next" disabled>Send answers<' in body
+
+
+def test_multi_page_scopes_option_names_and_steps_per_question():
+    body = _body(_multi_page())
+    assert 'name="pp-option-step-0"' in body
+    assert 'name="pp-option-step-1"' in body
+    assert 'data-step="0"' in body
+    assert 'data-step="1"' in body
+
+
+def test_multi_page_free_text_is_scoped_per_question():
+    body = _body(
+        _multi_page(
+            questions=[
+                {"question": "first", "options": [], "allow_free_text": True},
+                {
+                    "question": "second",
+                    "options": [_option(id="b", label="B")],
+                    "allow_free_text": False,
+                },
+            ]
+        )
+    )
+    assert 'id="pp-free-text-0"' in body
+    assert 'id="pp-free-text-1"' not in body
+
+
+def test_multi_page_embeds_the_step_count():
+    html = _multi_page()
+    assert "var STEP_COUNT = 2;" in html
+
+
+def test_multi_page_default_accent_matches_single_page():
+    assert "#1f7a4c" in _multi_page()
+
+
+def test_multi_page_custom_accent_overrides_the_built_in_green():
+    html = _multi_page(accent="#2563eb")
+    assert "#2563eb" in html
+    assert "#1f7a4c" in html
+
+
+def test_multi_page_invalid_accent_raises():
+    with pytest.raises(InvalidAccent):
+        _multi_page(accent="not-a-colour")

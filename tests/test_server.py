@@ -58,7 +58,10 @@ def test_ask_is_the_only_registered_tool():
 def test_ask_schema_matches_the_agreed_shape():
     tool = anyio.run(server.list_tools)[0]
     schema = tool.input_schema
-    assert schema["required"] == ["question"]
+    # No required properties: `question` alone answers the single-question shorthand,
+    # `questions` alone answers the multi-question prototype, and either can carry the
+    # whole call — schema-level "required" cannot express an either/or across the two.
+    assert "required" not in schema
     properties = schema["properties"]
     assert set(properties) >= {
         "question",
@@ -66,9 +69,12 @@ def test_ask_schema_matches_the_agreed_shape():
         "multi_select",
         "allow_free_text",
         "timeout_seconds",
+        "questions",
     }
     option = schema["$defs"]["Option"]["properties"]
     assert set(option) == {"id", "label", "body", "recommended"}
+    question = schema["$defs"]["Question"]["properties"]
+    assert set(question) == {"question", "options", "multi_select", "allow_free_text"}
 
 
 @pytest.mark.parametrize(
@@ -76,6 +82,9 @@ def test_ask_schema_matches_the_agreed_shape():
     [
         ({"question": "q", "options": [], "allow_free_text": False}, "no way to answer"),
         ({"question": "  "}, "question is empty"),
+        ({"question": "q", "questions": [{"question": "a"}]}, "not both"),
+        ({"questions": []}, "questions is empty"),
+        ({"questions": [{"question": " "}]}, r"questions\[0\]: question is empty"),
     ],
 )
 def test_an_unanswerable_call_fails_before_a_page_is_opened(arguments, match):

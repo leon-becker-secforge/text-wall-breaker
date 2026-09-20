@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, run_ask
+from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, Question, run_ask
 from .server import environment_problem, main, server
 
 __all__ = [
@@ -10,6 +10,7 @@ __all__ = [
     "BrowserUnavailable",
     "InvalidAsk",
     "Option",
+    "Question",
     "environment_problem",
     "main",
     "run_ask",

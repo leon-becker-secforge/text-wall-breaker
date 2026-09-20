@@ -12,6 +12,7 @@ from pretty_prompt.ask import (
     BrowserUnavailable,
     InvalidAsk,
     Option,
+    Question,
     _resolve_accent,
     run_ask,
 )
@@ -184,3 +185,101 @@ def test_a_browser_failure_surfaces_rather_than_blocking(monkeypatch):
     monkeypatch.setattr(ask_module, "open_in_browser", refuse)
     with pytest.raises(BrowserUnavailable):
         run_ask(AskRequest(question="q", timeout_seconds=60))
+
+
+def test_questions_and_question_together_are_rejected():
+    request = AskRequest(question="q", questions=[Question(question="a")])
+    with pytest.raises(InvalidAsk, match="not both"):
+        request.validated()
+
+
+def test_empty_questions_list_is_rejected():
+    with pytest.raises(InvalidAsk, match="questions is empty"):
+        AskRequest(questions=[]).validated()
+
+
+def test_a_question_within_questions_is_labelled_in_the_error():
+    request = AskRequest(questions=[Question(question="q"), Question(question="  ")])
+    with pytest.raises(InvalidAsk, match=r"questions\[1\]: question is empty"):
+        request.validated()
+
+
+def test_multi_question_submission_returns_one_answer_per_question(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {
+                "answers": [
+                    {"selected": ["a"], "free_text": ""},
+                    {"selected": [], "free_text": " second "},
+                ]
+            },
+        }
+    )
+    result = run_ask(
+        AskRequest(
+            questions=[
+                Question(question="first", options=[Option(id="a", label="A")]),
+                Question(question="second", allow_free_text=True, options=[]),
+            ]
+        )
+    )
+    assert result == {
+        "answers": [
+            {"selected": ["a"], "free_text": ""},
+            {"selected": [], "free_text": "second"},
+        ]
+    }
+
+
+def test_multi_question_filters_unknown_ids_per_question(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"answers": [{"selected": ["a", "nope"], "free_text": ""}]},
+        }
+    )
+    result = run_ask(
+        AskRequest(questions=[Question(question="q", options=[Option(id="a", label="A")])])
+    )
+    assert result == {"answers": [{"selected": ["a"], "free_text": ""}]}
+
+
+def test_multi_question_missing_answers_are_padded_empty(browser):
+    browser(lambda page: {"kind": "submit", "data": {"answers": []}})
+    result = run_ask(
+        AskRequest(
+            questions=[
+                Question(question="first", options=[Option(id="a", label="A")]),
+                Question(question="second"),
+            ]
+        )
+    )
+    assert result == {
+        "answers": [
+            {"selected": [], "free_text": ""},
+            {"selected": [], "free_text": ""},
+        ]
+    }
+
+
+def test_multi_question_cancel_is_reported_as_cancelled(browser):
+    browser(lambda page: {"kind": "cancel", "data": {}})
+    result = run_ask(AskRequest(questions=[Question(question="q")]))
+    assert result == {"cancelled": True}
+
+
+def test_the_page_carries_every_question(browser):
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(
+        AskRequest(
+            questions=[
+                Question(question="# First", options=[Option(id="a", label="A")]),
+                Question(question="Second", options=[Option(id="b", label="B")]),
+            ]
+        )
+    )
+    assert "<h1>First</h1>" in fake.page
+    assert "Second" in fake.page
+    assert 'data-option-id="a"' in fake.page
+    assert 'data-option-id="b"' in fake.page

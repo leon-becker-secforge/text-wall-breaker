@@ -23,7 +23,7 @@ from importlib import resources
 
 from .markdown import render_markdown
 
-__all__ = ["ACCENT_ENV_VAR", "InvalidAccent", "build_page", "parse_accent"]
+__all__ = ["ACCENT_ENV_VAR", "InvalidAccent", "build_multi_page", "build_page", "parse_accent"]
 
 # Read by both server.py (to validate once at startup) and ask.py (to resolve the
 # colour for each page) — defined here, not in server.py, so ask.py does not have to
@@ -192,6 +192,23 @@ tbody tr:last-child td { border-bottom: none; }
 #pp-fallback textarea { width: 100%; box-sizing: border-box; margin-block-start: 8px;
   border: 1px solid var(--ntw-border); border-radius: 6px; background: var(--ntw-bg);
   color: var(--ntw-fg); font-family: var(--pp-font-mono); font-size: 0.85em; padding: 8px; }
+"""
+
+# Layered onto _ADDENDUM (not merged into it) only for the multi-question page: a wizard
+# showing one question at a time, with a progress bar in place of the single-question
+# page's one static question — picked over an all-at-once stack and an accordion in a
+# three-way visual A/B/C (see the "paging style" pick in project history).
+_MULTI_ADDENDUM = """
+.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 18px 0; }
+.pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
+.pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
+  overflow: hidden; }
+.pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
+  transition: width .15s; }
+.pp-step { display: none; }
+.pp-step.pp-step-active { display: block; }
+.pp-step .pp-question { margin: 0 0 10px; }
+.pp-step .pp-free-text { margin: 10px 0 0; }
 """
 
 _TEMPLATE = """<!doctype html>
@@ -406,6 +423,238 @@ __FREE_TEXT__
 """
 
 
+# A prototype sibling of _TEMPLATE for a page carrying several questions — see
+# build_multi_page's docstring for why this is a separate template rather than a
+# generalisation of the one above. A wizard: one `.pp-step` visible at a time (toggled by
+# `.pp-step-active`, not by removing the others from the DOM, so every step's markup is
+# still present for a static read of the page — see the page.py tests), a progress bar
+# in place of the single-question page's one static question, and Back/Next replacing
+# Send/Cancel until the last step, where Next becomes the actual submit.
+_MULTI_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__
+</style>
+</head>
+<body>
+<main>
+  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+
+  <div class="pp-progress">
+    <span class="pp-progress-label" id="pp-progress-label">__INITIAL_LABEL__</span>
+    <span class="pp-progress-track">
+      <span class="pp-progress-fill" id="pp-progress-fill"
+        style="width: __INITIAL_PROGRESS__%"></span>
+    </span>
+  </div>
+
+  <form id="pp-form" novalidate>
+__STEPS__
+    <div class="pp-actions">
+      <button type="button" id="pp-back" disabled>Back</button>
+      <button type="button" id="pp-next" disabled>__INITIAL_NEXT_LABEL__</button>
+      <button type="button" id="pp-cancel">Cancel</button>
+      <span id="pp-status"></span>
+    </div>
+  </form>
+
+  <div id="pp-fallback" hidden>
+    <strong>Couldn't reach Claude Code</strong>
+    <p data-role="body" id="pp-fallback-reason"></p>
+    <textarea readonly rows="6"></textarea>
+  </div>
+</main>
+
+<script>
+(function () {
+  var SUBMIT_URL = __SUBMIT_URL__;
+  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
+  var STEP_COUNT = __STEP_COUNT__;
+  var THEME_KEY = 'no-text-wall:theme';
+
+  var steps = Array.prototype.slice.call(document.querySelectorAll('.pp-step'));
+  var backBtn = document.getElementById('pp-back');
+  var nextBtn = document.getElementById('pp-next');
+  var cancelBtn = document.getElementById('pp-cancel');
+  var status = document.getElementById('pp-status');
+  var progressLabel = document.getElementById('pp-progress-label');
+  var progressFill = document.getElementById('pp-progress-fill');
+  var inputs = Array.prototype.slice.call(document.querySelectorAll('[data-option-id]'));
+  var freeTexts = Array.prototype.slice.call(document.querySelectorAll('textarea[data-step]'));
+  var current = 0;
+
+  try {
+    var stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+  } catch (e) { /* private mode: fall back to the OS preference */ }
+  document.getElementById('pp-theme').addEventListener('click', function () {
+    var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
+    var next = document.documentElement.dataset.theme
+      ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      : (dark ? 'light' : 'dark');
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+  });
+
+  function stepInputs(step) {
+    return inputs.filter(function (i) { return i.dataset.step === String(step); });
+  }
+  function stepFreeText(step) {
+    return document.getElementById('pp-free-text-' + step);
+  }
+  function stepAnswered(step) {
+    var selected = stepInputs(step).some(function (i) { return i.checked; });
+    var ft = stepFreeText(step);
+    return selected || (ft && ft.value.trim() !== '');
+  }
+  function collect() {
+    var answers = [];
+    for (var s = 0; s < STEP_COUNT; s++) {
+      var ft = stepFreeText(s);
+      answers.push({
+        selected: stepInputs(s).filter(function (i) { return i.checked; })
+                                .map(function (i) { return i.dataset.optionId; }),
+        free_text: ft ? ft.value.trim() : ''
+      });
+    }
+    return { answers: answers };
+  }
+
+  function showStep(index) {
+    steps.forEach(function (el, i) { el.classList.toggle('pp-step-active', i === index); });
+    progressLabel.textContent = 'Question ' + (index + 1) + ' of ' + STEP_COUNT;
+    progressFill.style.width = ((index + 1) / STEP_COUNT * 100) + '%';
+    backBtn.disabled = index === 0;
+    nextBtn.textContent = index === STEP_COUNT - 1 ? 'Send answers' : 'Next';
+    refresh();
+  }
+
+  // Only the current step's answer gates Next — earlier steps were already checked on
+  // their own way past, and later ones haven't been seen yet.
+  function refresh() {
+    nextBtn.disabled = !stepAnswered(current);
+  }
+
+  inputs.forEach(function (i) { i.addEventListener('change', refresh); });
+  // See page.py's _render_options: a long body wraps the input in <summary>, so a click
+  // on the checkbox/radio would otherwise also toggle the drawer open.
+  inputs.forEach(function (i) {
+    i.addEventListener('click', function (e) { e.stopPropagation(); });
+  });
+  freeTexts.forEach(function (t) { t.addEventListener('input', refresh); });
+
+  function freeze(message) {
+    inputs.forEach(function (i) { i.disabled = true; });
+    freeTexts.forEach(function (t) { t.readOnly = true; });
+    backBtn.disabled = true;
+    nextBtn.disabled = true;
+    cancelBtn.disabled = true;
+    status.hidden = false;
+    status.textContent = message;
+    stopHeartbeat();
+  }
+
+  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  var heartbeatTimer = null;
+  function heartbeat() {
+    if (document.visibilityState === 'visible') send('probe', {});
+  }
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') heartbeat();
+  });
+
+  function fallback(payload, reason) {
+    var box = document.getElementById('pp-fallback');
+    var text = JSON.stringify(payload, null, 2);
+    box.hidden = false;
+    var textarea = box.querySelector('textarea');
+    textarea.value = text;
+    document.getElementById('pp-fallback-reason').textContent =
+      reason + ' \\u2014 copy the text below and paste it to Claude Code.';
+    textarea.select();
+  }
+
+  async function send(kind, data) {
+    var payload = { kind: kind, data: data };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        if (kind !== 'probe') {
+          fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
+        }
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (kind !== 'probe') {
+        fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      }
+      return false;
+    }
+  }
+
+  backBtn.addEventListener('click', function () {
+    if (current > 0) { current -= 1; showStep(current); }
+  });
+
+  nextBtn.addEventListener('click', async function () {
+    if (nextBtn.disabled) return;
+    if (current < STEP_COUNT - 1) {
+      current += 1;
+      showStep(current);
+      return;
+    }
+    var data = collect();
+    freeze('Sending\\u2026');
+    if (await send('submit', data)) freeze('Answers sent. You can close this tab.');
+    else status.textContent = 'Not sent.';
+  });
+
+  cancelBtn.addEventListener('click', async function () {
+    freeze('Cancelling\\u2026');
+    if (await send('cancel', {})) freeze('Cancelled. You can close this tab.');
+    else status.textContent = 'Not sent.';
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      nextBtn.click();
+    }
+  });
+
+  showStep(0);
+  if (inputs.length) inputs[0].focus();
+  else if (freeTexts.length) freeTexts[0].focus();
+  // Proves the token and the CORS response are readable from a real page load before
+  // the operator has spent any time answering. Never consumes the one submission.
+  send('probe', {});
+  startHeartbeat();
+}());
+</script>
+</body>
+</html>
+"""
+
+
 def _load_base_css() -> str:
     return resources.files(__package__).joinpath("assets/base.css").read_text(encoding="utf-8")
 
@@ -495,10 +744,17 @@ def _is_long_body(body_html: str) -> bool:
     return "<img" in body_html or "<pre" in body_html or len(body_html) > _LONG_BODY_CHARS
 
 
-def _render_options(options: list[dict[str, object]], multi_select: bool) -> str:
+def _render_options(
+    options: list[dict[str, object]],
+    multi_select: bool,
+    *,
+    name: str = "pp-option",
+    data_step: str | None = None,
+) -> str:
     if not options:
         return ""
     kind = "checkbox" if multi_select else "radio"
+    step_attr = f' data-step="{data_step}"' if data_step is not None else ""
     rows: list[str] = []
     for option in options:
         option_id = html.escape(str(option["id"]), quote=True)
@@ -509,7 +765,7 @@ def _render_options(options: list[dict[str, object]], multi_select: bool) -> str
         # implicit accessible name the way <label> does, so the input would otherwise
         # announce with none at all.
         select_html = (
-            f'<input type="{kind}" name="pp-option" data-option-id="{option_id}" '
+            f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr} '
             f'aria-label="{label}">'
             f'<span class="pp-option-label">{label}</span>'
         )
@@ -596,4 +852,75 @@ def build_page(
         .replace("__HINT__", html.escape(hint, quote=True))
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
+    )
+
+
+def _render_step(index: int, spec: dict[str, object]) -> str:
+    question_html = render_markdown(str(spec.get("question", "")))
+    options = spec.get("options")
+    multi_select = bool(spec.get("multi_select"))
+    options_html = _render_options(
+        list(options) if isinstance(options, list) else [],
+        multi_select,
+        name=f"pp-option-step-{index}",
+        data_step=str(index),
+    )
+    free_text_html = ""
+    if spec.get("allow_free_text", True):
+        free_text_html = (
+            f'    <label class="pp-free-text">Anything else'
+            f'<textarea id="pp-free-text-{index}" data-step="{index}" rows="3" '
+            'placeholder="Optional — type a free-text answer"></textarea></label>'
+        )
+    # The wizard's JS toggles `pp-step-active` on navigation; the first step starts with
+    # it already set so the page shows question one even before the script has run.
+    active = " pp-step-active" if index == 0 else ""
+    return (
+        f'  <section class="pp-step{active}" data-step-index="{index}">\n'
+        f'    <div class="pp-question">{question_html}</div>\n'
+        f"{options_html}\n"
+        f"{free_text_html}\n"
+        "  </section>"
+    )
+
+
+def build_multi_page(
+    *,
+    questions: list[dict[str, object]],
+    submit_url: str,
+    timeout_seconds: float,
+    title: str = "Claude Code is asking",
+    accent: str | None = None,
+) -> str:
+    """Return the complete HTML document for an `ask` call carrying several questions.
+
+    Prototype: a sibling of `build_page` rather than a generalisation of it, so the
+    well-exercised single-question page and its wire format (`{selected, free_text}`)
+    stay exactly as they were. Each entry of `questions` takes the same keys `build_page`
+    takes for one question (`question`, `options`, `multi_select`, `allow_free_text`).
+    The page's wire format here is `{"answers": [{selected, free_text}, ...]}`, one entry
+    per question, in the order given — see `ask.run_ask` for how it's unpacked.
+
+    Presented as a wizard, one question per screen with a progress bar and Back/Next —
+    picked over showing every question stacked at once and over an accordion in a
+    three-way visual A/B/C (see the "paging style" pick in project history).
+    """
+    css = _load_base_css() + _ADDENDUM + _MULTI_ADDENDUM
+    if accent is not None:
+        css += _accent_css(accent)
+
+    total = len(questions)
+    steps_html = "\n".join(_render_step(i, spec) for i, spec in enumerate(questions))
+    initial_progress = round(100 / total) if total else 0
+
+    return (
+        _MULTI_TEMPLATE.replace("__CSS__", css)
+        .replace("__TITLE__", html.escape(title, quote=True))
+        .replace("__STEPS__", steps_html)
+        .replace("__INITIAL_LABEL__", html.escape(f"Question 1 of {total}", quote=True))
+        .replace("__INITIAL_PROGRESS__", str(initial_progress))
+        .replace("__INITIAL_NEXT_LABEL__", "Send answers" if total == 1 else "Next")
+        .replace("__SUBMIT_URL__", _js_string(submit_url))
+        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
+        .replace("__STEP_COUNT__", str(total))
     )

@@ -19,9 +19,16 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from .listener import LoopbackListener
-from .page import ACCENT_ENV_VAR, InvalidAccent, build_page, parse_accent
+from .page import ACCENT_ENV_VAR, InvalidAccent, build_multi_page, build_page, parse_accent
 
-__all__ = ["AskRequest", "BrowserUnavailable", "InvalidAsk", "Option", "run_ask"]
+__all__ = [
+    "AskRequest",
+    "BrowserUnavailable",
+    "InvalidAsk",
+    "Option",
+    "Question",
+    "run_ask",
+]
 
 # xdg-open hands the file to the desktop's browser and returns immediately. If it has
 # not returned by now something is wrong with the desktop session, and failing is better
@@ -67,36 +74,78 @@ class Option(BaseModel):
     ] = False
 
 
-class AskRequest(BaseModel):
-    """A validated `ask` call."""
+class Question(BaseModel):
+    """One question on a page — the single-question shape, reused for `questions`."""
 
     question: str
     options: list[Option] = []
     multi_select: bool = False
     allow_free_text: bool = True
-    timeout_seconds: float = 300.0
 
-    def validated(self) -> AskRequest:
-        """Return self, or raise `InvalidAsk` if the page would be unanswerable."""
+    def validated(self, *, label: str) -> Question:
+        """Return self, or raise `InvalidAsk` naming `label` if unanswerable."""
         if not self.question.strip():
-            raise InvalidAsk("question is empty")
+            raise InvalidAsk(f"{label}: question is empty")
         if not self.options and not self.allow_free_text:
             raise InvalidAsk(
-                "options is empty and allow_free_text is false, so the page would have "
-                "no way to answer — supply options, or set allow_free_text"
+                f"{label}: options is empty and allow_free_text is false, so it would "
+                "have no way to answer — supply options, or set allow_free_text"
             )
         seen: set[str] = set()
         for option in self.options:
             if not option.id.strip():
-                raise InvalidAsk("every option needs a non-empty id")
+                raise InvalidAsk(f"{label}: every option needs a non-empty id")
             if not option.label.strip():
-                raise InvalidAsk(f"option {option.id!r} has an empty label")
+                raise InvalidAsk(f"{label}: option {option.id!r} has an empty label")
             if option.id in seen:
-                raise InvalidAsk(f"duplicate option id {option.id!r}")
+                raise InvalidAsk(f"{label}: duplicate option id {option.id!r}")
             seen.add(option.id)
+        return self
+
+
+class AskRequest(BaseModel):
+    """A validated `ask` call.
+
+    Either the top-level `question`/`options`/`multi_select`/`allow_free_text` (one
+    question) or `questions` (several, on one page) is set — never both. See
+    `page.build_multi_page` for why the multi-question path is a separate prototype
+    rather than a generalisation of the single-question one.
+    """
+
+    question: str = ""
+    options: list[Option] = []
+    multi_select: bool = False
+    allow_free_text: bool = True
+    questions: list[Question] | None = None
+    timeout_seconds: float = 300.0
+
+    def validated(self) -> AskRequest:
+        """Return self, or raise `InvalidAsk` if the page would be unanswerable."""
         if self.timeout_seconds <= 0:
             raise InvalidAsk("timeout_seconds must be positive")
+        if self.questions is not None:
+            if self.question.strip() or self.options:
+                raise InvalidAsk("set either question/options or questions, not both")
+            if not self.questions:
+                raise InvalidAsk("questions is empty")
+            for index, question in enumerate(self.questions):
+                question.validated(label=f"questions[{index}]")
+            return self
+        self._as_single_question().validated(label="question")
         return self
+
+    def _as_single_question(self) -> Question:
+        return Question(
+            question=self.question,
+            options=self.options,
+            multi_select=self.multi_select,
+            allow_free_text=self.allow_free_text,
+        )
+
+    @property
+    def steps(self) -> list[Question]:
+        """The page's questions: `questions` as given, or `question` as a list of one."""
+        return self.questions if self.questions is not None else [self._as_single_question()]
 
 
 def open_in_browser(path: Path) -> None:
@@ -139,28 +188,68 @@ def _resolve_accent() -> str | None:
     return value
 
 
+def _extract_answer(step: Question, raw: object) -> dict[str, Any]:
+    """One `{selected, free_text}` from a page's answer for `step`.
+
+    Ids are filtered against `step` rather than trusted: the page is the only thing
+    that should ever POST here, but the answer is what the agent acts on.
+    """
+    known = {option.id for option in step.options}
+    raw_selected = raw.get("selected") if isinstance(raw, dict) else None
+    selected = (
+        [value for value in raw_selected if value in known]
+        if isinstance(raw_selected, list)
+        else []
+    )
+    free_text = raw.get("free_text") if isinstance(raw, dict) else None
+    return {
+        "selected": selected,
+        "free_text": free_text.strip() if isinstance(free_text, str) else "",
+    }
+
+
 def run_ask(request: AskRequest) -> dict[str, Any]:
     """Open the page for `request` and block until it is answered, cancelled or idle.
 
-    Returns exactly one of `{"selected", "free_text"}`, `{"cancelled": True}` or
-    `{"timed_out": True}`.
+    Returns `{"cancelled": True}` or `{"timed_out": True}` either way. Otherwise, for a
+    single question (the `question` shorthand), `{"selected", "free_text"}`; for
+    `questions`, `{"answers": [{"selected", "free_text"}, ...]}`, one entry per question,
+    in order.
     """
     request = request.validated()
+    steps = request.steps
     token = secrets.token_hex(16)
 
     # Bind before writing: the page needs the port baked into its submit URL, and a port
     # chosen any other way is a race against whatever else is starting on this machine.
     with LoopbackListener(token) as listener:
         submit_url = f"http://127.0.0.1:{listener.port}/submit?t={token}"
-        html = build_page(
-            question=request.question,
-            options=[option.model_dump() for option in request.options],
-            multi_select=request.multi_select,
-            allow_free_text=request.allow_free_text,
-            submit_url=submit_url,
-            timeout_seconds=request.timeout_seconds,
-            accent=_resolve_accent(),
-        )
+        if request.questions is None:
+            step = steps[0]
+            html = build_page(
+                question=step.question,
+                options=[option.model_dump() for option in step.options],
+                multi_select=step.multi_select,
+                allow_free_text=step.allow_free_text,
+                submit_url=submit_url,
+                timeout_seconds=request.timeout_seconds,
+                accent=_resolve_accent(),
+            )
+        else:
+            html = build_multi_page(
+                questions=[
+                    {
+                        "question": step.question,
+                        "options": [option.model_dump() for option in step.options],
+                        "multi_select": step.multi_select,
+                        "allow_free_text": step.allow_free_text,
+                    }
+                    for step in steps
+                ],
+                submit_url=submit_url,
+                timeout_seconds=request.timeout_seconds,
+                accent=_resolve_accent(),
+            )
 
         # One directory per call, removed on every exit path. Nothing outlives the call
         # it belongs to.
@@ -178,17 +267,17 @@ def run_ask(request: AskRequest) -> dict[str, Any]:
     if submission.kind == "cancel":
         return {"cancelled": True}
 
-    # Ids are filtered against the request rather than trusted: the page is the only
-    # thing that should ever POST here, but the answer is what the agent acts on.
-    known = {option.id for option in request.options}
-    raw_selected = submission.data.get("selected")
-    selected = (
-        [value for value in raw_selected if value in known]
-        if isinstance(raw_selected, list)
-        else []
-    )
-    free_text = submission.data.get("free_text")
-    return {
-        "selected": selected,
-        "free_text": free_text.strip() if isinstance(free_text, str) else "",
-    }
+    if request.questions is None:
+        return _extract_answer(steps[0], submission.data)
+
+    raw_answers = submission.data.get("answers")
+    answers = [
+        _extract_answer(
+            step,
+            raw_answers[index]
+            if isinstance(raw_answers, list) and index < len(raw_answers)
+            else None,
+        )
+        for index, step in enumerate(steps)
+    ]
+    return {"answers": answers}
