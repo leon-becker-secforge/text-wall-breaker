@@ -71,25 +71,65 @@ Selecting an option and writing free text are additive, never exclusive. The sen
 enables once at least one option is selected **or** the free-text box is non-empty, and
 an answer may carry both.
 
+An option's body over ~400 characters, or one carrying an image or a fenced code block,
+collapses behind a click-to-open row instead of always being shown; `recommended: true`
+pre-expands that row (without pre-selecting the option) for the one the user should read
+first. Two or more image-bearing options switch the whole page to a widened, grid gallery
+instead (comparing screenshots side by side beats one at a time behind a drawer), and
+never collapse behind one. Every image, gallery or not, is click-to-zoom: it expands
+full-size in a lightbox, dismissed by clicking again or Escape.
+
+### Several questions on one page
+
+`questions` (prototype) replaces `question`/`options`/`multi_select`/`allow_free_text`
+(set one or the other, never both) to ask several questions on a single page, presented
+as a wizard: one question per screen, a progress bar, Back/Next.
+
+```json
+{
+  "questions": [
+    {"question": "Which backend?", "options": [{"id": "pg", "label": "PostgreSQL"}]},
+    {"question": "Which region?", "allow_free_text": true}
+  ]
+}
+```
+
+Each entry takes the same keys `question`/`options`/`multi_select`/`allow_free_text`
+takes for one question. The result carries one answer per question, in order, under
+`answers` instead of at the top level; see Result below.
+
 ### Result
 
 Exactly one of:
 
 ```json
-{"selected": ["pg"], "free_text": ""}
+{"selected": ["pg"], "free_text": "", "expanded": []}
+{"answers": [{"selected": ["pg"], "free_text": "", "expanded": []}, ...]}
 {"cancelled": true}
 {"timed_out": true}
 ```
 
-Cancel is a control of its own on the page, so an answer the user declined to give is
-distinguishable from one that never arrived. `timeout_seconds` is an *idle* timeout,
-refreshed by any traffic from the page — including the probe it sends on load — so the
-window starts when the page renders rather than when the browser was launched.
+The first shape answers `question`; the second, one entry per question in order,
+answers `questions`. Cancel is a control of its own on the page, so an answer the user
+declined to give is distinguishable from one that never arrived. `timeout_seconds` is an
+*idle* timeout, refreshed by any traffic from the page — including the probe it sends on
+load — so the window starts when the page renders rather than when the browser was
+launched.
+
+`expanded` is the ids of options whose collapsed body was opened at any point before the
+answer was sent. It stays set even if the drawer was closed again afterwards, so an id
+can be expanded without being selected, or selected without ever being expanded (a short
+option, or one never opened).
 
 ## Markdown
 
 A deliberate subset: headings, paragraphs, fenced and inline code, unordered and ordered
-lists, links, images, bold and italic. Anything outside it renders as literal text.
+lists (nestable by indentation), blockquotes, GFM pipe tables (with `:--`/`:-:`/`--:`
+alignment), links, images, bold, italic, and strikethrough. Anything outside it renders
+as literal text.
+
+A ` ```diff ` fenced block gets its own minimal rendering instead of a plain code block:
+a colored left-edge rule and `+`/`-` markers per line, with removed lines struck through.
 
 Raw HTML is never passed through. Every run of source text is escaped before any tag is
 added, so a `<script>` in a question appears as visible text. Rendering happens in Python
@@ -108,12 +148,25 @@ and `data:image/`; anything else, `javascript:` above all, renders as text.
 
 ## How a call works
 
+Every process keeps one shared browser tab (prototype): a call tries to reuse it first,
+and the already-open tab notices the new question and reloads in place, so a sequence of
+`ask` calls doesn't open a new tab each time. A call that finds the shared tab already
+answering another question falls back to its own one-off tab instead of waiting for it,
+so two overlapping calls stay safe. The one-off path is the original, always-safe
+behaviour:
+
 1. A loopback socket binds an OS-chosen port on `127.0.0.1`, and a fresh
    `secrets.token_hex(16)` token is generated — both **before** the page is written, so
    they can be baked into its submit URL.
 2. The page is written to a per-call temp directory and handed to `xdg-open`.
 3. The call blocks on that socket until the token-matched POST arrives, a cancel arrives,
    or the idle timeout elapses. The temp directory is removed on every exit path.
+
+The tab title gets a checkmark or cross prefix once its question is answered or
+cancelled, so an answered tab left open (or waiting its turn, with tab reuse) is
+identifiable without switching to it. The last chosen light/dark theme is remembered across processes and
+browser profiles (a small state file, not just the browser's own `localStorage`) and
+baked into the very first paint rather than corrected after the fact by script.
 
 The token is the whole of the authentication: a `file://` page reports its origin as
 `null`, so an `Origin` check cannot tell our page from any other local page that guessed

@@ -3,6 +3,27 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-09-20
+
+### Added
+
+- Blockquotes (`>`) in the Markdown subset, styled with a neutral left border and no
+  fill, picked in a four-way visual A/B/C/D over an accent rule (with and without a
+  tint background) and a bordered card.
+- Nested unordered/ordered lists, inferred from indentation, replacing the previous
+  single-level list buffer.
+- Strikethrough (`~~text~~`), rendered as `<del>`.
+- `expanded` alongside `selected`/`free_text` in the `ask` result: the ids of options
+  whose Markdown body drawer was opened at any point before the answer was sent, latched
+  so closing the drawer again afterwards (the expected motion with several long options)
+  doesn't erase the signal.
+
+### Fixed
+
+- The wizard page's Back/Next had no matching CSS selector at all, so they rendered as
+  plain unstyled browser buttons instead of matching the single-question page's Send
+  answer/Cancel.
+
 ## [0.2.0] - 2026-09-20
 
 ### Added
