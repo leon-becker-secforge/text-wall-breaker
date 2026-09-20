@@ -181,3 +181,33 @@ def test_blockquote_ends_at_a_blank_line_or_non_quote_line():
 
     out = render_markdown("> quoted\nafter")
     assert out == "<blockquote><p>quoted</p></blockquote><p>after</p>"
+
+
+def test_strikethrough():
+    assert render_inline("~~gone~~") == "<del>gone</del>"
+
+
+def test_strikethrough_nests_other_emphasis():
+    assert render_inline("~~**gone**~~") == "<del><strong>gone</strong></del>"
+
+
+def test_nested_bullet_list():
+    out = render_markdown("- one\n  - one.a\n- two")
+    assert out == "<ul><li>one<ul><li>one.a</li></ul></li><li>two</li></ul>"
+
+
+def test_nested_ordered_list():
+    out = render_markdown("1. one\n   1. one.a\n2. two")
+    assert out == "<ol><li>one<ol><li>one.a</li></ol></li><li>two</li></ol>"
+
+
+def test_nested_list_mixed_markers():
+    out = render_markdown("- one\n  1. one.a\n  2. one.b\n- two")
+    assert out == (
+        "<ul><li>one<ol><li>one.a</li><li>one.b</li></ol></li><li>two</li></ul>"
+    )
+
+
+def test_multiple_nesting_levels():
+    out = render_markdown("- a\n  - b\n    - c")
+    assert out == "<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>"

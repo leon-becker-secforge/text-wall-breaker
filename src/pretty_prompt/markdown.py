@@ -2,9 +2,9 @@
 
 Deliberately not a CommonMark implementation. The prompt text an agent writes is short
 and hand-authored, so the supported set is the one an agent actually reaches for:
-headings, paragraphs, fenced and inline code, unordered and ordered lists, blockquotes,
-links, images, bold and italic. Anything outside that set renders as literal text rather
-than silently disappearing.
+headings, paragraphs, fenced and inline code, unordered and ordered lists (nestable by
+indentation), blockquotes, links, images, bold, italic, and strikethrough. Anything
+outside that set renders as literal text rather than silently disappearing.
 
 Raw HTML in the source is never passed through — every run of source text is escaped
 before any tag this module emits is added, so a `<script>` in a question becomes visible
@@ -31,8 +31,8 @@ _SAFE_SCHEMES = ("http://", "https://", "file://", "mailto:", "data:image/")
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 _FENCE = re.compile(r"^```\s*([A-Za-z0-9_+-]*)\s*$")
-_BULLET = re.compile(r"^[-*]\s+(.*)$")
-_ORDERED = re.compile(r"^\d+[.)]\s+(.*)$")
+_BULLET = re.compile(r"^([ \t]*)[-*]\s+(.*)$")
+_ORDERED = re.compile(r"^([ \t]*)\d+[.)]\s+(.*)$")
 _QUOTE = re.compile(r"^>\s?(.*)$")
 
 # A GFM pipe-table separator cell: optional colons around one or more dashes, e.g. `---`,
@@ -50,7 +50,8 @@ _INLINE = re.compile(
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
     # first: a non-greedy close would otherwise strand the trailing marker as text.
     r"|(?P<b>\*\*|__)(?P<b_text>.+?)(?P=b)(?![*_])"
-    r"|(?P<i>[*_])(?P<i_text>.+?)(?P=i)",
+    r"|(?P<i>[*_])(?P<i_text>.+?)(?P=i)"
+    r"|(?P<s>~~)(?P<s_text>.+?)(?P=s)",
     re.DOTALL,
 )
 
@@ -106,6 +107,9 @@ def _render_match(match: re.Match[str]) -> str:
     if match.group("b"):
         return f"<strong>{render_inline(match.group('b_text'))}</strong>"
 
+    if match.group("s"):
+        return f"<del>{render_inline(match.group('s_text'))}</del>"
+
     return f"<em>{render_inline(match.group('i_text'))}</em>"
 
 
@@ -152,6 +156,29 @@ def _render_table(header: list[str], aligns: list[str | None], rows: list[list[s
     return f"<table>{thead}{tbody}</table>"
 
 
+def _render_list(entries: list[tuple[int, str, str]], start: int) -> tuple[str, int]:
+    """Render one `<ul>`/`<ol>` from `entries` starting at `start`, returning (html, next).
+
+    `entries` is a flat (indent, tag, text) sequence for a contiguous run of list lines;
+    nesting is inferred from indent increasing, the same way the block loop above infers
+    nesting for nothing else — there is no separate tree built ahead of time. A deeper
+    indent right after an item becomes that item's own nested list (recursing); a tag
+    change at the *same* indent ends the current list rather than joining it, so `1. one`
+    followed by `- two` renders as two sibling lists, not one with a mismatched marker.
+    """
+    indent, tag, _ = entries[start]
+    items: list[str] = []
+    index = start
+    while index < len(entries) and entries[index][0] == indent and entries[index][1] == tag:
+        content = render_inline(entries[index][2])
+        index += 1
+        if index < len(entries) and entries[index][0] > indent:
+            nested_html, index = _render_list(entries, index)
+            content += nested_html
+        items.append(f"<li>{content}</li>")
+    return f"<{tag}>{''.join(items)}</{tag}>", index
+
+
 def _render_diff_block(body_lines: list[str]) -> str:
     """A ```diff fenced block, one `.line` per row, classified by its leading marker.
 
@@ -182,8 +209,7 @@ def render_markdown(text: str) -> str:
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     out: list[str] = []
     paragraph: list[str] = []
-    list_items: list[str] = []
-    list_tag = ""
+    list_entries: list[tuple[int, str, str]] = []
     quote_lines: list[str] = []
 
     def flush_paragraph() -> None:
@@ -192,12 +218,12 @@ def render_markdown(text: str) -> str:
             paragraph.clear()
 
     def flush_list() -> None:
-        nonlocal list_tag
-        if list_items:
-            rendered = "".join(f"<li>{render_inline(item)}</li>" for item in list_items)
-            out.append(f"<{list_tag}>{rendered}</{list_tag}>")
-            list_items.clear()
-        list_tag = ""
+        if list_entries:
+            index = 0
+            while index < len(list_entries):
+                html, index = _render_list(list_entries, index)
+                out.append(html)
+            list_entries.clear()
 
     def flush_quote() -> None:
         if quote_lines:
@@ -275,14 +301,10 @@ def render_markdown(text: str) -> str:
         item_match = bullet or ordered
         if item_match is not None:
             tag = "ul" if bullet is not None else "ol"
-            if list_tag and list_tag != tag:
-                # A bullet directly after a numbered item starts a new list rather than
-                # joining the old one, so the marker the author typed is the one shown.
-                flush_list()
             flush_paragraph()
             flush_quote()
-            list_tag = tag
-            list_items.append(item_match.group(1))
+            indent = len(item_match.group(1).expandtabs())
+            list_entries.append((indent, tag, item_match.group(2)))
             index += 1
             continue
 
