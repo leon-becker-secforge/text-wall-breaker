@@ -279,9 +279,12 @@ main img { cursor: zoom-in; }
 .pp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pp-actions button { border-radius: 6px; padding: 7px 14px; font: inherit;
   font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer; }
-#pp-submit { border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
+/* #pp-next is the wizard page's equivalent of #pp-submit (the primary action), and
+   #pp-back its equivalent of #pp-cancel (secondary) — grouped here rather than
+   duplicated in _MULTI_ADDENDUM, since neither pair of ids ever coexists on one page. */
+#pp-submit, #pp-next { border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
   color: var(--ntw-accent-contrast); }
-#pp-cancel { border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
+#pp-cancel, #pp-back { border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
 .pp-actions button:disabled { opacity: 0.5; cursor: default; }
 #pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
 
