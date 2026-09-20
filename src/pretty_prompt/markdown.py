@@ -2,9 +2,9 @@
 
 Deliberately not a CommonMark implementation. The prompt text an agent writes is short
 and hand-authored, so the supported set is the one an agent actually reaches for:
-headings, paragraphs, fenced and inline code, unordered and ordered lists, links,
-images, bold and italic. Anything outside that set renders as literal text rather than
-silently disappearing.
+headings, paragraphs, fenced and inline code, unordered and ordered lists, blockquotes,
+links, images, bold and italic. Anything outside that set renders as literal text rather
+than silently disappearing.
 
 Raw HTML in the source is never passed through — every run of source text is escaped
 before any tag this module emits is added, so a `<script>` in a question becomes visible
@@ -33,6 +33,7 @@ _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 _FENCE = re.compile(r"^```\s*([A-Za-z0-9_+-]*)\s*$")
 _BULLET = re.compile(r"^[-*]\s+(.*)$")
 _ORDERED = re.compile(r"^\d+[.)]\s+(.*)$")
+_QUOTE = re.compile(r"^>\s?(.*)$")
 
 # A GFM pipe-table separator cell: optional colons around one or more dashes, e.g. `---`,
 # `:---`, `---:` or `:---:`. The row this belongs to is what tells a table apart from a
@@ -183,6 +184,7 @@ def render_markdown(text: str) -> str:
     paragraph: list[str] = []
     list_items: list[str] = []
     list_tag = ""
+    quote_lines: list[str] = []
 
     def flush_paragraph() -> None:
         if paragraph:
@@ -197,9 +199,16 @@ def render_markdown(text: str) -> str:
             list_items.clear()
         list_tag = ""
 
+    def flush_quote() -> None:
+        if quote_lines:
+            body = "<br>".join(render_inline(line) for line in quote_lines)
+            out.append(f"<blockquote><p>{body}</p></blockquote>")
+            quote_lines.clear()
+
     def flush_all() -> None:
         flush_paragraph()
         flush_list()
+        flush_quote()
 
     index = 0
     while index < len(lines):
@@ -238,6 +247,14 @@ def render_markdown(text: str) -> str:
             index += 1
             continue
 
+        quote = _QUOTE.match(line)
+        if quote is not None:
+            flush_paragraph()
+            flush_list()
+            quote_lines.append(quote.group(1))
+            index += 1
+            continue
+
         # A table is a header row immediately followed by a separator row — checking the
         # next line is what tells it apart from a paragraph that just happens to contain
         # a `|`, since neither row is identifiable from itself alone.
@@ -263,12 +280,14 @@ def render_markdown(text: str) -> str:
                 # joining the old one, so the marker the author typed is the one shown.
                 flush_list()
             flush_paragraph()
+            flush_quote()
             list_tag = tag
             list_items.append(item_match.group(1))
             index += 1
             continue
 
         flush_list()
+        flush_quote()
         paragraph.append(line)
         index += 1
 

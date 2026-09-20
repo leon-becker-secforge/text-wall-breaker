@@ -155,3 +155,29 @@ def test_diff_block_escapes_line_content():
 def test_diff_block_pads_empty_lines():
     out = render_markdown("```diff\n \n```")
     assert '<div class="line ctx">&nbsp;</div>' in out
+
+
+def test_blockquote_renders_as_blockquote():
+    assert render_markdown("> quoted") == "<blockquote><p>quoted</p></blockquote>"
+
+
+def test_blockquote_marker_without_a_space_is_still_recognised():
+    assert render_markdown(">quoted") == "<blockquote><p>quoted</p></blockquote>"
+
+
+def test_multiline_blockquote_keeps_authored_line_breaks():
+    out = render_markdown("> one\n> two")
+    assert out == "<blockquote><p>one<br>two</p></blockquote>"
+
+
+def test_blockquote_renders_inline_markdown():
+    out = render_markdown("> **bold** text")
+    assert out == "<blockquote><p><strong>bold</strong> text</p></blockquote>"
+
+
+def test_blockquote_ends_at_a_blank_line_or_non_quote_line():
+    out = render_markdown("> quoted\n\nafter")
+    assert out == "<blockquote><p>quoted</p></blockquote><p>after</p>"
+
+    out = render_markdown("> quoted\nafter")
+    assert out == "<blockquote><p>quoted</p></blockquote><p>after</p>"
