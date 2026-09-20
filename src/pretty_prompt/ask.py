@@ -211,22 +211,22 @@ def _resolve_accent() -> str | None:
 
 
 def _extract_answer(step: Question, raw: object) -> dict[str, Any]:
-    """One `{selected, free_text}` from a page's answer for `step`.
+    """One `{selected, free_text, expanded}` from a page's answer for `step`.
 
     Ids are filtered against `step` rather than trusted: the page is the only thing
     that should ever POST here, but the answer is what the agent acts on.
     """
     known = {option.id for option in step.options}
-    raw_selected = raw.get("selected") if isinstance(raw, dict) else None
-    selected = (
-        [value for value in raw_selected if value in known]
-        if isinstance(raw_selected, list)
-        else []
-    )
+
+    def _known_ids(key: str) -> list[str]:
+        raw_ids = raw.get(key) if isinstance(raw, dict) else None
+        return [value for value in raw_ids if value in known] if isinstance(raw_ids, list) else []
+
     free_text = raw.get("free_text") if isinstance(raw, dict) else None
     return {
-        "selected": selected,
+        "selected": _known_ids("selected"),
         "free_text": free_text.strip() if isinstance(free_text, str) else "",
+        "expanded": _known_ids("expanded"),
     }
 
 
@@ -365,9 +365,11 @@ def run_ask(request: AskRequest) -> dict[str, Any]:
     """Open the page for `request` and block until it is answered, cancelled or idle.
 
     Returns `{"cancelled": True}` or `{"timed_out": True}` either way. Otherwise, for a
-    single question (the `question` shorthand), `{"selected", "free_text"}`; for
-    `questions`, `{"answers": [{"selected", "free_text"}, ...]}`, one entry per question,
-    in order.
+    single question (the `question` shorthand), `{"selected", "free_text", "expanded"}`;
+    for `questions`, `{"answers": [{"selected", "free_text", "expanded"}, ...]}`, one
+    entry per question, in order. `expanded` is the option ids whose body drawer was
+    opened at any point before the answer was sent, whether or not it was closed again
+    afterwards.
 
     Tries to reuse the process's one shared browser tab first, falling back to a fresh
     one-off tab if that shared tab is already answering another call — see the module

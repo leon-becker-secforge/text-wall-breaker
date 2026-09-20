@@ -68,8 +68,8 @@ def _option(**kwargs):
     return {"id": "a", "label": "A", "body": None, "recommended": False, **kwargs}
 
 
-_DRAWER_OPEN_TAG = '<details class="pp-option-drawer" open>'
-_DRAWER_CLOSED_TAG = '<details class="pp-option-drawer">'
+_DRAWER_OPEN_TAG = '<details class="pp-option-drawer" data-option-id="a" open>'
+_DRAWER_CLOSED_TAG = '<details class="pp-option-drawer" data-option-id="a">'
 
 
 def test_option_with_no_body_is_a_plain_label():
@@ -274,7 +274,7 @@ def test_one_image_option_does_not_trigger_gallery_mode():
     body = _body(_page(options=[_option(id="a", body="![x](https://example.com/a.png)")]))
     assert "pp-options-gallery" not in body
     # A single image is still shown behind a drawer, same as any other long body.
-    assert '<details class="pp-option-drawer">' in body
+    assert '<details class="pp-option-drawer" data-option-id="a">' in body
 
 
 def test_two_image_options_trigger_gallery_mode():
@@ -287,8 +287,11 @@ def test_two_image_options_trigger_gallery_mode():
         )
     )
     assert "pp-options-gallery" in body
-    # Gallery mode never drawers an image behind a click.
-    assert "pp-option-drawer" not in body
+    # Gallery mode never drawers an image behind a click. Scoped to the markup, not the
+    # script — the script's own drawer-querying selector is a `pp-option-drawer` literal
+    # regardless of whether the page has any.
+    markup = body.split("<script>", 1)[0]
+    assert "pp-option-drawer" not in markup
 
 
 def test_gallery_widens_the_page():

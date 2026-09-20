@@ -401,7 +401,17 @@ __FREE_TEXT__
   var cancelBtn = document.getElementById('pp-cancel');
   var status = document.getElementById('pp-status');
   var freeText = document.getElementById('pp-free-text');
-  var inputs = Array.prototype.slice.call(document.querySelectorAll('[data-option-id]'));
+  var inputs = Array.prototype.slice.call(document.querySelectorAll('input[data-option-id]'));
+  var drawers = Array.prototype.slice.call(document.querySelectorAll('.pp-option-drawer[data-option-id]'));
+  // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
+  // now" — with several long-bodied options, closing one after reading it to get to the
+  // next is the expected motion, and a snapshot at submit time would read that as never
+  // having been opened at all. The initial `open` attribute (recommended: true) counts
+  // as having been shown too, seeded here rather than waiting for a first `toggle`.
+  drawers.forEach(function (d) {
+    d._wasExpanded = d.open;
+    d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
+  });
 
   // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
   // genuinely new question, never the one just answered — but the browser doesn't know
@@ -441,7 +451,11 @@ __FREE_TEXT__
     return {
       selected: inputs.filter(function (i) { return i.checked; })
                       .map(function (i) { return i.dataset.optionId; }),
-      free_text: freeText ? freeText.value.trim() : ''
+      free_text: freeText ? freeText.value.trim() : '',
+      // Every drawer opened at any point this page has been up, not just the ones still
+      // open at submit time — see the `_wasExpanded` tracking above.
+      expanded: drawers.filter(function (d) { return d._wasExpanded; })
+                        .map(function (d) { return d.dataset.optionId; })
     };
   }
 
@@ -710,7 +724,8 @@ __STEPS__
   var status = document.getElementById('pp-status');
   var progressLabel = document.getElementById('pp-progress-label');
   var progressFill = document.getElementById('pp-progress-fill');
-  var inputs = Array.prototype.slice.call(document.querySelectorAll('[data-option-id]'));
+  var inputs = Array.prototype.slice.call(document.querySelectorAll('input[data-option-id]'));
+  var drawers = Array.prototype.slice.call(document.querySelectorAll('.pp-option-drawer[data-option-id]'));
   var freeTexts = Array.prototype.slice.call(document.querySelectorAll('textarea[data-step]'));
   var current = 0;
 
@@ -722,6 +737,16 @@ __STEPS__
   // anything else reads these fields, or a new question can silently start pre-answered.
   inputs.forEach(function (i) { i.checked = false; });
   freeTexts.forEach(function (t) { t.value = ''; });
+
+  // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
+  // now" — with several long-bodied options, closing one after reading it to move to
+  // the next is the expected motion, and a snapshot at submit time would read that as
+  // never having been opened. The initial `open` attribute (recommended: true) counts
+  // as having been shown too, seeded here rather than waiting for a first `toggle`.
+  drawers.forEach(function (d) {
+    d._wasExpanded = d.open;
+    d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
+  });
 
   // The server already set the theme attribute from its own saved state whenever it has
   // one (see page.py's __THEME_ATTR__); localStorage is only the fallback for the very
@@ -747,6 +772,13 @@ __STEPS__
   function stepInputs(step) {
     return inputs.filter(function (i) { return i.dataset.step === String(step); });
   }
+  // Drawers carry no data-step of their own — scoped by DOM ancestry (their step's
+  // <section>) instead, the same way stepFreeText's id already ties a field to a step.
+  function stepDrawers(step) {
+    return Array.prototype.slice.call(
+      steps[step].querySelectorAll('.pp-option-drawer[data-option-id]')
+    );
+  }
   function stepFreeText(step) {
     return document.getElementById('pp-free-text-' + step);
   }
@@ -762,7 +794,9 @@ __STEPS__
       answers.push({
         selected: stepInputs(s).filter(function (i) { return i.checked; })
                                 .map(function (i) { return i.dataset.optionId; }),
-        free_text: ft ? ft.value.trim() : ''
+        free_text: ft ? ft.value.trim() : '',
+        expanded: stepDrawers(s).filter(function (d) { return d._wasExpanded; })
+                                 .map(function (d) { return d.dataset.optionId; })
       });
     }
     return { answers: answers };
@@ -1090,7 +1124,8 @@ def _render_options(
         open_attr = " open" if option.get("recommended") else ""
         chevron = '<span class="pp-option-chevron" aria-hidden="true"></span>'
         rows.append(
-            f'    <li class="pp-option"><details class="pp-option-drawer"{open_attr}>'
+            f'    <li class="pp-option"><details class="pp-option-drawer" '
+            f'data-option-id="{option_id}"{open_attr}>'
             f'<summary class="pp-option-select">{select_html}{chevron}</summary>'
             f"{body_div}</details></li>"
         )
@@ -1227,11 +1262,12 @@ def build_multi_page(
     """Return the complete HTML document for an `ask` call carrying several questions.
 
     Prototype: a sibling of `build_page` rather than a generalisation of it, so the
-    well-exercised single-question page and its wire format (`{selected, free_text}`)
-    stay exactly as they were. Each entry of `questions` takes the same keys `build_page`
-    takes for one question (`question`, `options`, `multi_select`, `allow_free_text`).
-    The page's wire format here is `{"answers": [{selected, free_text}, ...]}`, one entry
-    per question, in the order given — see `ask.run_ask` for how it's unpacked.
+    well-exercised single-question page and its wire format (`{selected, free_text,
+    expanded}`) stay exactly as they were. Each entry of `questions` takes the same keys
+    `build_page` takes for one question (`question`, `options`, `multi_select`,
+    `allow_free_text`). The page's wire format here is `{"answers": [{selected,
+    free_text, expanded}, ...]}`, one entry per question, in the order given — see
+    `ask.run_ask` for how it's unpacked.
 
     Presented as a wizard, one question per screen with a progress bar and Back/Next —
     picked over showing every question stacked at once and over an accordion in a

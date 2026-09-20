@@ -153,7 +153,31 @@ def test_submission_returns_ids_and_free_text(browser):
     result = run_ask(
         AskRequest(question="q", options=[Option(id="a", label="A"), Option(id="b", label="B")])
     )
-    assert result == {"selected": ["b"], "free_text": "hi"}
+    assert result == {"selected": ["b"], "free_text": "hi", "expanded": []}
+
+
+def test_submission_returns_expanded_ids(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"selected": ["b"], "free_text": "", "expanded": ["a"]},
+        }
+    )
+    result = run_ask(
+        AskRequest(question="q", options=[Option(id="a", label="A"), Option(id="b", label="B")])
+    )
+    assert result == {"selected": ["b"], "free_text": "", "expanded": ["a"]}
+
+
+def test_unknown_expanded_ids_are_dropped(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"selected": [], "free_text": "", "expanded": ["a", "nope"]},
+        }
+    )
+    result = run_ask(AskRequest(question="q", options=[Option(id="a", label="A")]))
+    assert result == {"selected": [], "free_text": "", "expanded": ["a"]}
 
 
 def test_cancel_is_reported_as_cancelled(browser):
@@ -172,7 +196,7 @@ def test_no_answer_times_out(browser):
 def test_unknown_ids_in_a_submission_are_dropped(browser):
     browser(lambda page: {"kind": "submit", "data": {"selected": ["a", "nope"]}})
     result = run_ask(AskRequest(question="q", options=[Option(id="a", label="A")]))
-    assert result == {"selected": ["a"], "free_text": ""}
+    assert result == {"selected": ["a"], "free_text": "", "expanded": []}
 
 
 def test_the_page_carries_the_options_and_a_matching_token(browser):
@@ -265,8 +289,8 @@ def test_multi_question_submission_returns_one_answer_per_question(browser):
     )
     assert result == {
         "answers": [
-            {"selected": ["a"], "free_text": ""},
-            {"selected": [], "free_text": "second"},
+            {"selected": ["a"], "free_text": "", "expanded": []},
+            {"selected": [], "free_text": "second", "expanded": []},
         ]
     }
 
@@ -281,7 +305,7 @@ def test_multi_question_filters_unknown_ids_per_question(browser):
     result = run_ask(
         AskRequest(questions=[Question(question="q", options=[Option(id="a", label="A")])])
     )
-    assert result == {"answers": [{"selected": ["a"], "free_text": ""}]}
+    assert result == {"answers": [{"selected": ["a"], "free_text": "", "expanded": []}]}
 
 
 def test_multi_question_missing_answers_are_padded_empty(browser):
@@ -296,8 +320,8 @@ def test_multi_question_missing_answers_are_padded_empty(browser):
     )
     assert result == {
         "answers": [
-            {"selected": [], "free_text": ""},
-            {"selected": [], "free_text": ""},
+            {"selected": [], "free_text": "", "expanded": []},
+            {"selected": [], "free_text": "", "expanded": []},
         ]
     }
 

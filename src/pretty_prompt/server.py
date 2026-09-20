@@ -45,18 +45,22 @@ options need Markdown bodies, or when it should show an image.
 Markdown image syntax with an absolute file:// URL, e.g. `![diagram](file:///tmp/x.png)`.
 
 Returns exactly one of:
-  {"selected": ["<option id>", ...], "free_text": "..."}  the user answered
-  {"answers": [{"selected": [...], "free_text": "..."}, ...]}  answered `questions`
+  {"selected": [...], "free_text": "...", "expanded": [...]}  the user answered
+  {"answers": [{"selected": [...], "free_text": "...", "expanded": [...]}, ...]}
+                                                             answered `questions`
   {"cancelled": true}                                      the user pressed Cancel
   {"timed_out": true}                                      nothing arrived in time
 
 Selecting an option and writing free text are additive, not exclusive, so `selected` and
-`free_text` can both be populated.
+`free_text` can both be populated. `expanded` is the ids of options whose Markdown body
+was opened (read) at any point before the answer was sent, for options long enough to
+collapse behind a drawer — it stays set even if the drawer was closed again afterwards,
+so an id can be selected without being expanded, or expanded without being selected.
 
 `questions` (prototype) puts several questions on one page instead of one — set it
 instead of `question`/`options`/`multi_select`/`allow_free_text`, never alongside them.
 The user answers all of them before sending, and the result's `answers` list is in the
-same order, one `{selected, free_text}` per question."""
+same order, one `{selected, free_text, expanded}` per question."""
 
 
 def environment_problem() -> str | None:
