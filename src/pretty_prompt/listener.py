@@ -20,13 +20,17 @@ from __future__ import annotations
 
 import json
 import secrets
+import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
-__all__ = ["LoopbackListener", "Submission"]
+from .page import save_theme
+
+__all__ = ["LoopbackListener", "SessionListener", "Submission"]
 
 # Bodies larger than this are rejected unread. Nothing legitimate approaches it — a
 # submission is a handful of option ids and a free-text box.
@@ -42,6 +46,52 @@ class Submission:
 
     kind: str
     data: dict[str, Any]
+
+
+def _handle_submit_payload(
+    raw: bytes,
+    respond: Callable[[int, bytes], None],
+    deliver: Callable[[Submission], None],
+) -> None:
+    """Parse one POST /submit body and act on it via `respond`/`deliver`.
+
+    Shared between `_Handler` (one listener, one submission) and `_SessionHandler` (one
+    listener, many submissions over its life) — a probe, a theme change, or an answer
+    means the same thing to either one; only what "deliver" does with an answer differs.
+    """
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        respond(400, b'{"error":"invalid json"}')
+        return
+    if not isinstance(payload, dict):
+        respond(400, b'{"error":"expected an object"}')
+        return
+
+    kind = payload.get("kind")
+    if kind == "probe":
+        # The page fires this on load to prove the token and CORS response are
+        # readable. It bumps the idle deadline but must not consume the one
+        # submission this listener exists to collect.
+        respond(204, b"")
+        return
+    if kind == "theme":
+        # The page's toggle reports a change here so the *next* page this process
+        # serves can start in it — see page.py's save_theme/read_saved_theme. Never
+        # consumes the one submission, the same as a probe.
+        data = payload.get("data")
+        theme = data.get("theme") if isinstance(data, dict) else None
+        if isinstance(theme, str):
+            save_theme(theme)
+        respond(204, b"")
+        return
+    if kind not in ("submit", "cancel"):
+        respond(400, b'{"error":"unknown kind"}')
+        return
+
+    data = payload.get("data")
+    respond(200, b'{"ok":true}')
+    deliver(Submission(kind=kind, data=data if isinstance(data, dict) else {}))
 
 
 class _Server(HTTPServer):
@@ -99,29 +149,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._respond(403, b'{"error":"bad token"}')
             return
 
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            self._respond(400, b'{"error":"invalid json"}')
-            return
-        if not isinstance(payload, dict):
-            self._respond(400, b'{"error":"expected an object"}')
-            return
-
-        kind = payload.get("kind")
-        if kind == "probe":
-            # The page fires this on load to prove the token and CORS response are
-            # readable. It bumps the idle deadline but must not consume the one
-            # submission this listener exists to collect.
-            self._respond(204)
-            return
-        if kind not in ("submit", "cancel"):
-            self._respond(400, b'{"error":"unknown kind"}')
-            return
-
-        data = payload.get("data")
-        self._respond(200, b'{"ok":true}')
-        listener.deliver(Submission(kind=kind, data=data if isinstance(data, dict) else {}))
+        _handle_submit_payload(raw, self._respond, listener.deliver)
 
 
 class LoopbackListener:
@@ -175,3 +203,175 @@ class LoopbackListener:
 
     def __exit__(self, *exc: object) -> None:
         self.close()
+
+
+class _SessionServer(HTTPServer):
+    """An HTTPServer that carries the session its handler reports to."""
+
+    session: SessionListener
+
+
+class _SessionHandler(BaseHTTPRequestHandler):
+    server_version = "pretty-prompt/1"
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: ARG002
+        return  # see _Handler.log_message
+
+    @property
+    def session(self) -> SessionListener:
+        return cast("_SessionServer", self.server).session
+
+    def _drain_body(self) -> bytes:
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length <= 0 or length > _MAX_BODY_BYTES:
+            return b""
+        return self.rfile.read(length)
+
+    def _respond(
+        self, status: int, body: bytes = b"", content_type: str = "application/json"
+    ) -> None:
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def _token_ok(self, query: str) -> bool:
+        return self.session.token_matches(parse_qs(query).get("t", [""])[0])
+
+    def do_GET(self) -> None:
+        session = self.session
+        parts = urlsplit(self.path)
+        if not self._token_ok(parts.query):
+            self._respond(403)
+            return
+        session.note_activity()
+
+        if parts.path in ("", "/"):
+            page, _generation = session.current_page()
+            self._respond(200, page, content_type="text/html; charset=utf-8")
+            return
+        if parts.path == "/status":
+            _page, generation = session.current_page()
+            body = json.dumps({"generation": generation}).encode("utf-8")
+            self._respond(200, body)
+            return
+        self._respond(404)
+
+    def do_POST(self) -> None:
+        session = self.session
+        session.note_activity()
+        raw = self._drain_body()
+
+        parts = urlsplit(self.path)
+        if parts.path != "/submit":
+            self._respond(404)
+            return
+        if not self._token_ok(parts.query):
+            self._respond(403, b'{"error":"bad token"}')
+            return
+
+        _handle_submit_payload(raw, self._respond, session.deliver)
+
+
+class SessionListener:
+    """A loopback server that outlives a single `ask` call, so the same browser tab can
+    answer several questions instead of a new one opening for each.
+
+    Unlike `LoopbackListener` (one bind, one submission, then closed), this binds once
+    and keeps a background thread servicing it for as long as the process runs. `ask.py`
+    calls `publish()` with each new question, already-open tab notices the change itself
+    — the page polls `GET /status` once it is done with the question it has, and reloads
+    when the generation number moves, landing on `GET /` for the new one (see page.py's
+    `startReusePolling`). Concurrent `ask` calls cannot share one tab without one
+    clobbering the other's in-progress question, so only one caller may hold this at a
+    time — see `try_claim`/`release` — and a caller that can't claim it falls back to its
+    own one-off `LoopbackListener` tab instead of blocking on this one.
+    """
+
+    def __init__(self, token: str) -> None:
+        self._token = token
+        self._state_lock = threading.Lock()
+        self._busy_lock = threading.Lock()
+        self._last_activity = time.monotonic()
+        self._page = b""
+        self._generation = 0
+        self._submission: Submission | None = None
+        self._answered = threading.Event()
+        self.tab_opened = False
+        # Port 0 lets the OS pick a free port, same reasoning as LoopbackListener.
+        self._httpd = _SessionServer(("127.0.0.1", 0), _SessionHandler)
+        self._httpd.session = self
+        # serve_forever(), not handle_request() in a loop: unlike LoopbackListener this
+        # has to keep answering GET /status between `ask` calls, while nothing is
+        # blocked waiting on it — there may be no `run_ask` call in flight at all.
+        self._thread = threading.Thread(target=self._httpd.serve_forever, daemon=True)
+        self._thread.start()
+
+    @property
+    def port(self) -> int:
+        return int(self._httpd.server_address[1])
+
+    @property
+    def token(self) -> str:
+        return self._token
+
+    def token_matches(self, token: str) -> bool:
+        return secrets.compare_digest(token, self._token)
+
+    def note_activity(self) -> None:
+        with self._state_lock:
+            self._last_activity = time.monotonic()
+
+    def try_claim(self) -> bool:
+        """Claim exclusive use of this session for one `ask` call. Never blocks."""
+        return self._busy_lock.acquire(blocking=False)
+
+    def release(self) -> None:
+        self._busy_lock.release()
+
+    def current_page(self) -> tuple[bytes, int]:
+        with self._state_lock:
+            return self._page, self._generation
+
+    def publish(self, build_html: Callable[[int], str]) -> None:
+        """Swap in the next question's page, built from the generation it will carry.
+
+        `build_html` gets the new generation number so it can be baked into the page's
+        own `GENERATION` — a page it matches means it's already showing this content, no
+        reload needed; anything else means a newer question is waiting.
+        """
+        with self._state_lock:
+            self._generation += 1
+            self._page = build_html(self._generation).encode("utf-8")
+            self._submission = None
+        self._answered.clear()
+        self.note_activity()
+
+    def deliver(self, submission: Submission) -> None:
+        with self._state_lock:
+            self._submission = submission
+        self._answered.set()
+
+    def wait_for_answer(self, timeout_seconds: float) -> Submission | None:
+        """Block until the current question is answered, or the tab goes idle too long.
+
+        Polls in `_POLL_SECONDS` slices rather than blocking for the whole timeout in one
+        wait() so an idle deadline bumped by GET/POST traffic (see note_activity) is
+        re-checked promptly instead of only after the original window would have lapsed.
+        """
+        self.note_activity()
+        while True:
+            if self._answered.wait(timeout=_POLL_SECONDS):
+                with self._state_lock:
+                    return self._submission
+            with self._state_lock:
+                idle_for = time.monotonic() - self._last_activity
+            if idle_for > timeout_seconds:
+                return None
+
+    def close(self) -> None:
+        self._httpd.shutdown()
+        self._httpd.server_close()

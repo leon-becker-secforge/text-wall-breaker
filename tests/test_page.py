@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from pretty_prompt.page import InvalidAccent, build_multi_page, build_page, parse_accent
+from pretty_prompt.page import (
+    InvalidAccent,
+    build_multi_page,
+    build_page,
+    parse_accent,
+    read_saved_theme,
+    save_theme,
+)
 
 
 @pytest.mark.parametrize("value", ["#1f7a4c", "1f7a4c", "#1F7A4C", " #1f7a4c "])
@@ -199,3 +206,127 @@ def test_multi_page_custom_accent_overrides_the_built_in_green():
 def test_multi_page_invalid_accent_raises():
     with pytest.raises(InvalidAccent):
         _multi_page(accent="not-a-colour")
+
+
+@pytest.fixture
+def theme_state_home(monkeypatch, tmp_path):
+    """Point the saved-theme file at a throwaway directory, never the real user state."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    return tmp_path
+
+
+def test_read_saved_theme_is_none_when_nothing_was_saved(theme_state_home):
+    assert read_saved_theme() is None
+
+
+def test_save_then_read_round_trips(theme_state_home):
+    save_theme("dark")
+    assert read_saved_theme() == "dark"
+    save_theme("light")
+    assert read_saved_theme() == "light"
+
+
+def test_save_theme_ignores_an_invalid_value(theme_state_home):
+    save_theme("nope")
+    assert read_saved_theme() is None
+
+
+def test_read_saved_theme_ignores_a_corrupted_file(theme_state_home):
+    path = theme_state_home / "pretty-prompt" / "theme"
+    path.parent.mkdir(parents=True)
+    path.write_text("purple", encoding="utf-8")
+    assert read_saved_theme() is None
+
+
+def test_page_bakes_in_the_saved_theme_attribute():
+    assert '<html lang="en" data-theme="dark">' in _page(theme="dark")
+    assert '<html lang="en" data-theme="light">' in _page(theme="light")
+
+
+def test_page_has_no_theme_attribute_when_unsaved():
+    html = _page(theme=None)
+    assert '<html lang="en">' in html
+    assert '<html lang="en" data-theme' not in html
+
+
+def test_multi_page_bakes_in_the_saved_theme_attribute():
+    assert '<html lang="en" data-theme="dark">' in _multi_page(theme="dark")
+
+
+def test_page_title_marks_answered_and_cancelled():
+    html = _page()
+    assert "document.title = '\\u2705 ' + BASE_TITLE;" in html
+    assert "document.title = '\\u2716 ' + BASE_TITLE;" in html
+
+
+def test_multi_page_title_marks_answered_and_cancelled():
+    html = _multi_page()
+    assert "document.title = '\\u2705 ' + BASE_TITLE;" in html
+    assert "document.title = '\\u2716 ' + BASE_TITLE;" in html
+
+
+def test_every_page_carries_a_lightbox_and_zoom_listener():
+    assert 'id="pp-lightbox"' in _page()
+    assert 'id="pp-lightbox"' in _multi_page()
+
+
+def test_one_image_option_does_not_trigger_gallery_mode():
+    body = _body(_page(options=[_option(id="a", body="![x](https://example.com/a.png)")]))
+    assert "pp-options-gallery" not in body
+    # A single image is still shown behind a drawer, same as any other long body.
+    assert '<details class="pp-option-drawer">' in body
+
+
+def test_two_image_options_trigger_gallery_mode():
+    body = _body(
+        _page(
+            options=[
+                _option(id="a", body="![x](https://example.com/a.png)"),
+                _option(id="b", body="![y](https://example.com/b.png)"),
+            ]
+        )
+    )
+    assert "pp-options-gallery" in body
+    # Gallery mode never drawers an image behind a click.
+    assert "pp-option-drawer" not in body
+
+
+def test_gallery_widens_the_page():
+    html = _page(
+        options=[
+            _option(id="a", body="![x](https://example.com/a.png)"),
+            _option(id="b", body="![y](https://example.com/b.png)"),
+        ]
+    )
+    assert '<main class="pp-wide">' in html
+
+
+def test_non_gallery_page_has_a_plain_main_tag():
+    body = _body(_page(options=[_option()]))
+    assert "<main>" in body
+    assert "pp-wide" not in body
+
+
+def test_multi_page_widens_when_any_step_is_a_gallery():
+    html = _multi_page(
+        questions=[
+            {"question": "first", "options": [_option()]},
+            {
+                "question": "second",
+                "options": [
+                    _option(id="a", body="![x](https://example.com/a.png)"),
+                    _option(id="b", body="![y](https://example.com/b.png)"),
+                ],
+            },
+        ]
+    )
+    assert '<main class="pp-wide">' in html
+
+
+def test_lightbox_display_rule_is_guarded_against_the_hidden_attribute():
+    # Regression: `.pp-lightbox { display: flex; ... }` alone beats the browser's own
+    # `[hidden] { display: none }` (author origin outranks user-agent origin regardless
+    # of specificity), which left the full-page overlay visible at all times — the whole
+    # page reading as uniformly, wrongly dark, not just while an image was zoomed.
+    for html in (_page(), _multi_page()):
+        assert ".pp-lightbox[hidden] { display: none; }" in html

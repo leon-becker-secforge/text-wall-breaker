@@ -19,16 +19,66 @@ from __future__ import annotations
 
 import html
 import json
+import os
 from importlib import resources
+from pathlib import Path
 
 from .markdown import render_markdown
 
-__all__ = ["ACCENT_ENV_VAR", "InvalidAccent", "build_multi_page", "build_page", "parse_accent"]
+__all__ = [
+    "ACCENT_ENV_VAR",
+    "InvalidAccent",
+    "build_multi_page",
+    "build_page",
+    "parse_accent",
+    "read_saved_theme",
+    "save_theme",
+]
 
 # Read by both server.py (to validate once at startup) and ask.py (to resolve the
 # colour for each page) — defined here, not in server.py, so ask.py does not have to
 # import from the module that already imports it.
 ACCENT_ENV_VAR = "PRETTY_PROMPT_ACCENT"
+
+# The theme toggle only ever writes localStorage, which is scoped to a `file://` page's
+# storage partition — not guaranteed stable across browsers, profiles, or private
+# windows, and useless to the reusable session page's own served origin, which is a
+# different one again. A tiny state file next to XDG's other per-user state gives the
+# preference one home that survives all of those, and that this process itself can read
+# back before the first paint instead of flashing the wrong theme and correcting via JS.
+_THEME_STATES = ("light", "dark")
+
+
+def _theme_state_path() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / "pretty-prompt" / "theme"
+
+
+def read_saved_theme() -> str | None:
+    """Return the last theme `save_theme` recorded, or None if there isn't one (yet)."""
+    try:
+        value = _theme_state_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return value if value in _THEME_STATES else None
+
+
+def save_theme(theme: str) -> None:
+    """Record `theme` for future pages to start in. Silently a no-op if that fails.
+
+    Called from the listener's request-handling thread when a page's toggle reports a
+    change — losing that write is better than crashing the one connection carrying it,
+    since the theme is a convenience, not the reason the page exists.
+    """
+    if theme not in _THEME_STATES:
+        return
+    path = _theme_state_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(theme, encoding="utf-8")
+    except OSError:
+        return
+
 
 # Where the accent tint sits under a selected option, mixed
 # against each theme's own background rather than a fixed opacity on both: the dark
@@ -58,9 +108,12 @@ _ADDENDUM = """
   --pp-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   /* Light palette: base.css's default tokens read as flat next to real content, so this
-     pushes contrast up — near-black text on pure white, a firmer border, and a deeper,
-     more saturated accent than the vendored `--ntw-accent`. */
-  --ntw-bg: #ffffff;
+     pushes contrast up — near-black text, a firmer border, and a deeper, more saturated
+     accent than the vendored `--ntw-accent`. Pure white (#ffffff) for --ntw-bg was tried
+     first and read as too bright/glary next to that firmer contrast — base.css's own
+     off-white is gentler on the eyes while --ntw-bg-elevated stays pure white, so cards
+     and inputs still lift off the page. */
+  --ntw-bg: #fafaf9;
   --ntw-bg-elevated: #ffffff;
   --ntw-fg: #0a0a0a;
   --ntw-fg-muted: #54595f;
@@ -121,6 +174,54 @@ th, td { padding: 6px 10px; text-align: left; border: none;
 thead th { border-bottom: 2px solid var(--ntw-accent); color: var(--ntw-accent);
   font-weight: 600; text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.03em; }
 tbody tr:last-child td { border-bottom: none; }
+
+/* Picked in the same round as the table style: minimal over a GitHub-style full-line
+   background and a gutter-badge style — colour without a solid block, so it reads as
+   text with an accent rather than a wall of tinted rows. */
+.pp-diff { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0.6em 0;
+  overflow-x: auto; }
+.pp-diff .line { padding: 1px 10px 1px 12px; white-space: pre; border-left: 3px solid transparent; }
+.pp-diff .add { border-left-color: #1f7a4c; }
+.pp-diff .add::before { content: "+ "; color: #1f7a4c; }
+.pp-diff .del { border-left-color: #b3261e; color: var(--ntw-fg-muted);
+  text-decoration: line-through; }
+.pp-diff .del::before { content: "- "; color: #b3261e; text-decoration: none; }
+.pp-diff .ctx::before { content: "\\00a0\\00a0"; }
+.pp-diff .hunk, .pp-diff .file { color: var(--ntw-fg-muted); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pp-diff .add { border-left-color: #3ddc84; }
+  :root:not([data-theme="light"]) .pp-diff .add::before { color: #3ddc84; }
+}
+:root[data-theme="dark"] .pp-diff .add { border-left-color: #3ddc84; }
+:root[data-theme="dark"] .pp-diff .add::before { color: #3ddc84; }
+
+/* Auto-widened (see page.py's _is_gallery) rather than a manual flag, the same way a
+   long option body already auto-collapses into a drawer without the caller asking. */
+main.pp-wide { max-width: 920px; }
+
+/* `.pp-options.pp-options-gallery`, not `.pp-options-gallery` alone: the element carries
+   both classes, and matching both here beats the later, equal-specificity `.pp-options`
+   rule below regardless of which one comes first in the stylesheet — a single-class
+   selector lost that tie to source order once before. */
+.pp-options.pp-options-gallery { display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
+.pp-options-gallery .pp-option { display: flex; flex-direction: column-reverse; gap: 8px;
+  padding: 10px; }
+.pp-options-gallery .pp-option-body { margin: 0; }
+.pp-options-gallery .pp-option-body img { width: 100%; margin-block: 0; }
+
+/* Any image, gallery or not, expands full-size on click — a thumbnail-sized screenshot
+   is otherwise too small to actually compare against another. */
+main img { cursor: zoom-in; }
+.pp-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+/* `[hidden]` alone loses this fight: author-origin CSS beats the browser's own default
+   `[hidden] { display: none }` regardless of specificity, so the unguarded rule above
+   left the overlay visible — and the page looking wrongly, uniformly dark — at all
+   times, not just while zoomed. The extra attribute here outranks the plain class. */
+.pp-lightbox[hidden] { display: none; }
+.pp-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
 
 #pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
   background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
@@ -212,7 +313,7 @@ _MULTI_ADDENDUM = """
 """
 
 _TEMPLATE = """<!doctype html>
-<html lang="en">
+<html lang="en"__THEME_ATTR__>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -222,7 +323,7 @@ __CSS__
 </style>
 </head>
 <body>
-<main>
+<main__MAIN_EXTRA__>
   <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
   <section class="pp-question">
 __QUESTION__
@@ -245,11 +346,44 @@ __FREE_TEXT__
   </div>
 </main>
 
+<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
   var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var THEME_KEY = 'no-text-wall:theme';
+  // So the tab bar shows whether this question is done without switching to the tab —
+  // useful once several are open, or once one is answered and left to wait its turn.
+  var BASE_TITLE = document.title;
+  // Set only when this tab is reused across `ask` calls (see listener.py's
+  // SessionListener) — null on the ordinary one-shot page, where startReusePolling()
+  // below is then a no-op.
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+
+  // Any image (a gallery thumbnail or one in an option/question body) expands full-size
+  // on click — a thumbnail is otherwise too small to actually compare against another.
+  var lightbox = document.getElementById('pp-lightbox');
+  var lightboxImg = document.getElementById('pp-lightbox-img');
+  document.querySelectorAll('main img').forEach(function (img) {
+    img.addEventListener('click', function (e) {
+      e.stopPropagation();
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.hidden = false;
+    });
+  });
+  lightbox.addEventListener('click', function () {
+    lightbox.hidden = true;
+    lightboxImg.src = '';
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !lightbox.hidden) {
+      lightbox.hidden = true;
+      lightboxImg.src = '';
+    }
+  });
 
   var form = document.getElementById('pp-form');
   var submitBtn = document.getElementById('pp-submit');
@@ -258,12 +392,25 @@ __FREE_TEXT__
   var freeText = document.getElementById('pp-free-text');
   var inputs = Array.prototype.slice.call(document.querySelectorAll('[data-option-id]'));
 
-  // Theme: the root attribute overrides the OS preference, absent follows it. Shared
-  // localStorage key with no-text-wall so one toggle covers both surfaces.
-  try {
-    var stored = localStorage.getItem(THEME_KEY);
-    if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
-  } catch (e) { /* private mode: fall back to the OS preference */ }
+  // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
+  // genuinely new question, never the one just answered — but the browser doesn't know
+  // that, and some (Firefox in particular) restore form field values across a plain
+  // reload keyed by field identity/position. Since the new question's fields can occupy
+  // the same identity as the old ones, that restore has to be undone before anything
+  // else reads these fields, or the new question can silently start pre-answered.
+  inputs.forEach(function (i) { i.checked = false; });
+  if (freeText) freeText.value = '';
+
+  // Theme: the root attribute overrides the OS preference, absent follows it. The server
+  // already set it from its own saved state (see page.py's __THEME_ATTR__) whenever it
+  // has one; localStorage is only the fallback for the very first page it ever serves,
+  // and stays as a same-tab-reload convenience after that.
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
   document.getElementById('pp-theme').addEventListener('click', function () {
     // rgb(30, 30, 30) is --ntw-bg's dark value (#1e1e1e) — kept in sync with the
     // palette in _ADDENDUM by hand, since this runs before that stylesheet's custom
@@ -274,6 +421,9 @@ __FREE_TEXT__
       : (dark ? 'light' : 'dark');
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+    // Fire-and-forget: the next page this process serves reads this back (see
+    // page.py's read_saved_theme), so the preference survives past this one tab.
+    send('theme', { theme: next });
   });
 
   function collect() {
@@ -360,6 +510,25 @@ __FREE_TEXT__
     textarea.select();
   }
 
+  // Only meaningful on a reused tab (STATUS_URL set — see listener.py's
+  // SessionListener): once this question is answered, keep checking whether the process
+  // has published a new one, and reload to pick it up when it has. On the ordinary
+  // one-shot page this never runs.
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
   async function send(kind, data) {
     var payload = { kind: kind, data: data };
     try {
@@ -387,19 +556,33 @@ __FREE_TEXT__
     }
   }
 
+  // "You can close this tab" is only true on the ordinary one-shot page — a reused tab
+  // (STATUS_URL set) is about to reload itself for the next question instead.
+  function doneMessage(base) {
+    return STATUS_URL
+      ? base + ' Waiting for the next question\\u2026'
+      : base + ' You can close this tab.';
+  }
+
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
     if (submitBtn.disabled) return;
     var data = collect();
     freeze('Sending\\u2026');
-    if (await send('submit', data)) freeze('Answer sent. You can close this tab.');
-    else status.textContent = 'Not sent.';
+    if (await send('submit', data)) {
+      freeze(doneMessage('Answer sent.'));
+      document.title = '\\u2705 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
   });
 
   cancelBtn.addEventListener('click', async function () {
     freeze('Cancelling\\u2026');
-    if (await send('cancel', {})) freeze('Cancelled. You can close this tab.');
-    else status.textContent = 'Not sent.';
+    if (await send('cancel', {})) {
+      freeze(doneMessage('Cancelled.'));
+      document.title = '\\u2716 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
   });
 
   document.addEventListener('keydown', function (event) {
@@ -431,7 +614,7 @@ __FREE_TEXT__
 # in place of the single-question page's one static question, and Back/Next replacing
 # Send/Cancel until the last step, where Next becomes the actual submit.
 _MULTI_TEMPLATE = """<!doctype html>
-<html lang="en">
+<html lang="en"__THEME_ATTR__>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -441,7 +624,7 @@ __CSS__
 </style>
 </head>
 <body>
-<main>
+<main__MAIN_EXTRA__>
   <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
 
   <div class="pp-progress">
@@ -469,12 +652,45 @@ __STEPS__
   </div>
 </main>
 
+<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
   var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var STEP_COUNT = __STEP_COUNT__;
   var THEME_KEY = 'no-text-wall:theme';
+  // So the tab bar shows whether this question is done without switching to the tab —
+  // useful once several are open, or once one is answered and left to wait its turn.
+  var BASE_TITLE = document.title;
+  // Set only when this tab is reused across `ask` calls (see listener.py's
+  // SessionListener) — null on the ordinary one-shot page, where startReusePolling()
+  // below is then a no-op.
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+
+  // Any image (a gallery thumbnail or one in an option/question body) expands full-size
+  // on click — a thumbnail is otherwise too small to actually compare against another.
+  var lightbox = document.getElementById('pp-lightbox');
+  var lightboxImg = document.getElementById('pp-lightbox-img');
+  document.querySelectorAll('main img').forEach(function (img) {
+    img.addEventListener('click', function (e) {
+      e.stopPropagation();
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.hidden = false;
+    });
+  });
+  lightbox.addEventListener('click', function () {
+    lightbox.hidden = true;
+    lightboxImg.src = '';
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !lightbox.hidden) {
+      lightbox.hidden = true;
+      lightboxImg.src = '';
+    }
+  });
 
   var steps = Array.prototype.slice.call(document.querySelectorAll('.pp-step'));
   var backBtn = document.getElementById('pp-back');
@@ -487,10 +703,24 @@ __STEPS__
   var freeTexts = Array.prototype.slice.call(document.querySelectorAll('textarea[data-step]'));
   var current = 0;
 
-  try {
-    var stored = localStorage.getItem(THEME_KEY);
-    if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
-  } catch (e) { /* private mode: fall back to the OS preference */ }
+  // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
+  // genuinely new set of questions, never the ones just answered — but the browser
+  // doesn't know that, and some (Firefox in particular) restore form field values across
+  // a plain reload keyed by field identity/position. Since the new questions' fields can
+  // occupy the same identity as the old ones, that restore has to be undone before
+  // anything else reads these fields, or a new question can silently start pre-answered.
+  inputs.forEach(function (i) { i.checked = false; });
+  freeTexts.forEach(function (t) { t.value = ''; });
+
+  // The server already set the theme attribute from its own saved state whenever it has
+  // one (see page.py's __THEME_ATTR__); localStorage is only the fallback for the very
+  // first page it ever serves.
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
   document.getElementById('pp-theme').addEventListener('click', function () {
     var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
     var next = document.documentElement.dataset.theme
@@ -498,6 +728,9 @@ __STEPS__
       : (dark ? 'light' : 'dark');
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+    // Fire-and-forget: the next page this process serves reads this back (see
+    // page.py's read_saved_theme), so the preference survives past this one tab.
+    send('theme', { theme: next });
   });
 
   function stepInputs(step) {
@@ -588,6 +821,25 @@ __STEPS__
     textarea.select();
   }
 
+  // Only meaningful on a reused tab (STATUS_URL set — see listener.py's
+  // SessionListener): once this question is answered, keep checking whether the process
+  // has published a new one, and reload to pick it up when it has. On the ordinary
+  // one-shot page this never runs.
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
   async function send(kind, data) {
     var payload = { kind: kind, data: data };
     try {
@@ -615,6 +867,14 @@ __STEPS__
     if (current > 0) { current -= 1; showStep(current); }
   });
 
+  // "You can close this tab" is only true on the ordinary one-shot page — a reused tab
+  // (STATUS_URL set) is about to reload itself for the next question instead.
+  function doneMessage(base) {
+    return STATUS_URL
+      ? base + ' Waiting for the next question\\u2026'
+      : base + ' You can close this tab.';
+  }
+
   nextBtn.addEventListener('click', async function () {
     if (nextBtn.disabled) return;
     if (current < STEP_COUNT - 1) {
@@ -624,14 +884,20 @@ __STEPS__
     }
     var data = collect();
     freeze('Sending\\u2026');
-    if (await send('submit', data)) freeze('Answers sent. You can close this tab.');
-    else status.textContent = 'Not sent.';
+    if (await send('submit', data)) {
+      freeze(doneMessage('Answers sent.'));
+      document.title = '\\u2705 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
   });
 
   cancelBtn.addEventListener('click', async function () {
     freeze('Cancelling\\u2026');
-    if (await send('cancel', {})) freeze('Cancelled. You can close this tab.');
-    else status.textContent = 'Not sent.';
+    if (await send('cancel', {})) {
+      freeze(doneMessage('Cancelled.'));
+      document.title = '\\u2716 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
   });
 
   document.addEventListener('keydown', function (event) {
@@ -744,12 +1010,29 @@ def _is_long_body(body_html: str) -> bool:
     return "<img" in body_html or "<pre" in body_html or len(body_html) > _LONG_BODY_CHARS
 
 
+def _has_image_body(option: dict[str, object]) -> bool:
+    body = option.get("body")
+    return isinstance(body, str) and "![" in body
+
+
+def _is_gallery(options: list[dict[str, object]]) -> bool:
+    """Two or more image-bearing options make this a gallery, auto-detected the same way
+    a long body already auto-collapses into a drawer — nothing for the caller to flag.
+
+    One image alone stays the ordinary layout: comparing needs at least two things next
+    to each other, and a single-image option is already well served by the existing
+    inline-or-drawer body.
+    """
+    return sum(1 for option in options if _has_image_body(option)) >= 2
+
+
 def _render_options(
     options: list[dict[str, object]],
     multi_select: bool,
     *,
     name: str = "pp-option",
     data_step: str | None = None,
+    gallery: bool = False,
 ) -> str:
     if not options:
         return ""
@@ -780,7 +1063,9 @@ def _render_options(
         body_html = render_markdown(str(body))
         body_div = f'<div class="pp-option-body">{body_html}</div>'
 
-        if not _is_long_body(body_html):
+        # A gallery never drawers its images behind a click — the whole point is seeing
+        # them at once — so it always takes the inline branch, long body or not.
+        if gallery or not _is_long_body(body_html):
             rows.append(
                 f'    <li class="pp-option"><label class="pp-option-select">'
                 f"{select_html}</label>{body_div}</li>"
@@ -798,7 +1083,20 @@ def _render_options(
             f'<summary class="pp-option-select">{select_html}{chevron}</summary>'
             f"{body_div}</details></li>"
         )
-    return '  <ul class="pp-options">\n' + "\n".join(rows) + "\n  </ul>"
+    ul_class = "pp-options pp-options-gallery" if gallery else "pp-options"
+    return f'  <ul class="{ul_class}">\n' + "\n".join(rows) + "\n  </ul>"
+
+
+def _theme_attr(theme: str | None) -> str:
+    """The ` data-theme="..."` to splice into `<html lang="en"...>`, or "" if unset.
+
+    Baked into the markup rather than left to the page's own localStorage-reading script
+    so the saved theme applies on the very first paint — no flash of the other theme
+    while the script catches up.
+    """
+    if theme not in _THEME_STATES:
+        return ""
+    return f' data-theme="{theme}"'
 
 
 def build_page(
@@ -811,6 +1109,9 @@ def build_page(
     timeout_seconds: float,
     title: str = "Claude Code is asking",
     accent: str | None = None,
+    theme: str | None = None,
+    status_url: str | None = None,
+    generation: int = 0,
 ) -> str:
     """Return the complete HTML document for one `ask` call.
 
@@ -823,6 +1124,15 @@ def build_page(
     `PRETTY_PROMPT_ACCENT` are expected to validate once at startup (see
     `server.accent_config_problem`) so this only re-raises the same problem, never
     surfaces a new one mid-call.
+
+    `theme` is `"light"`, `"dark"`, or None to follow the OS preference until the page's
+    own toggle is used — see `read_saved_theme`.
+
+    `status_url` and `generation` are only set when this page is served by a
+    `listener.SessionListener` for tab reuse: once answered, the page polls `status_url`
+    and reloads the moment the served generation moves past `generation`, landing on the
+    next question without a new tab. Leave both at their defaults for the ordinary
+    one-shot, `file://`-opened page, where there is nothing to poll.
     """
     css = _load_base_css() + _ADDENDUM
     if accent is not None:
@@ -843,27 +1153,35 @@ def build_page(
     else:
         hint = "Write an answer."
 
+    gallery = _is_gallery(options)
+
     return (
         _TEMPLATE.replace("__CSS__", css)
+        .replace("__THEME_ATTR__", _theme_attr(theme))
+        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if gallery else "")
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__QUESTION__", render_markdown(question))
-        .replace("__OPTIONS__", _render_options(options, multi_select))
+        .replace("__OPTIONS__", _render_options(options, multi_select, gallery=gallery))
         .replace("__FREE_TEXT__", free_text)
         .replace("__HINT__", html.escape(hint, quote=True))
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
+        .replace("__STATUS_URL__", _js_string(status_url))
+        .replace("__GENERATION__", _js_string(generation))
     )
 
 
 def _render_step(index: int, spec: dict[str, object]) -> str:
     question_html = render_markdown(str(spec.get("question", "")))
-    options = spec.get("options")
+    raw_options = spec.get("options")
+    options = list(raw_options) if isinstance(raw_options, list) else []
     multi_select = bool(spec.get("multi_select"))
     options_html = _render_options(
-        list(options) if isinstance(options, list) else [],
+        options,
         multi_select,
         name=f"pp-option-step-{index}",
         data_step=str(index),
+        gallery=_is_gallery(options),
     )
     free_text_html = ""
     if spec.get("allow_free_text", True):
@@ -891,6 +1209,9 @@ def build_multi_page(
     timeout_seconds: float,
     title: str = "Claude Code is asking",
     accent: str | None = None,
+    theme: str | None = None,
+    status_url: str | None = None,
+    generation: int = 0,
 ) -> str:
     """Return the complete HTML document for an `ask` call carrying several questions.
 
@@ -904,6 +1225,8 @@ def build_multi_page(
     Presented as a wizard, one question per screen with a progress bar and Back/Next —
     picked over showing every question stacked at once and over an accordion in a
     three-way visual A/B/C (see the "paging style" pick in project history).
+
+    `theme`, `status_url` and `generation` are as `build_page` takes them.
     """
     css = _load_base_css() + _ADDENDUM + _MULTI_ADDENDUM
     if accent is not None:
@@ -912,9 +1235,15 @@ def build_multi_page(
     total = len(questions)
     steps_html = "\n".join(_render_step(i, spec) for i, spec in enumerate(questions))
     initial_progress = round(100 / total) if total else 0
+    any_gallery = any(
+        _is_gallery(options) if isinstance(options := spec.get("options"), list) else False
+        for spec in questions
+    )
 
     return (
         _MULTI_TEMPLATE.replace("__CSS__", css)
+        .replace("__THEME_ATTR__", _theme_attr(theme))
+        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if any_gallery else "")
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__STEPS__", steps_html)
         .replace("__INITIAL_LABEL__", html.escape(f"Question 1 of {total}", quote=True))
@@ -923,4 +1252,6 @@ def build_multi_page(
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STEP_COUNT__", str(total))
+        .replace("__STATUS_URL__", _js_string(status_url))
+        .replace("__GENERATION__", _js_string(generation))
     )

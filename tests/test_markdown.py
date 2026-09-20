@@ -126,3 +126,32 @@ def test_table_ends_at_a_blank_line_or_non_table_line():
 
 def test_a_pipe_without_a_separator_row_is_not_a_table():
     assert render_markdown("a | b") == "<p>a | b</p>"
+
+
+def test_diff_block_classifies_added_and_removed_lines():
+    out = render_markdown("```diff\n def f():\n-    old()\n+    new()\n```")
+    assert out == (
+        '<div class="pp-diff">'
+        '<div class="line ctx">def f():</div>'
+        '<div class="line del">    old()</div>'
+        '<div class="line add">    new()</div>'
+        "</div>"
+    )
+
+
+def test_diff_block_marks_hunk_and_file_headers():
+    out = render_markdown("```diff\n--- a/x.py\n+++ b/x.py\n@@ -1,2 +1,2 @@\n```")
+    assert '<div class="line file">--- a/x.py</div>' in out
+    assert '<div class="line file">+++ b/x.py</div>' in out
+    assert '<div class="line hunk">@@ -1,2 +1,2 @@</div>' in out
+
+
+def test_diff_block_escapes_line_content():
+    out = render_markdown("```diff\n+<script>\n```")
+    assert "<script>" not in out
+    assert "&lt;script&gt;" in out
+
+
+def test_diff_block_pads_empty_lines():
+    out = render_markdown("```diff\n \n```")
+    assert '<div class="line ctx">&nbsp;</div>' in out

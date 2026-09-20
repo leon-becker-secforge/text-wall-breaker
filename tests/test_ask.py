@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -70,7 +72,12 @@ def test_rejected_requests(kwargs, match):
 
 
 class FakeBrowser:
-    """Stands in for xdg-open: reads the page and answers it from another thread."""
+    """Stands in for xdg-open: reads the page and answers it from another thread.
+
+    `open_in_browser` is called with a `Path` for the one-off tab, or a
+    `http://127.0.0.1:...` URL string for the shared, reused-tab session (see
+    `SessionListener`) — this reads either the same way the real browser would.
+    """
 
     def __init__(self, respond):
         self.respond = respond
@@ -78,9 +85,13 @@ class FakeBrowser:
         self.path = None
         self.thread: threading.Thread | None = None
 
-    def __call__(self, path):
-        self.path = path
-        self.page = path.read_text(encoding="utf-8")
+    def __call__(self, target):
+        self.path = target
+        if isinstance(target, str):
+            with urllib.request.urlopen(target, timeout=5) as response:  # noqa: S310
+                self.page = response.read().decode("utf-8")
+        else:
+            self.page = target.read_text(encoding="utf-8")
         url = self.page.split('var SUBMIT_URL = "')[1].split('"')[0]
         payload = self.respond(self.page)
         if payload is None:
@@ -99,9 +110,37 @@ def _post(url: str, payload: object) -> None:
     urllib.request.urlopen(request, timeout=5)  # noqa: S310 — loopback URL from our own page
 
 
+@pytest.fixture(autouse=True)
+def _isolated_shared_session():
+    """Give every test its own shared-tab session, closed after, never the real one.
+
+    Without this, tests would fight over one process-wide singleton — an earlier test's
+    claimed-but-not-released session would make a later one silently fall back to its
+    one-off tab, or two tests' assertions about the shared port would collide.
+    """
+    original = ask_module._shared_session
+    ask_module._shared_session = None
+    yield
+    if ask_module._shared_session is not None:
+        ask_module._shared_session.close()
+    ask_module._shared_session = original
+
+
 @pytest.fixture
 def browser(monkeypatch):
+    """Installs FakeBrowser and forces the one-off tab path (no shared-session reuse).
+
+    Pre-claiming the shared session's busy lock — and never releasing it — makes every
+    `run_ask` call under this fixture fall back to its own fresh `LoopbackListener` tab,
+    exactly as it always did before tab reuse existed. That is what the ~20 tests using
+    this fixture are actually testing (the page's content, validation, timeouts, ...);
+    reuse itself gets its own tests below, since a second `run_ask` call in a reused
+    session publishes new content into the *same* already-open tab rather than calling
+    `open_in_browser` again, which this fixture's one-shot FakeBrowser can't simulate.
+    """
+
     def install(respond):
+        ask_module._get_shared_session().try_claim()
         fake = FakeBrowser(respond)
         monkeypatch.setattr(ask_module, "open_in_browser", fake)
         return fake
@@ -269,6 +308,20 @@ def test_multi_question_cancel_is_reported_as_cancelled(browser):
     assert result == {"cancelled": True}
 
 
+def test_run_ask_bakes_in_the_saved_theme(browser, monkeypatch):
+    monkeypatch.setattr(ask_module, "read_saved_theme", lambda: "dark")
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(question="q"))
+    assert '<html lang="en" data-theme="dark">' in fake.page
+
+
+def test_run_ask_bakes_in_the_saved_theme_for_questions(browser, monkeypatch):
+    monkeypatch.setattr(ask_module, "read_saved_theme", lambda: "light")
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(questions=[Question(question="q")]))
+    assert '<html lang="en" data-theme="light">' in fake.page
+
+
 def test_the_page_carries_every_question(browser):
     fake = browser(lambda page: {"kind": "cancel", "data": {}})
     run_ask(
@@ -283,3 +336,61 @@ def test_the_page_carries_every_question(browser):
     assert "Second" in fake.page
     assert 'data-option-id="a"' in fake.page
     assert 'data-option-id="b"' in fake.page
+
+
+def _answer_current_generation(session, expected_generation, payload, timeout=5.0):
+    """Answer whatever `session` has published, once it reaches `expected_generation`.
+
+    Stands in for the real page's own reload-and-resubmit: this test isn't running a
+    browser, so the "tab" here is just this function watching the session directly and
+    posting to whatever SUBMIT_URL the newly published page carries.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        page, generation = session.current_page()
+        if generation == expected_generation and page:
+            html = page.decode("utf-8")
+            submit_url = html.split('var SUBMIT_URL = "')[1].split('"')[0]
+            _post(submit_url, payload)
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"generation {expected_generation} was never published")
+
+
+def test_run_ask_reuses_the_tab_for_a_second_call(monkeypatch):
+    session = ask_module._get_shared_session()
+    opened = []
+    monkeypatch.setattr(ask_module, "open_in_browser", opened.append)
+
+    thread = threading.Thread(
+        target=_answer_current_generation, args=(session, 1, {"kind": "cancel", "data": {}})
+    )
+    thread.start()
+    result = run_ask(AskRequest(question="first"))
+    thread.join(timeout=5)
+    assert result == {"cancelled": True}
+    assert len(opened) == 1
+
+    thread = threading.Thread(
+        target=_answer_current_generation, args=(session, 2, {"kind": "cancel", "data": {}})
+    )
+    thread.start()
+    result = run_ask(AskRequest(question="second"))
+    thread.join(timeout=5)
+    assert result == {"cancelled": True}
+    # Still just the one open — the second question was published into the same tab.
+    assert len(opened) == 1
+
+
+def test_run_ask_falls_back_to_a_new_tab_when_the_shared_session_is_busy():
+    session = ask_module._get_shared_session()
+    assert session.try_claim()  # simulate another `ask` call already using the shared tab
+    try:
+        fake = FakeBrowser(lambda page: {"kind": "cancel", "data": {}})
+        with pytest.MonkeyPatch.context() as monkeypatch:
+            monkeypatch.setattr(ask_module, "open_in_browser", fake)
+            result = run_ask(AskRequest(question="q"))
+    finally:
+        session.release()
+    assert result == {"cancelled": True}
+    assert isinstance(fake.path, Path)  # a one-off file:// tab, not the shared session's

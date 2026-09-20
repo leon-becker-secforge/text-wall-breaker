@@ -151,6 +151,28 @@ def _render_table(header: list[str], aligns: list[str | None], rows: list[list[s
     return f"<table>{thead}{tbody}</table>"
 
 
+def _render_diff_block(body_lines: list[str]) -> str:
+    """A ```diff fenced block, one `.line` per row, classified by its leading marker.
+
+    The marker itself is stripped from the text and re-added by CSS (`::before`), which
+    is what lets the minimal diff style show it in a fixed accent colour instead of
+    whatever colour plain text happens to render in.
+    """
+    rows: list[str] = []
+    for line in body_lines:
+        if line.startswith("@@"):
+            rows.append(f'<div class="line hunk">{_escape(line) or "&nbsp;"}</div>')
+        elif line.startswith(("+++", "---")):
+            rows.append(f'<div class="line file">{_escape(line) or "&nbsp;"}</div>')
+        elif line[:1] in ("+", "-"):
+            cls = "add" if line[0] == "+" else "del"
+            rows.append(f'<div class="line {cls}">{_escape(line[1:]) or "&nbsp;"}</div>')
+        else:
+            text = line[1:] if line.startswith(" ") else line
+            rows.append(f'<div class="line ctx">{_escape(text) or "&nbsp;"}</div>')
+    return '<div class="pp-diff">' + "".join(rows) + "</div>"
+
+
 def render_markdown(text: str) -> str:
     """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input."""
     if not text or not text.strip():
@@ -194,9 +216,12 @@ def render_markdown(text: str) -> str:
             while index < len(lines) and not _FENCE.match(lines[index].strip()):
                 body.append(lines[index])
                 index += 1
-            attr = f' data-language="{_escape(language)}"' if language else ""
-            code = _escape("\n".join(body))
-            out.append(f'<pre class="code-block"{attr}><code>{code}</code></pre>')
+            if language == "diff":
+                out.append(_render_diff_block(body))
+            else:
+                attr = f' data-language="{_escape(language)}"' if language else ""
+                code = _escape("\n".join(body))
+                out.append(f'<pre class="code-block"{attr}><code>{code}</code></pre>')
             index += 1
             continue
 

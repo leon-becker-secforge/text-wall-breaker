@@ -7,6 +7,7 @@ import urllib.request
 
 import pytest
 
+from pretty_prompt import listener as listener_module
 from pretty_prompt.listener import LoopbackListener
 
 
@@ -134,6 +135,31 @@ def test_wrong_path_is_a_404():
             urllib.request.urlopen(request, timeout=5)  # noqa: S310 — fixed loopback URL
         assert caught.value.code == 404
         thread.join(timeout=5)
+
+
+def test_theme_kind_persists_and_does_not_end_the_wait(monkeypatch):
+    saved = []
+    monkeypatch.setattr(listener_module, "save_theme", saved.append)
+    with LoopbackListener("tok") as listener:
+        thread, result = wait_in_thread(listener, timeout=0.5)
+        response = post(listener.port, "?t=tok", {"kind": "theme", "data": {"theme": "dark"}})
+        assert response.status == 204
+        thread.join(timeout=5)
+
+    assert saved == ["dark"]
+    assert result[0] is None
+
+
+def test_theme_kind_with_a_non_string_theme_is_ignored(monkeypatch):
+    saved = []
+    monkeypatch.setattr(listener_module, "save_theme", saved.append)
+    with LoopbackListener("tok") as listener:
+        thread, _ = wait_in_thread(listener, timeout=0.5)
+        response = post(listener.port, "?t=tok", {"kind": "theme", "data": {"theme": 3}})
+        assert response.status == 204
+        thread.join(timeout=5)
+
+    assert saved == []
 
 
 def test_response_carries_the_cors_header():
