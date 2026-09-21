@@ -22,16 +22,19 @@ from pydantic import Field
 
 from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, Question, run_ask
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
+from .show import InvalidShow, ShowRequest, run_show
 
 __all__ = ["accent_config_problem", "environment_problem", "main", "server"]
 
 server = MCPServer(
     name="pretty-prompt",
     instructions=(
-        "Ask the user a question in a browser page instead of the terminal. Prefer this "
-        "over AskUserQuestion when the question has more than four options, when an "
-        "option needs more than a line of explanation, or when the answer is easier to "
-        "give while looking at an image."
+        "Ask the user a question, or show them a formatted result, in a browser page "
+        "instead of the terminal. Use `ask` over AskUserQuestion when the question has "
+        "more than four options, when an option needs more than a line of explanation, "
+        "or when the answer is easier to give while looking at an image. Use `show` "
+        "when a result — a report, a comparison, a diff, a long table — would otherwise "
+        "be a wall of text in the terminal and doesn't need an answer back."
     ),
 )
 
@@ -61,6 +64,30 @@ so an id can be selected without being expanded, or expanded without being selec
 instead of `question`/`options`/`multi_select`/`allow_free_text`, never alongside them.
 The user answers all of them before sending, and the result's `answers` list is in the
 same order, one `{selected, free_text, expanded}` per question."""
+
+_SHOW_DESCRIPTION = """Show the user a formatted result in a local browser page (prototype).
+
+Opens a page with `content` rendered as Markdown. By default returns immediately —
+there's no answer to wait for. Use this instead of a long terminal reply when the
+content is a report, a comparison, a diff, a long table, or anything else that would
+otherwise be a wall of text: the same Markdown subset `ask` renders (headings, lists,
+tables, code, images, blockquotes) applies here too.
+
+Reuses the same browser tab `ask` uses, so a `show` and an `ask` in the same session
+don't pile up separate tabs.
+
+The page carries two buttons, on by default:
+  - Save report — lets the user download the content, as the original Markdown or as
+    the rendered HTML page. Purely client-side; never reported back here.
+  - Acknowledge — marks the report as seen. Set `wait_for_acknowledge` to actually block
+    on it (like `ask`), which then returns `{"acknowledged": true}` or, if nothing
+    arrives before `timeout_seconds`, `{"timed_out": true}`. Left false (the default),
+    clicking it is a local-only mark for the user, not reported back.
+Turn either off with `save_button`/`acknowledge_button` when it doesn't apply — e.g. no
+Acknowledge button on a page that's purely informational and never needs confirming.
+
+Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path is only
+present for a one-off, non-reused tab) as soon as the browser has been asked to open it."""
 
 
 def environment_problem() -> str | None:
@@ -141,6 +168,50 @@ async def ask(
         return await anyio.to_thread.run_sync(run_ask, request)
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the question page: {exc}") from exc
+
+
+@server.tool(name="show", description=_SHOW_DESCRIPTION)
+async def show(
+    content: Annotated[str, Field(description="What to show, as Markdown.")] = "",
+    title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
+    save_button: Annotated[
+        bool, Field(description="Offer a Save report button (Markdown or HTML).")
+    ] = True,
+    acknowledge_button: Annotated[
+        bool, Field(description="Offer an Acknowledge button marking the report seen.")
+    ] = True,
+    wait_for_acknowledge: Annotated[
+        bool,
+        Field(
+            description="Block until Acknowledge is clicked, like ask. Requires "
+            "acknowledge_button. Default false: show returns immediately and a click "
+            "is a local-only mark, never reported back."
+        ),
+    ] = False,
+    timeout_seconds: Annotated[
+        float,
+        Field(description="With wait_for_acknowledge, give up after this many idle seconds."),
+    ] = 300.0,
+) -> dict[str, Any]:
+    request = ShowRequest(
+        content=content,
+        title=title,
+        save_button=save_button,
+        acknowledge_button=acknowledge_button,
+        wait_for_acknowledge=wait_for_acknowledge,
+        timeout_seconds=timeout_seconds,
+    )
+    try:
+        request.validated()
+    except InvalidShow as exc:
+        raise ToolError(str(exc)) from exc
+
+    try:
+        # Writing and xdg-open are both quick, but off the event loop for the same
+        # reason ask's run_ask is: nothing here should block the server's loop.
+        return await anyio.to_thread.run_sync(run_show, request)
+    except BrowserUnavailable as exc:
+        raise ToolError(f"could not open the page: {exc}") from exc
 
 
 def main() -> None:

@@ -3,6 +3,27 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0] - 2026-09-21
+
+### Added
+
+- The `show` tool (prototype): opens a Markdown result in a browser page without waiting
+  for an answer, for a report, a comparison, a diff, or anything else that would
+  otherwise be a wall of text in the terminal. Returns as soon as the browser has the
+  page, unless `wait_for_acknowledge` opts into blocking on the new Acknowledge button.
+- `show`'s page carries a Save report button (Markdown or a static, button-free HTML
+  snapshot, both client-side downloads) and an Acknowledge button, either toggleable off
+  per call via `save_button`/`acknowledge_button`.
+- `ask` and `show` now reuse the same process-wide shared tab: a `show` after an `ask`
+  (or the reverse) lands in one tab instead of opening a second. The shared-tab session
+  singleton moved out of `ask.py` into its own `session.py` to make that possible.
+
+### Fixed
+
+- A saved-as-HTML report captured the live page verbatim — Save/Acknowledge buttons,
+  the save menu (open at the moment of capture), the theme toggle, and its own scripts
+  included. It now saves a static content-only snapshot instead.
+
 ## [0.3.0] - 2026-09-20
 
 ### Added

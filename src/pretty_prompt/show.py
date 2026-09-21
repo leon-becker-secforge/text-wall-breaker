@@ -1,0 +1,179 @@
+"""One `show` call: build the page, open it, and — unless told to wait — return at once.
+
+Two ways a call gets its tab, exactly mirroring `ask.run_ask`:
+
+  1. Reuse the process's one shared `SessionListener` tab (`session.get_shared_session`),
+     if nothing else is using it right now. This is the same session `ask` claims, so an
+     `ask` and a `show` in the same process land in one tab between them, not two.
+  2. Fall back to a one-off tab if the shared one is already claimed by an overlapping
+     call.
+
+Unlike `ask`, most `show` calls don't wait for anything: `wait_for_acknowledge=False`
+(the default) publishes the page and returns immediately once the browser has it. Only a
+call that opts into `wait_for_acknowledge` blocks on a response, and only the Acknowledge
+button ever sends one — Save is pure client-side Blob download and never reaches here.
+"""
+
+from __future__ import annotations
+
+import os
+import secrets
+import shutil
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+from .ask import BrowserUnavailable, open_in_browser
+from .listener import LoopbackListener, SessionListener, Submission
+from .page import (
+    ACCENT_ENV_VAR,
+    InvalidAccent,
+    build_show_page,
+    parse_accent,
+    read_saved_theme,
+)
+from .session import get_shared_session
+
+__all__ = ["BrowserUnavailable", "InvalidShow", "ShowRequest", "run_show"]
+
+
+class InvalidShow(ValueError):
+    """The request has nothing to show, or can't produce a page worth opening."""
+
+
+class ShowRequest(BaseModel):
+    """A validated `show` call."""
+
+    content: str = ""
+    title: str = "Claude Code"
+    save_button: bool = True
+    acknowledge_button: bool = True
+    wait_for_acknowledge: bool = False
+    timeout_seconds: float = 300.0
+
+    def validated(self) -> ShowRequest:
+        if not self.content.strip():
+            raise InvalidShow("content is empty")
+        if self.timeout_seconds <= 0:
+            raise InvalidShow("timeout_seconds must be positive")
+        if self.wait_for_acknowledge and not self.acknowledge_button:
+            raise InvalidShow("wait_for_acknowledge requires acknowledge_button")
+        return self
+
+
+def _resolve_accent() -> str | None:
+    """Same reasoning as `ask._resolve_accent` — see there."""
+    value = os.environ.get(ACCENT_ENV_VAR)
+    if not value:
+        return None
+    try:
+        parse_accent(value)
+    except InvalidAccent:
+        return None
+    return value
+
+
+def _build_html(
+    request: ShowRequest,
+    *,
+    submit_url: str | None,
+    status_url: str | None = None,
+    generation: int = 0,
+) -> str:
+    return build_show_page(
+        content=request.content,
+        title=request.title,
+        accent=_resolve_accent(),
+        theme=read_saved_theme(),
+        save_button=request.save_button,
+        acknowledge_button=request.acknowledge_button,
+        submit_url=submit_url,
+        timeout_seconds=request.timeout_seconds,
+        status_url=status_url,
+        generation=generation,
+    )
+
+
+def _result_from_submission(submission: Submission | None) -> dict[str, Any]:
+    if submission is None:
+        return {"timed_out": True}
+    return {"acknowledged": submission.kind == "acknowledge"}
+
+
+def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dict[str, Any]:
+    """Show `request` on `session`'s already-claimed, possibly already-open tab.
+
+    The shared session is always running once any call has touched it, so a submit URL
+    is always available here regardless of `wait_for_acknowledge` — an Acknowledge click
+    on a call that isn't waiting still reaches the session, it's just that nothing reads
+    it back out (the next `publish()` discards it, same as an ignored probe).
+    """
+    submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
+    status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
+
+    session.publish(
+        lambda generation: _build_html(
+            request, submit_url=submit_url, status_url=status_url, generation=generation
+        )
+    )
+    if not session.tab_opened:
+        open_in_browser(f"http://127.0.0.1:{session.port}/?t={session.token}")
+        session.tab_opened = True
+
+    if not request.wait_for_acknowledge:
+        return {"opened": True}
+    submission = session.wait_for_answer(request.timeout_seconds)
+    return _result_from_submission(submission)
+
+
+def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
+    """Show `request` with its own one-off tab, used when the shared one is busy.
+
+    Only binds a listener when `wait_for_acknowledge` is set — otherwise there is nothing
+    to wait for, and a socket kept alive with no one polling it would outlive this call
+    for no reason. Without a listener, Acknowledge still shows on the page but is purely
+    a local "seen" mark (see build_show_page's docstring); Save is unaffected either way.
+    """
+    directory = Path(tempfile.mkdtemp(prefix="pretty-prompt-show-"))
+    page = directory / "show.html"
+
+    if not request.wait_for_acknowledge:
+        html = _build_html(request, submit_url=None)
+        page.write_text(html, encoding="utf-8")
+        open_in_browser(page)
+        return {"opened": True, "path": str(page)}
+
+    token = secrets.token_hex(16)
+    with LoopbackListener(token) as listener:
+        submit_url = f"http://127.0.0.1:{listener.port}/submit?t={token}"
+        html = _build_html(request, submit_url=submit_url)
+        page.write_text(html, encoding="utf-8")
+        try:
+            open_in_browser(page)
+            submission = listener.wait(request.timeout_seconds)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+    return _result_from_submission(submission)
+
+
+def run_show(request: ShowRequest) -> dict[str, Any]:
+    """Open the page for `request`. Returns `{"opened": True[, "path": ...]}` unless
+    `wait_for_acknowledge` is set, in which case it blocks until the Acknowledge button
+    is clicked, the idle timeout elapses (`{"timed_out": True}`), or it's clicked
+    (`{"acknowledged": True}`).
+
+    Tries the process's one shared browser tab first — the same one `ask` uses — falling
+    back to a fresh one-off tab if that shared tab is already showing or asking something
+    else. See the module docstring.
+    """
+    request = request.validated()
+
+    session = get_shared_session()
+    if session.try_claim():
+        try:
+            return _run_show_reusing_tab(request, session)
+        finally:
+            session.release()
+    return _run_show_with_new_tab(request)

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from pretty_prompt import ask as ask_module
+from pretty_prompt import session as session_module
 from pretty_prompt.ask import (
     AskRequest,
     BrowserUnavailable,
@@ -118,12 +119,12 @@ def _isolated_shared_session():
     claimed-but-not-released session would make a later one silently fall back to its
     one-off tab, or two tests' assertions about the shared port would collide.
     """
-    original = ask_module._shared_session
-    ask_module._shared_session = None
+    original = session_module._session
+    session_module._session = None
     yield
-    if ask_module._shared_session is not None:
-        ask_module._shared_session.close()
-    ask_module._shared_session = original
+    if session_module._session is not None:
+        session_module._session.close()
+    session_module._session = original
 
 
 @pytest.fixture
@@ -140,7 +141,7 @@ def browser(monkeypatch):
     """
 
     def install(respond):
-        ask_module._get_shared_session().try_claim()
+        session_module.get_shared_session().try_claim()
         fake = FakeBrowser(respond)
         monkeypatch.setattr(ask_module, "open_in_browser", fake)
         return fake
@@ -382,7 +383,7 @@ def _answer_current_generation(session, expected_generation, payload, timeout=5.
 
 
 def test_run_ask_reuses_the_tab_for_a_second_call(monkeypatch):
-    session = ask_module._get_shared_session()
+    session = session_module.get_shared_session()
     opened = []
     monkeypatch.setattr(ask_module, "open_in_browser", opened.append)
 
@@ -407,7 +408,7 @@ def test_run_ask_reuses_the_tab_for_a_second_call(monkeypatch):
 
 
 def test_run_ask_falls_back_to_a_new_tab_when_the_shared_session_is_busy():
-    session = ask_module._get_shared_session()
+    session = session_module.get_shared_session()
     assert session.try_claim()  # simulate another `ask` call already using the shared tab
     try:
         fake = FakeBrowser(lambda page: {"kind": "cancel", "data": {}})

@@ -30,6 +30,7 @@ __all__ = [
     "InvalidAccent",
     "build_multi_page",
     "build_page",
+    "build_show_page",
     "parse_accent",
     "read_saved_theme",
     "save_theme",
@@ -964,6 +965,416 @@ __STEPS__
 </body>
 </html>
 """
+
+
+# Sibling of _ADDENDUM for `show`: same tokens and font, but no option/free-text rules —
+# `show` has no choices to render, only content plus the Save/Acknowledge actions below.
+# Kept as its own block rather than a subset of _ADDENDUM so `show`'s CSS doesn't carry
+# rules for elements it never renders.
+_SHOW_ADDENDUM = """
+* { box-sizing: border-box; }
+:root {
+  --pp-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --ntw-bg: #fafaf9;
+  --ntw-bg-elevated: #ffffff;
+  --ntw-fg: #0a0a0a;
+  --ntw-fg-muted: #54595f;
+  --ntw-border: #c7cbd1;
+  --ntw-accent: #1f7a4c;
+  --ntw-accent-contrast: #ffffff;
+  --ntw-verdict-bg: #e3f3ea;
+  --ntw-code-bg: #f0f0f0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ntw-bg: #1e1e1e;
+    --ntw-bg-elevated: #262626;
+    --ntw-fg: #e6e6e6;
+    --ntw-fg-muted: #9d9d9d;
+    --ntw-border: #3f3f3f;
+    --ntw-accent: #3ddc84;
+    --ntw-accent-contrast: #00150a;
+    --ntw-verdict-bg: #16281f;
+    --ntw-code-bg: #2a2a2a;
+  }
+}
+:root[data-theme="dark"] {
+  --ntw-bg: #1e1e1e;
+  --ntw-bg-elevated: #262626;
+  --ntw-fg: #e6e6e6;
+  --ntw-fg-muted: #9d9d9d;
+  --ntw-border: #3f3f3f;
+  --ntw-accent: #3ddc84;
+  --ntw-accent-contrast: #00150a;
+  --ntw-verdict-bg: #16281f;
+  --ntw-code-bg: #2a2a2a;
+}
+html { font-size: 18px; }
+body { margin: 0; padding: 20px 16px 40px; }
+main { max-width: 680px; margin: 0 auto; position: relative; }
+
+code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--ntw-code-bg);
+  padding: 0.1em 0.35em; border-radius: 4px; }
+pre.code-block { font-family: var(--pp-font-mono); }
+pre.code-block code { background: none; padding: 0; border-radius: 0; }
+
+blockquote { border-inline-start: 4px solid var(--ntw-border); color: var(--ntw-fg-muted);
+  margin: 0.6em 0; padding-inline-start: 14px; }
+blockquote > p:first-child { margin-block-start: 0; }
+blockquote > p:last-child { margin-block-end: 0; }
+
+table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size: 0.9em; }
+th, td { padding: 6px 10px; text-align: left; border: none;
+  border-bottom: 1px solid var(--ntw-border); }
+thead th { border-bottom: 2px solid var(--ntw-accent); color: var(--ntw-accent);
+  font-weight: 600; text-transform: uppercase; font-size: 0.78em; letter-spacing: 0.03em; }
+tbody tr:last-child td { border-bottom: none; }
+
+main img { cursor: zoom-in; max-width: 100%; height: auto; border-radius: 6px; }
+.pp-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+.pp-lightbox[hidden] { display: none; }
+.pp-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
+
+#pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
+  background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
+  font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+#pp-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
+
+.pp-content > :first-child { margin-block-start: 0; }
+.pp-content > :last-child { margin-block-end: 0; }
+
+/* Same visual language as _ADDENDUM's .pp-actions/button, duplicated rather than
+   shared for the same reason _SHOW_ADDENDUM as a whole is its own block — see the
+   module docstring. */
+.pp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-block-start: 22px; position: relative; }
+.pp-actions button { border-radius: 6px; padding: 7px 14px; font: inherit;
+  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
+#pp-ack { border-color: var(--ntw-accent); background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); }
+.pp-actions button:disabled { opacity: 0.5; cursor: default; }
+#pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
+
+.pp-save-menu { position: absolute; top: 100%; left: 0; margin-block-start: 6px;
+  display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--ntw-border);
+  border-radius: 6px; background: var(--ntw-bg-elevated); padding: 4px; z-index: 10;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); }
+.pp-save-menu[hidden] { display: none; }
+.pp-save-menu button { border: none; background: none; text-align: left;
+  white-space: nowrap; }
+.pp-save-menu button:hover { background: var(--ntw-border); }
+
+/* Same reasoning and colours as _ADDENDUM's #pp-fallback — see there. No textarea here:
+   an acknowledgement that fails to send loses nothing the way a lost answer would for
+   `ask`, since the report itself is still on screen. */
+#pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
+  background: #fef2f2; padding: 12px 14px; margin-block-start: 12px; }
+#pp-fallback strong { color: var(--ntw-danger); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #pp-fallback { background: #3f1d1d; }
+}
+:root[data-theme="dark"] #pp-fallback { background: #3f1d1d; }
+"""
+
+# `show` gets a listener-driven submit script only when a call actually wires one up
+# (see page.py's build_show_page and show.py's run_show) — the fallback box, heartbeat
+# and reuse-polling are copied from _TEMPLATE's script since a listener-backed show page
+# needs the exact same idle-timeout and tab-reuse behaviour ask's page does. Save is pure
+# client-side Blob download and needs none of that, whether or not a listener exists.
+_SHOW_TEMPLATE = """<!doctype html>
+<html lang="en"__THEME_ATTR__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__
+</style>
+</head>
+<body>
+<main>
+  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+  <div class="pp-content">
+__CONTENT__
+  </div>
+
+  <div class="pp-actions">
+__SAVE_BUTTON__
+__ACK_BUTTON__
+    <span id="pp-status"></span>
+  </div>
+
+  <div id="pp-fallback" hidden>
+    <strong>Couldn't reach Claude Code</strong>
+    <p data-role="body" id="pp-fallback-reason"></p>
+  </div>
+</main>
+
+<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+
+<script>
+(function () {
+  var SUBMIT_URL = __SUBMIT_URL__;
+  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+  var RAW_CONTENT = __RAW_CONTENT__;
+  var FILENAME_BASE = __FILENAME_BASE__;
+  var THEME_KEY = 'no-text-wall:theme';
+  var BASE_TITLE = document.title;
+
+  var lightbox = document.getElementById('pp-lightbox');
+  var lightboxImg = document.getElementById('pp-lightbox-img');
+  document.querySelectorAll('main img').forEach(function (img) {
+    img.addEventListener('click', function (e) {
+      e.stopPropagation();
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.hidden = false;
+    });
+  });
+  lightbox.addEventListener('click', function () {
+    lightbox.hidden = true;
+    lightboxImg.src = '';
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !lightbox.hidden) {
+      lightbox.hidden = true;
+      lightboxImg.src = '';
+    }
+  });
+
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
+  document.getElementById('pp-theme').addEventListener('click', function () {
+    var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
+    var next = document.documentElement.dataset.theme
+      ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      : (dark ? 'light' : 'dark');
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+  });
+
+  // Client-side only — a save never touches SUBMIT_URL, so it works exactly the same
+  // whether or not this show call is being waited on. Markdown saves RAW_CONTENT (the
+  // Markdown the agent actually passed, the portable/diffable record — see no-text-wall's
+  // "HTML is a view, never the record"); HTML saves this page's own rendered markup, a
+  // snapshot of what was on screen, tables/diff formatting and all.
+  function download(filename, mime, data) {
+    var blob = new Blob([data], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  var saveBtn = document.getElementById('pp-save');
+  var saveMenu = document.getElementById('pp-save-menu');
+  if (saveBtn && saveMenu) {
+    saveBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      saveMenu.hidden = !saveMenu.hidden;
+    });
+    document.addEventListener('click', function () { saveMenu.hidden = true; });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') saveMenu.hidden = true;
+    });
+    document.getElementById('pp-save-md').addEventListener('click', function () {
+      download(FILENAME_BASE + '.md', 'text/markdown', RAW_CONTENT);
+      saveMenu.hidden = true;
+    });
+    document.getElementById('pp-save-html').addEventListener('click', function () {
+      // A static snapshot of the content, not a serialization of this live page: the
+      // theme toggle, Save/Acknowledge actions (and the save menu itself, open right
+      // now) and the scripts that drive them have no meaning once this is a plain file
+      // on disk, so they're stripped rather than saved half-working.
+      var clone = document.documentElement.cloneNode(true);
+      ['#pp-theme', '.pp-actions', '#pp-fallback', '.pp-lightbox', 'script'].forEach(
+        function (selector) {
+          clone.querySelectorAll(selector).forEach(function (el) { el.remove(); });
+        }
+      );
+      download(FILENAME_BASE + '.html', 'text/html', '<!doctype html>\\n' + clone.outerHTML);
+      saveMenu.hidden = true;
+    });
+  }
+
+  var ackBtn = document.getElementById('pp-ack');
+  var status = document.getElementById('pp-status');
+
+  function fallback(payload, reason) {
+    var box = document.getElementById('pp-fallback');
+    box.hidden = false;
+    document.getElementById('pp-fallback-reason').textContent =
+      reason + ' \\u2014 the report is still on screen; only the acknowledgement failed to send.';
+  }
+
+  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  var heartbeatTimer = null;
+  function heartbeat() {
+    if (document.visibilityState === 'visible') send('probe', {});
+  }
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') heartbeat();
+  });
+
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
+  async function send(kind, data) {
+    var payload = { kind: kind, data: data };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        if (kind !== 'probe') fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (kind !== 'probe') fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      return false;
+    }
+  }
+
+  function doneMessage(base) {
+    return STATUS_URL ? base + ' Waiting for the next thing\\u2026' : base;
+  }
+
+  if (ackBtn) {
+    ackBtn.addEventListener('click', async function () {
+      ackBtn.disabled = true;
+      if (!SUBMIT_URL) {
+        // No listener behind this page (see show.py's run_show): nothing to send,
+        // acknowledging is purely a local mark that the report was seen.
+        status.textContent = 'Acknowledged.';
+        return;
+      }
+      status.textContent = 'Sending\\u2026';
+      if (await send('acknowledge', {})) {
+        status.textContent = doneMessage('Acknowledged.');
+        document.title = '\\u2705 ' + BASE_TITLE;
+        stopHeartbeat();
+        startReusePolling();
+      } else {
+        ackBtn.disabled = false;
+        status.textContent = 'Not sent.';
+      }
+    });
+  }
+
+  if (SUBMIT_URL) {
+    // Proves the token and CORS response are readable before the user has done
+    // anything, same as ask's page — never consumes the one acknowledgement.
+    send('probe', {});
+    startHeartbeat();
+  }
+}());
+</script>
+</body>
+</html>
+"""
+
+
+def _filename_base(title: str) -> str:
+    """A filesystem-safe stem for the saved file, derived from `title`."""
+    stem = "".join(c if c.isalnum() else "-" for c in title.strip().lower())
+    stem = "-".join(filter(None, stem.split("-")))
+    return stem or "report"
+
+
+def build_show_page(
+    *,
+    content: str,
+    title: str = "Claude Code",
+    accent: str | None = None,
+    theme: str | None = None,
+    save_button: bool = True,
+    acknowledge_button: bool = True,
+    submit_url: str | None = None,
+    timeout_seconds: float = 300.0,
+    status_url: str | None = None,
+    generation: int = 0,
+) -> str:
+    """Return the complete HTML document for one `show` call.
+
+    `content` is Markdown, rendered the same way `question` is for `ask`. Save is always
+    client-side (a Blob download), regardless of `submit_url`. Acknowledge only actually
+    reaches the agent when `submit_url` is set — see `show.run_show` for when that is:
+    the shared session (always available) or, on the one-off fallback tab, only if the
+    call opted into waiting for it. With no `submit_url`, the Acknowledge button still
+    shows and responds, but purely as a local "seen" mark, never sent anywhere.
+
+    `submit_url`/`status_url`/`generation`/`timeout_seconds` mirror `build_page`'s: set
+    together when this page is served by a `SessionListener` or a one-shot
+    `LoopbackListener`, left at their defaults for a plain unlistened page.
+    """
+    css = _load_base_css() + _SHOW_ADDENDUM
+    if accent is not None:
+        css += _accent_css(accent)
+
+    save_html = ""
+    if save_button:
+        save_html = (
+            '    <button type="button" id="pp-save">Save report</button>\n'
+            '    <div class="pp-save-menu" id="pp-save-menu" hidden>\n'
+            '      <button type="button" id="pp-save-md">as Markdown (.md)</button>\n'
+            '      <button type="button" id="pp-save-html">as HTML (.html)</button>\n'
+            "    </div>"
+        )
+    ack_html = ""
+    if acknowledge_button:
+        ack_html = '    <button type="button" id="pp-ack">Acknowledge</button>'
+
+    return (
+        _SHOW_TEMPLATE.replace("__CSS__", css)
+        .replace("__THEME_ATTR__", _theme_attr(theme))
+        .replace("__TITLE__", html.escape(title, quote=True))
+        .replace("__CONTENT__", render_markdown(content))
+        .replace("__SAVE_BUTTON__", save_html)
+        .replace("__ACK_BUTTON__", ack_html)
+        .replace("__SUBMIT_URL__", _js_string(submit_url))
+        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
+        .replace("__STATUS_URL__", _js_string(status_url))
+        .replace("__GENERATION__", _js_string(generation))
+        .replace("__RAW_CONTENT__", _js_string(content))
+        .replace("__FILENAME_BASE__", _js_string(_filename_base(title)))
+    )
 
 
 def _load_base_css() -> str:

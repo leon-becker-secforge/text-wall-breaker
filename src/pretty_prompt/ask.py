@@ -6,10 +6,11 @@ server's event loop stays free.
 
 Two ways a call gets its tab, tried in that order:
 
-  1. Reuse the process's one shared `SessionListener` tab, if nothing else is using it
-     right now (see `_shared_session`/`try_claim`). The already-open tab notices the new
-     question itself and reloads — see `page.py`'s `startReusePolling` — so the person
-     answering doesn't get a new tab per question.
+  1. Reuse the process's one shared `SessionListener` tab (see `session.py`), if nothing
+     else is using it right now (see `try_claim`). `show` calls reuse the very same
+     session, so an `ask` and a `show` in the same process land in one tab between them.
+     The already-open tab notices the new question itself and reloads — see `page.py`'s
+     `startReusePolling` — so the person answering doesn't get a new tab per question.
   2. Fall back to a one-off `LoopbackListener` and its own freshly opened tab, exactly as
      every call worked before tab reuse existed. This is what makes two overlapping `ask`
      calls safe: the second one can't wait for the first to free the shared tab, so it
@@ -23,7 +24,6 @@ import secrets
 import shutil
 import subprocess
 import tempfile
-import threading
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -38,6 +38,7 @@ from .page import (
     parse_accent,
     read_saved_theme,
 )
+from .session import get_shared_session
 
 __all__ = [
     "AskRequest",
@@ -300,21 +301,6 @@ def _answer_from_submission(
     return {"answers": answers}
 
 
-# One shared tab for the process's whole life, tried before opening a new one — see the
-# module docstring. Created lazily rather than at import time so importing this module
-# never binds a port as a side effect (tests, in particular, import it freely).
-_shared_session_lock = threading.Lock()
-_shared_session: SessionListener | None = None
-
-
-def _get_shared_session() -> SessionListener:
-    global _shared_session
-    with _shared_session_lock:
-        if _shared_session is None:
-            _shared_session = SessionListener(secrets.token_hex(16))
-        return _shared_session
-
-
 def _run_ask_reusing_tab(
     request: AskRequest, steps: list[Question], session: SessionListener
 ) -> dict[str, Any]:
@@ -378,7 +364,7 @@ def run_ask(request: AskRequest) -> dict[str, Any]:
     request = request.validated()
     steps = request.steps
 
-    session = _get_shared_session()
+    session = get_shared_session()
     if session.try_claim():
         try:
             return _run_ask_reusing_tab(request, steps, session)

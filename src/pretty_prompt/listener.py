@@ -85,7 +85,11 @@ def _handle_submit_payload(
             save_theme(theme)
         respond(204, b"")
         return
-    if kind not in ("submit", "cancel"):
+    # "submit"/"cancel" are ask's answer kinds; "acknowledge" is show's — see
+    # show.run_show. All three are "the one submission this listener exists to
+    # collect", handled identically from here on; only the caller distinguishes them
+    # by `Submission.kind`.
+    if kind not in ("submit", "cancel", "acknowledge"):
         respond(400, b'{"error":"unknown kind"}')
         return
 

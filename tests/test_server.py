@@ -50,9 +50,9 @@ def test_accent_config_is_refused_when_not_a_hex_colour(monkeypatch):
     assert "blue" in problem
 
 
-def test_ask_is_the_only_registered_tool():
+def test_ask_and_show_are_the_only_registered_tools():
     tools = anyio.run(server.list_tools)
-    assert [tool.name for tool in tools] == ["ask"]
+    assert [tool.name for tool in tools] == ["ask", "show"]
 
 
 def test_ask_schema_matches_the_agreed_shape():

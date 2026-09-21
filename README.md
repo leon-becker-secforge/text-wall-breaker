@@ -1,14 +1,21 @@
 # pretty-prompt
 
-An MCP server that asks the user a question in a browser page.
+An MCP server that asks the user a question, or shows them a result, in a browser page.
+
+A wall of unformatted text is hard to read, and HTML is the tool for fixing that. But
+hand-writing a page per question doesn't scale, and a model generating HTML inline tends
+to look it — inconsistent, slow to produce, obviously AI-written. `pretty-prompt` covers
+the common cases — options with explanations, images, long text — with one well-designed
+page instead, so neither cost has to be paid per question.
 
 Claude Code's built-in AskUserQuestion renders inside the terminal panel: at most four
 options, plain-text previews, no images. `pretty-prompt` opens a real page on the desktop
 instead, so a question can carry any number of options, a Markdown body per option, and
 images.
 
-The server exposes one tool, `ask`. The name of the server is broader than its one tool
-because more are expected.
+The server exposes two tools: `ask`, which waits for an answer, and `show` (prototype),
+which doesn't — it opens a page for a result the user only needs to read, like a report,
+a comparison, or a diff, and returns as soon as the browser has it.
 
 ## Installing
 
@@ -31,9 +38,9 @@ error in the client rather than as a failure inside the first question asked.
 
 ### Accent colour
 
-The page's accent — the selected-option border and tint, the submit button, focus
-rings — defaults to green. Set `PRETTY_PROMPT_ACCENT` to a `#rrggbb` hex colour to use
-something else instead, in both light and dark theme:
+The page's accent — the selected-option border and tint, the submit/Acknowledge button,
+focus rings — defaults to green, for both `ask` and `show`. Set `PRETTY_PROMPT_ACCENT`
+to a `#rrggbb` hex colour to use something else instead, in both light and dark theme:
 
 ```bash
 claude mcp add pretty-prompt --env PRETTY_PROMPT_ACCENT=#2563eb -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
@@ -121,6 +128,45 @@ answer was sent. It stays set even if the drawer was closed again afterwards, so
 can be expanded without being selected, or selected without ever being expanded (a short
 option, or one never opened).
 
+## The `show` tool (prototype)
+
+```json
+{
+  "content": "# Review findings\n\n| file | severity |\n|---|---|\n| ask.py | high |",
+  "title": "Review: auth middleware",
+  "save_button": true,
+  "acknowledge_button": true,
+  "wait_for_acknowledge": false,
+  "timeout_seconds": 300
+}
+```
+
+`content` is Markdown, rendered the same way `ask`'s `question` is. Unlike `ask`, `show`
+doesn't wait for anything by default — it opens the page and returns as soon as the
+browser has it, so it's the tool to reach for when a result only needs to be read, not
+answered: a report, a comparison, a diff, a table too long for a terminal reply.
+
+The page carries two buttons, on by default, either can be turned off:
+
+- **Save report** — downloads the content, as the original Markdown or as a static
+  snapshot of the rendered page (no buttons, no scripts). Purely client-side; never
+  reported back here.
+- **Acknowledge** — marks the report seen. By default that's a local-only mark: the
+  click never reaches the agent, because nothing is waiting for it. Set
+  `wait_for_acknowledge` to actually block on it, the way `ask` blocks on an answer.
+
+### Result
+
+```json
+{"opened": true, "path": "..."}
+{"acknowledged": true}
+{"timed_out": true}
+```
+
+Without `wait_for_acknowledge`, always `{"opened": true}`, plus `path` when the call
+didn't reuse an already-open tab (see below). With it, `{"acknowledged": true}` once
+Acknowledge is clicked, or `{"timed_out": true}` after `timeout_seconds` idle.
+
 ## Markdown
 
 A deliberate subset: headings, paragraphs, fenced and inline code, unordered and ordered
@@ -148,12 +194,13 @@ and `data:image/`; anything else, `javascript:` above all, renders as text.
 
 ## How a call works
 
-Every process keeps one shared browser tab (prototype): a call tries to reuse it first,
-and the already-open tab notices the new question and reloads in place, so a sequence of
-`ask` calls doesn't open a new tab each time. A call that finds the shared tab already
-answering another question falls back to its own one-off tab instead of waiting for it,
-so two overlapping calls stay safe. The one-off path is the original, always-safe
-behaviour:
+Every process keeps one shared browser tab (prototype), used by `ask` and `show` alike —
+an `ask` followed by a `show` (or the reverse) lands in the same tab, not two. A call
+tries to reuse it first, and the already-open tab notices the new content and reloads in
+place, so a sequence of calls doesn't open a new tab each time. A call that finds the
+shared tab already busy with another call falls back to its own one-off tab instead of
+waiting for it, so two overlapping calls stay safe. The one-off path is the original,
+always-safe behaviour:
 
 1. A loopback socket binds an OS-chosen port on `127.0.0.1`, and a fresh
    `secrets.token_hex(16)` token is generated — both **before** the page is written, so
@@ -161,6 +208,11 @@ behaviour:
 2. The page is written to a per-call temp directory and handed to `xdg-open`.
 3. The call blocks on that socket until the token-matched POST arrives, a cancel arrives,
    or the idle timeout elapses. The temp directory is removed on every exit path.
+
+A one-off `show` call that isn't waiting for Acknowledge skips step 1 and 3 entirely: no
+socket, no token, nothing to block on — just a static page, written and opened. Its
+Acknowledge button still shows, but with no listener behind it, a click is a local-only
+mark rather than something sent anywhere.
 
 The tab title gets a checkmark or cross prefix once its question is answered or
 cancelled, so an answered tab left open (or waiting its turn, with tab reuse) is
@@ -175,12 +227,14 @@ the page's submit script is adapted from; `assets/base.css` is vendored verbatim
 same skill and kept byte-identical so it stays diffable against its source.
 
 The blocking wait runs in a worker thread, off the server's event loop, so two
-overlapping `ask` calls open two tabs with their own port and token. Nothing is
-serialised between them.
+overlapping calls — `ask`, `show`, or a mix — open two tabs with their own port and
+token. Nothing is serialised between them.
 
-If the page cannot reach the listener — a stale token, or a call that already timed out —
-it shows the answer in a selected, read-only textarea rather than losing it. It does not
-copy anything to the clipboard on its own; copying is left to the user.
+If an `ask` page cannot reach the listener — a stale token, or a call that already timed
+out — it shows the answer in a selected, read-only textarea rather than losing it. It
+does not copy anything to the clipboard on its own; copying is left to the user. `show`'s
+own fallback only reports the failure, without a textarea — there is nothing to lose the
+way an unreachable answer would be, since the report itself is still on screen either way.
 
 ## Developing
 
