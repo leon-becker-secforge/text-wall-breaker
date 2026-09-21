@@ -177,6 +177,13 @@ as literal text.
 A ` ```diff ` fenced block gets its own minimal rendering instead of a plain code block:
 a colored left-edge rule and `+`/`-` markers per line, with removed lines struck through.
 
+A ` ```mermaid ` fenced block renders as an actual diagram, centered under the
+surrounding prose. This is the one deliberate exception to the page otherwise never
+making a network call beyond its one POST: rather than vendor the mermaid library
+(~3.5MB) into this package, a page with a mermaid fence loads a pinned build from
+jsDelivr — never on a page without one. The diagram's theme is read once, from the
+page's own resolved theme, at load; it does not follow the in-page toggle afterwards.
+
 Raw HTML is never passed through. Every run of source text is escaped before any tag is
 added, so a `<script>` in a question appears as visible text. Rendering happens in Python
 rather than in the page's JavaScript for that reason — the page is never handed a string
@@ -201,6 +208,12 @@ place, so a sequence of calls doesn't open a new tab each time. A call that find
 shared tab already busy with another call falls back to its own one-off tab instead of
 waiting for it, so two overlapping calls stay safe. The one-off path is the original,
 always-safe behaviour:
+
+A `show` page on the shared tab polls for updates from the moment it loads (`ask`'s only
+starts once its one answer is in, so a reload can't sweep away an answer mid-composition
+— `show` has no answer to protect). That makes a later `show` call reusing the same
+session a live update of the open tab: republish new content — a progress readout, say —
+and the page picks it up within about 1.5 seconds, no new tab, no action from the user.
 
 1. A loopback socket binds an OS-chosen port on `127.0.0.1`, and a fresh
    `secrets.token_hex(16)` token is generated — both **before** the page is written, so

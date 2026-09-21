@@ -1,7 +1,11 @@
-"""Assembly of the HTML page one `ask` call opens.
+"""Assembly of the HTML page one `ask` or `show` call opens.
 
-The page is self-contained: styles are inlined, there is no CDN and no network fetch
-other than the one POST back to the listener. `base.css` is vendored verbatim from the
+The page is otherwise self-contained: styles are inlined, and the only network traffic
+is the one POST back to the listener. The one deliberate exception is a page containing a
+` ```mermaid ` fence (see `markdown.py`): it loads a pinned mermaid build from jsDelivr
+to render it, rather than vendoring the ~3.5MB bundle into this package — see
+`_MERMAID_SRC`/`_needs_mermaid`. Without that fence, nothing here ever reaches the
+network beyond the one POST. `base.css` is vendored verbatim from the
 no-text-wall skill (`assets/base.css`) for its `--ntw-*` colour tokens, which is the
 part that generalises across a long-form report and a one-question prompt. Its
 *components* (`.card`, `.theme-toggle`, ...) do not: they are sized for report
@@ -203,6 +207,14 @@ tbody tr:last-child td { border-bottom: none; }
 }
 :root[data-theme="dark"] .pp-diff .add { border-left-color: #3ddc84; }
 :root[data-theme="dark"] .pp-diff .add::before { color: #3ddc84; }
+
+/* A rendered mermaid diagram is centered rather than left-aligned like the rest of the
+   prose around it — it reads as a figure, not a paragraph. mermaid.run() replaces this
+   element's content with an <svg> but keeps the <pre> itself, so the default monospace/
+   white-space:pre styling a bare <pre> would otherwise carry is reset here too. */
+pre.mermaid { margin: 0.6em 0; text-align: center; white-space: normal;
+  font-family: inherit; }
+pre.mermaid svg { max-width: 100%; height: auto; }
 
 /* Auto-widened (see page.py's _is_gallery) rather than a manual flag, the same way a
    long option body already auto-collapses into a drawer without the caller asking. */
@@ -627,6 +639,7 @@ __FREE_TEXT__
   startHeartbeat();
 }());
 </script>
+__MERMAID__
 </body>
 </html>
 """
@@ -962,6 +975,7 @@ __STEPS__
   startHeartbeat();
 }());
 </script>
+__MERMAID__
 </body>
 </html>
 """
@@ -1017,6 +1031,11 @@ code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--nt
   padding: 0.1em 0.35em; border-radius: 4px; }
 pre.code-block { font-family: var(--pp-font-mono); }
 pre.code-block code { background: none; padding: 0; border-radius: 0; }
+
+/* Same reasoning as _ADDENDUM's pre.mermaid/pre.mermaid svg — see there. */
+pre.mermaid { margin: 0.6em 0; text-align: center; white-space: normal;
+  font-family: inherit; }
+pre.mermaid svg { max-width: 100%; height: auto; }
 
 blockquote { border-inline-start: 4px solid var(--ntw-border); color: var(--ntw-fg-muted);
   margin: 0.6em 0; padding-inline-start: 14px; }
@@ -1290,7 +1309,6 @@ __ACK_BUTTON__
         status.textContent = doneMessage('Acknowledged.');
         document.title = '\\u2705 ' + BASE_TITLE;
         stopHeartbeat();
-        startReusePolling();
       } else {
         ackBtn.disabled = false;
         status.textContent = 'Not sent.';
@@ -1304,8 +1322,15 @@ __ACK_BUTTON__
     send('probe', {});
     startHeartbeat();
   }
+  // Unlike ask's page (which only starts this once its one answer is in, so a reload
+  // can't sweep away an answer mid-composition), show has no answer to protect: it
+  // polls from the moment it loads, so a later show/ask call reusing this tab lands
+  // here as a live update instead of being silently overwritten on the server while
+  // this page keeps showing stale content.
+  startReusePolling();
 }());
 </script>
+__MERMAID__
 </body>
 </html>
 """
@@ -1361,11 +1386,14 @@ def build_show_page(
     if acknowledge_button:
         ack_html = '    <button type="button" id="pp-ack">Acknowledge</button>'
 
+    content_html = render_markdown(content)
+
     return (
         _SHOW_TEMPLATE.replace("__CSS__", css)
         .replace("__THEME_ATTR__", _theme_attr(theme))
         .replace("__TITLE__", html.escape(title, quote=True))
-        .replace("__CONTENT__", render_markdown(content))
+        .replace("__CONTENT__", content_html)
+        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html)))
         .replace("__SAVE_BUTTON__", save_html)
         .replace("__ACK_BUTTON__", ack_html)
         .replace("__SUBMIT_URL__", _js_string(submit_url))
@@ -1556,6 +1584,48 @@ def _theme_attr(theme: str | None) -> str:
     return f' data-theme="{theme}"'
 
 
+# Pinned to the exact version jsDelivr resolved `mermaid@11` to when this was written
+# (2026-09-21), not left floating: a floating tag means the page's behaviour can change
+# without this repo changing, which is the one thing vendoring (the no-text-wall default)
+# avoids and a CDN load reintroduces. See page.py's module docstring for why a CDN was
+# chosen here anyway over vendoring the ~3.5MB bundle.
+_MERMAID_SRC = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
+
+
+def _needs_mermaid(*fragments: str) -> bool:
+    """True if any rendered fragment carries a ```mermaid fence (see markdown.py)."""
+    return any('class="mermaid"' in fragment for fragment in fragments)
+
+
+def _mermaid_script(needed: bool) -> str:
+    """The `<script>` pair loading and running mermaid, or "" if this page has none.
+
+    Loaded only on a page that actually has a ```mermaid fence — every other page keeps
+    the "no network fetch but the one POST" contract intact. `theme` is read once, from
+    the page's own resolved theme (data-theme if set, else the OS preference) — it does
+    not react to the in-page toggle afterwards; mermaid has no live re-render for that,
+    same gap no-text-wall's DIAGRAMS.md already discloses for its own vendored version.
+    """
+    if not needed:
+        return ""
+    return f"""<script src="{_MERMAID_SRC}"></script>
+<script>
+(function () {{
+  var dark = document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  mermaid.initialize({{
+    startOnLoad: false,
+    theme: dark ? 'dark' : 'default',
+    securityLevel: 'strict',
+  }});
+  document.querySelectorAll('.mermaid').forEach(function (el) {{
+    mermaid.run({{ nodes: [el] }});
+  }});
+}}());
+</script>"""
+
+
 def build_page(
     *,
     question: str,
@@ -1611,20 +1681,23 @@ def build_page(
         hint = "Write an answer."
 
     gallery = _is_gallery(options)
+    question_html = render_markdown(question)
+    options_html = _render_options(options, multi_select, gallery=gallery)
 
     return (
         _TEMPLATE.replace("__CSS__", css)
         .replace("__THEME_ATTR__", _theme_attr(theme))
         .replace("__MAIN_EXTRA__", ' class="pp-wide"' if gallery else "")
         .replace("__TITLE__", html.escape(title, quote=True))
-        .replace("__QUESTION__", render_markdown(question))
-        .replace("__OPTIONS__", _render_options(options, multi_select, gallery=gallery))
+        .replace("__QUESTION__", question_html)
+        .replace("__OPTIONS__", options_html)
         .replace("__FREE_TEXT__", free_text)
         .replace("__HINT__", html.escape(hint, quote=True))
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
+        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(question_html, options_html)))
     )
 
 
@@ -1712,4 +1785,5 @@ def build_multi_page(
         .replace("__STEP_COUNT__", str(total))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
+        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(steps_html)))
     )

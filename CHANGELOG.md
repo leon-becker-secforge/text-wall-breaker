@@ -3,6 +3,23 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0] - 2026-09-21
+
+### Added
+
+- A ` ```mermaid ` fence in any `ask`/`show` Markdown renders as a real diagram — the one
+  deliberate exception to "no network fetch but the one POST": the page loads a pinned
+  mermaid build from jsDelivr rather than vendoring the ~3.5MB bundle, only on a page
+  that actually has one. Diagram is centered under the surrounding prose.
+
+### Fixed
+
+- A non-blocking `show`'s reused tab only started polling for the next update after its
+  Acknowledge button was clicked — for the (now default) fire-and-forget case, that never
+  happened, so a second `show` call reusing the tab silently republished on the server
+  while the open page kept showing stale content. It now polls from the moment it loads,
+  the way `show`'s "live update the same tab" use case actually needs.
+
 ## [0.4.0] - 2026-09-21
 
 ### Added

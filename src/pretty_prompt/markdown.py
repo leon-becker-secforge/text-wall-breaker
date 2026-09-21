@@ -6,6 +6,11 @@ headings, paragraphs, fenced and inline code, unordered and ordered lists (nesta
 indentation), blockquotes, links, images, bold, italic, and strikethrough. Anything
 outside that set renders as literal text rather than silently disappearing.
 
+A ` ```mermaid ` fence is the one exception to "no network fetch but the one POST" (see
+page.py's module docstring): it's escaped and wrapped the same way any other fence is
+here, but page.py loads a mermaid renderer from a CDN — not vendored — to draw it. See
+`page.py`'s `_needs_mermaid`/`_MERMAID_SRC` for why and the tradeoff that came with it.
+
 Raw HTML in the source is never passed through — every run of source text is escaped
 before any tag this module emits is added, so a `<script>` in a question becomes visible
 text. That is the whole reason rendering happens here rather than in the page's JS: the
@@ -253,6 +258,12 @@ def render_markdown(text: str) -> str:
                 index += 1
             if language == "diff":
                 out.append(_render_diff_block(body))
+            elif language == "mermaid":
+                # Rendered client-side by page.py's mermaid loader, which only appears on
+                # a page that actually has one of these — see _needs_mermaid there. The
+                # raw diagram source is escaped the same way any other fenced block's is;
+                # mermaid.run() reads it back via .textContent, which un-escapes it.
+                out.append(f'<pre class="mermaid">{_escape("\n".join(body))}</pre>')
             else:
                 attr = f' data-language="{_escape(language)}"' if language else ""
                 code = _escape("\n".join(body))
