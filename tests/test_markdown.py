@@ -84,6 +84,33 @@ def test_unsafe_or_schemeless_urls_render_as_text(source):
     assert "src=" not in out
 
 
+@pytest.mark.parametrize("value", ["success", "warning", "danger", "info"])
+def test_badge_renders_with_a_valid_severity_value(value):
+    out = render_inline(f"!badge[recommended]({value})")
+    assert out == f'<span class="badge" data-axis="severity" data-value="{value}">recommended</span>'
+
+
+def test_badge_with_an_unrecognized_value_falls_through_to_text():
+    out = render_inline("!badge[bogus](nonsense)")
+    assert out == "!badge[bogus](nonsense)"
+    assert "<span" not in out
+
+
+def test_badge_text_renders_inline_markdown():
+    out = render_inline("!badge[**x**](success)")
+    assert "<strong>x</strong>" in out
+
+
+def test_verdict_fence_renders_as_a_verdict_role_div():
+    out = render_markdown("```verdict\nUse Nexus CE.\n```")
+    assert out == '<div data-role="verdict">Use Nexus CE.</div>'
+
+
+def test_verdict_fence_renders_inline_markdown_not_code():
+    out = render_markdown("```verdict\n**Use** it.\n```")
+    assert out == '<div data-role="verdict"><strong>Use</strong> it.</div>'
+
+
 def test_raw_html_is_escaped_everywhere():
     assert "<script>" not in render_markdown("<script>alert(1)</script>")
     assert "<b>" not in render_markdown("# <b>x</b>")

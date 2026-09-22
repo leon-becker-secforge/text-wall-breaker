@@ -44,9 +44,17 @@ class InvalidShow(ValueError):
 
 
 class ShowRequest(BaseModel):
-    """A validated `show` call."""
+    """A validated `show` call.
+
+    Either `content` (one Markdown document) or `slides` (several, shown one at a time
+    as a deck) is set — never both. See `page.build_show_page`/`_render_deck` for how
+    `slides` renders; `header`/`footer` only mean anything alongside `slides`.
+    """
 
     content: str = ""
+    slides: list[str] | None = None
+    header: str | None = None
+    footer: str | None = None
     title: str = "Claude Code"
     save_button: bool = True
     acknowledge_button: bool = True
@@ -54,12 +62,22 @@ class ShowRequest(BaseModel):
     timeout_seconds: float = 300.0
 
     def validated(self) -> ShowRequest:
-        if not self.content.strip():
-            raise InvalidShow("content is empty")
         if self.timeout_seconds <= 0:
             raise InvalidShow("timeout_seconds must be positive")
         if self.wait_for_acknowledge and not self.acknowledge_button:
             raise InvalidShow("wait_for_acknowledge requires acknowledge_button")
+        if self.slides is not None:
+            if self.content.strip():
+                raise InvalidShow("set either content or slides, not both")
+            if not self.slides:
+                raise InvalidShow("slides is empty")
+            if not any(slide.strip() for slide in self.slides):
+                raise InvalidShow("slides has no content")
+            return self
+        if self.header is not None or self.footer is not None:
+            raise InvalidShow("header/footer require slides")
+        if not self.content.strip():
+            raise InvalidShow("content is empty")
         return self
 
 
@@ -84,6 +102,9 @@ def _build_html(
 ) -> str:
     return build_show_page(
         content=request.content,
+        slides=request.slides,
+        header=request.header,
+        footer=request.footer,
         title=request.title,
         accent=_resolve_accent(),
         theme=read_saved_theme(),

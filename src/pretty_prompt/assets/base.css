@@ -131,70 +131,31 @@ body {
 }
 
 /* 2. Badge — colour follows the severity axis only (#22); every other
-      axis (category, source, etc.) renders neutral regardless of value. */
+      axis (category, source, etc.) renders neutral regardless of value.
+      Solid block tag ("variant B" in the three-variant review), chosen over the
+      original tinted-pill and a dot+label style — see pretty-prompt's CLAUDE.md for
+      the review process this came out of. */
 .badge {
   display: inline-block;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 0.8em;
-  font-weight: 600;
-  border: 1px solid var(--ntw-border);
-  color: var(--ntw-fg-muted);
-  background: transparent;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #fff;
+  border: none;
 }
-/* Literal tint pairs, not color-mix(): #17/#18 keep these internal to the
-   component (not exposed tokens), and dropping color-mix() removes a
-   browser-support assumption this repo hadn't verified. Each pair is a
-   known-AA-safe combination (>7:1), not derived from --ntw-success/etc. —
-   deriving fg and bg from the same variable is what caused the 1:1
-   collision this replaces. */
-.badge[data-axis="severity"][data-value="success"] {
-  color: #065f46;
-  border-color: #065f46;
-  background: #d1fae5;
-}
-.badge[data-axis="severity"][data-value="warning"] {
-  color: #92400e;
-  border-color: #92400e;
-  background: #fef3c7;
-}
-.badge[data-axis="severity"][data-value="danger"] {
-  color: #991b1b;
-  border-color: #991b1b;
-  background: #fee2e2;
-}
-.badge[data-axis="severity"][data-value="info"] {
-  color: #1e40af;
-  border-color: #1e40af;
-  background: #dbeafe;
-}
-
-@media (prefers-color-scheme: dark) {
-  .badge[data-axis="severity"][data-value="success"] {
-    color: #6ee7b7; border-color: #6ee7b7; background: #064e3b;
-  }
-  .badge[data-axis="severity"][data-value="warning"] {
-    color: #fcd34d; border-color: #fcd34d; background: #78350f;
-  }
-  .badge[data-axis="severity"][data-value="danger"] {
-    color: #fca5a5; border-color: #fca5a5; background: #7f1d1d;
-  }
-  .badge[data-axis="severity"][data-value="info"] {
-    color: #93c5fd; border-color: #93c5fd; background: #1e3a8a;
-  }
-}
-:root[data-theme="dark"] .badge[data-axis="severity"][data-value="success"] {
-  color: #6ee7b7; border-color: #6ee7b7; background: #064e3b;
-}
-:root[data-theme="dark"] .badge[data-axis="severity"][data-value="warning"] {
-  color: #fcd34d; border-color: #fcd34d; background: #78350f;
-}
-:root[data-theme="dark"] .badge[data-axis="severity"][data-value="danger"] {
-  color: #fca5a5; border-color: #fca5a5; background: #7f1d1d;
-}
-:root[data-theme="dark"] .badge[data-axis="severity"][data-value="info"] {
-  color: #93c5fd; border-color: #93c5fd; background: #1e3a8a;
-}
+/* Literal colours, not color-mix(): #17/#18 keep these internal to the component (not
+   exposed tokens), and dropping color-mix() removes a browser-support assumption this
+   repo hadn't verified. Same four values as base.css already used as AA-safe *text*
+   colour on a light tint — reused here as a solid *background* under white text (each
+   still >4.5:1, measured), so light and dark mode need no separate override: the badge
+   looks identical in both themes, only the surrounding page does not. */
+.badge[data-axis="severity"][data-value="success"] { background: #065f46; }
+.badge[data-axis="severity"][data-value="warning"] { background: #92400e; }
+.badge[data-axis="severity"][data-value="danger"] { background: #991b1b; }
+.badge[data-axis="severity"][data-value="info"] { background: #1e40af; }
 
 /* 3. Provenance meta line (#28) — record path, record mtime, view gen time. */
 .meta {
@@ -333,13 +294,35 @@ tbody tr:hover {
   margin-block: 4px 10px;
 }
 
-/* 9. Deck (`deck` template) — one slide visible at a time. */
+/* 9. Deck (`deck` template) — one slide visible at a time. Accented card ("variant C"
+      in the three-variant review — see pretty-prompt's CLAUDE.md) over a plain
+      borderless slide and an unaccented card: the shadow + top accent bar mark this as
+      a slide, distinct from an ordinary `.card` report section. */
 .deck-slide {
   display: none;
+  position: relative;
 }
 .deck-slide.is-active {
   display: block;
 }
+.deck-slide.card {
+  padding-block-start: 22px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+.deck-slide.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--ntw-accent);
+  border-radius: var(--ntw-radius) var(--ntw-radius) 0 0;
+}
+/* Icon-only, borderless ("variant B" in the three-variant review — see pretty-prompt's
+   CLAUDE.md) over labelled bordered buttons and a labelled accent-pill style. Pinned to
+   the left/right edges (space-between), not clustered in the middle — centred left the
+   two bare glyphs looking adrift with empty space on both sides, caught in review. */
 .deck-nav {
   display: flex;
   justify-content: space-between;
@@ -347,12 +330,23 @@ tbody tr:hover {
   margin-block-start: 16px;
 }
 .deck-nav button {
-  border: 1px solid var(--ntw-border);
-  background: var(--ntw-bg-elevated);
-  color: var(--ntw-fg);
-  border-radius: var(--ntw-radius);
-  padding: 6px 14px;
+  border: none;
+  background: none;
+  color: var(--ntw-fg-muted);
+  font-size: 18px;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  padding: 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.deck-nav button:hover {
+  background: var(--ntw-border);
+  color: var(--ntw-fg);
 }
 
 /* 10. Sticky table of contents (`data-role="nav"`). */

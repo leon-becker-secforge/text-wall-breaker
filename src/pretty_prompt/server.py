@@ -87,7 +87,13 @@ Turn either off with `save_button`/`acknowledge_button` when it doesn't apply �
 Acknowledge button on a page that's purely informational and never needs confirming.
 
 Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path is only
-present for a one-off, non-reused tab) as soon as the browser has been asked to open it."""
+present for a one-off, non-reused tab) as soon as the browser has been asked to open it.
+
+`slides` puts the content in a deck instead — several independent Markdown documents
+shown one at a time with Prev/Next buttons and arrow-key navigation, a "N / total"
+position indicator between them. Set it instead of `content`, never alongside it.
+`header`/`footer` are each one more Markdown document, shown above/below the slide on
+every slide — only meaningful alongside `slides`."""
 
 
 def environment_problem() -> str | None:
@@ -173,6 +179,22 @@ async def ask(
 @server.tool(name="show", description=_SHOW_DESCRIPTION)
 async def show(
     content: Annotated[str, Field(description="What to show, as Markdown.")] = "",
+    slides: Annotated[
+        list[str] | None,
+        Field(
+            description="Prototype: show a deck instead of one document — several "
+            "independent Markdown documents, one shown at a time with Prev/Next and "
+            "arrow-key navigation. Set instead of content, never alongside it."
+        ),
+    ] = None,
+    header: Annotated[
+        str | None,
+        Field(description="Markdown shown above the slide on every slide. Requires slides."),
+    ] = None,
+    footer: Annotated[
+        str | None,
+        Field(description="Markdown shown below the slide on every slide. Requires slides."),
+    ] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
     save_button: Annotated[
         bool, Field(description="Offer a Save report button (Markdown or HTML).")
@@ -195,6 +217,9 @@ async def show(
 ) -> dict[str, Any]:
     request = ShowRequest(
         content=content,
+        slides=slides,
+        header=header,
+        footer=footer,
         title=title,
         save_button=save_button,
         acknowledge_button=acknowledge_button,

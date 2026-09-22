@@ -1064,6 +1064,19 @@ main img { cursor: zoom-in; max-width: 100%; height: auto; border-radius: 6px; }
 .pp-content > :first-child { margin-block-start: 0; }
 .pp-content > :last-child { margin-block-end: 0; }
 
+/* Same visual language as _MULTI_ADDENDUM's .pp-progress (ask's wizard), duplicated
+   rather than shared for the same reason _SHOW_ADDENDUM as a whole is its own block —
+   see the module docstring. Deck's equivalent of that wizard's per-question progress. */
+/* 40px right margin, not 0: clears #pp-theme (absolute, top-right) the same way
+   _MULTI_ADDENDUM's original .pp-progress already does — dropping it earlier caused
+   a real overlap with the theme toggle, caught in review. */
+.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 16px 0; }
+.pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
+.pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
+  overflow: hidden; }
+.pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
+  transition: width .15s; }
+
 /* Same visual language as _ADDENDUM's .pp-actions/button, duplicated rather than
    shared for the same reason _SHOW_ADDENDUM as a whole is its own block — see the
    module docstring. */
@@ -1330,6 +1343,7 @@ __ACK_BUTTON__
   startReusePolling();
 }());
 </script>
+__DECK_SCRIPT__
 __MERMAID__
 </body>
 </html>
@@ -1343,9 +1357,51 @@ def _filename_base(title: str) -> str:
     return stem or "report"
 
 
+def _render_deck(slides: list[str], header: str | None, footer: str | None) -> tuple[str, str]:
+    """Return (content_html, raw_markdown) for a deck-mode `show` call.
+
+    Each of `header`/`footer`/every entry of `slides` is its own independent Markdown
+    render — no shared state between them beyond which slide `_deck_script` currently
+    shows. `raw_markdown` reconstructs one document for the Markdown Save button, joining
+    slides on a `---` line; that line is never parsed back (there is no deck-from-Markdown
+    path), it only has to read sensibly as a saved file.
+    """
+    header_html = render_markdown(header) if header else ""
+    footer_html = render_markdown(footer) if footer else ""
+    total = len(slides)
+    initial_progress = round(100 / total) if total else 0
+    progress_html = (
+        '<div class="pp-progress">'
+        f'<span class="pp-progress-label" id="pp-deck-progress-label">Slide 1 of {total}</span>'
+        '<span class="pp-progress-track">'
+        f'<span class="pp-progress-fill" id="pp-deck-progress-fill" '
+        f'style="width: {initial_progress}%"></span>'
+        "</span>"
+        "</div>"
+    )
+    slide_parts = []
+    for index, slide in enumerate(slides):
+        active = " is-active" if index == 0 else ""
+        slide_html = render_markdown(slide)
+        slide_parts.append(f'<section class="deck-slide card{active}">{slide_html}</section>')
+    nav_html = (
+        '<div class="deck-nav">'
+        '<button type="button" data-deck-prev aria-label="Previous slide">&larr;</button>'
+        '<button type="button" data-deck-next aria-label="Next slide">&rarr;</button>'
+        "</div>"
+    )
+    content_html = header_html + progress_html + "\n".join(slide_parts) + nav_html + footer_html
+
+    raw_parts = [part for part in (header, "\n\n---\n\n".join(slides), footer) if part]
+    return content_html, "\n\n".join(raw_parts)
+
+
 def build_show_page(
     *,
-    content: str,
+    content: str = "",
+    slides: list[str] | None = None,
+    header: str | None = None,
+    footer: str | None = None,
     title: str = "Claude Code",
     accent: str | None = None,
     theme: str | None = None,
@@ -1358,12 +1414,16 @@ def build_show_page(
 ) -> str:
     """Return the complete HTML document for one `show` call.
 
-    `content` is Markdown, rendered the same way `question` is for `ask`. Save is always
-    client-side (a Blob download), regardless of `submit_url`. Acknowledge only actually
-    reaches the agent when `submit_url` is set — see `show.run_show` for when that is:
-    the shared session (always available) or, on the one-off fallback tab, only if the
-    call opted into waiting for it. With no `submit_url`, the Acknowledge button still
-    shows and responds, but purely as a local "seen" mark, never sent anywhere.
+    `content` is Markdown, rendered the same way `question` is for `ask` — or, in deck
+    mode, `slides` is a list of independent Markdown documents shown one at a time with
+    Prev/Next/arrow-key nav, optionally framed by a `header`/`footer` shown on every
+    slide. `content` and `slides` are mutually exclusive, validated by `show.ShowRequest`
+    before this is called. Save is always client-side (a Blob download), regardless of
+    `submit_url`. Acknowledge only actually reaches the agent when `submit_url` is set —
+    see `show.run_show` for when that is: the shared session (always available) or, on
+    the one-off fallback tab, only if the call opted into waiting for it. With no
+    `submit_url`, the Acknowledge button still shows and responds, but purely as a local
+    "seen" mark, never sent anywhere.
 
     `submit_url`/`status_url`/`generation`/`timeout_seconds` mirror `build_page`'s: set
     together when this page is served by a `SessionListener` or a one-shot
@@ -1386,13 +1446,18 @@ def build_show_page(
     if acknowledge_button:
         ack_html = '    <button type="button" id="pp-ack">Acknowledge</button>'
 
-    content_html = render_markdown(content)
+    if slides is not None:
+        content_html, raw_content = _render_deck(slides, header, footer)
+    else:
+        content_html = render_markdown(content)
+        raw_content = content
 
     return (
         _SHOW_TEMPLATE.replace("__CSS__", css)
         .replace("__THEME_ATTR__", _theme_attr(theme))
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__CONTENT__", content_html)
+        .replace("__DECK_SCRIPT__", _deck_script(slides is not None))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html)))
         .replace("__SAVE_BUTTON__", save_html)
         .replace("__ACK_BUTTON__", ack_html)
@@ -1400,7 +1465,7 @@ def build_show_page(
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
-        .replace("__RAW_CONTENT__", _js_string(content))
+        .replace("__RAW_CONTENT__", _js_string(raw_content))
         .replace("__FILENAME_BASE__", _js_string(_filename_base(title)))
     )
 
@@ -1623,6 +1688,44 @@ def _mermaid_script(needed: bool) -> str:
     mermaid.run({{ nodes: [el] }});
   }});
 }}());
+</script>"""
+
+
+def _deck_script(needed: bool) -> str:
+    """The `<script>` driving `.deck-slide` prev/next/keyboard nav, or "" if not a deck.
+
+    Loaded only when `build_show_page` was given `slides` — a plain-content page has no
+    `.deck-slide` elements for this to act on. The nav mechanics (prev/next, keyboard,
+    wraparound) are the same ones exercised in no-text-wall's `TEMPLATES.md` `deck`
+    template; the progress bar it drives instead of that template's plain "N / total"
+    span reuses `ask`'s own wizard-progress widget (`.pp-progress`) for visual
+    consistency across pretty-prompt's two multi-step surfaces.
+    """
+    if not needed:
+        return ""
+    return """<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
+  var progressLabel = document.getElementById('pp-deck-progress-label');
+  var progressFill = document.getElementById('pp-deck-progress-fill');
+  var index = 0;
+  function show(next) {
+    slides[index].classList.remove('is-active');
+    index = (next + slides.length) % slides.length;
+    slides[index].classList.add('is-active');
+    if (progressLabel) progressLabel.textContent = 'Slide ' + (index + 1) + ' of ' + slides.length;
+    if (progressFill) progressFill.style.width = Math.round((index + 1) / slides.length * 100) + '%';
+  }
+  var prevBtn = document.querySelector('[data-deck-prev]');
+  var nextBtn = document.querySelector('[data-deck-next]');
+  if (prevBtn) prevBtn.addEventListener('click', function () { show(index - 1); });
+  if (nextBtn) nextBtn.addEventListener('click', function () { show(index + 1); });
+  document.addEventListener('keydown', function (event) {
+    if (event.target.matches('input, textarea, [contenteditable]') || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'ArrowRight') show(index + 1);
+    if (event.key === 'ArrowLeft') show(index - 1);
+  });
+}());
 </script>"""
 
 

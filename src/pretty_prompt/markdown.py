@@ -6,6 +6,13 @@ headings, paragraphs, fenced and inline code, unordered and ordered lists (nesta
 indentation), blockquotes, links, images, bold, italic, and strikethrough. Anything
 outside that set renders as literal text rather than silently disappearing.
 
+Two extensions beyond that, both closed-set so an unrecognized value still falls through
+to literal text rather than rendering something unintended: `!badge[text](value)` for a
+`base.css` severity badge (`value` is one of `success`/`warning`/`danger`/`info`), and a
+` ```verdict ` fence for the one-sentence headline block `base.css` styles via
+`[data-role="verdict"]` — its body is run through inline rendering like a paragraph,
+not escaped as code, since it's prose.
+
 A ` ```mermaid ` fence is the one exception to "no network fetch but the one POST" (see
 page.py's module docstring): it's escaped and wrapped the same way any other fence is
 here, but page.py loads a mermaid renderer from a CDN — not vendored — to draw it. See
@@ -45,11 +52,17 @@ _QUOTE = re.compile(r"^>\s?(.*)$")
 # paragraph that merely contains a `|` — no header row on its own is enough.
 _TABLE_SEPARATOR_CELL = re.compile(r"^:?-+:?$")
 
+# The closed severity set a badge's value may take — matches base.css's own rule that
+# colour follows severity only; anything else falls through to literal text below.
+_BADGE_VALUES = ("success", "warning", "danger", "info")
+
 # One alternation over the raw source: whatever does not match is escaped as literal
 # text. Order matters — code spans come first so that `**` inside backticks stays
-# literal, and `**` precedes `*` so bold is not mis-read as two italics.
+# literal, `!badge[...]` before the plain image pattern so `!` isn't consumed by it
+# first, and `**` precedes `*` so bold is not mis-read as two italics.
 _INLINE = re.compile(
     r"(?P<tick>`+)(?P<code>.+?)(?P=tick)"
+    r"|!badge\[(?P<badge_text>[^\]]*)\]\((?P<badge_value>[A-Za-z]+)\)"
     r"|!\[(?P<img_alt>[^\]]*)\]\((?P<img_url>[^)\s]+)\)"
     r"|\[(?P<link_text>[^\]]*)\]\((?P<link_url>[^)\s]+)\)"
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
@@ -95,6 +108,13 @@ def _render_match(match: re.Match[str]) -> str:
         # Code spans are escaped but not recursed into: backticks win over every other
         # inline marker, so `**x**` in code stays as typed.
         return f"<code>{_escape(match.group('code'))}</code>"
+
+    if match.group("badge_value") is not None:
+        value = match.group("badge_value").lower()
+        if value not in _BADGE_VALUES:
+            return _escape(match.group(0))
+        text = render_inline(match.group("badge_text"))
+        return f'<span class="badge" data-axis="severity" data-value="{value}">{text}</span>'
 
     if match.group("img_url") is not None:
         url = _safe_url(match.group("img_url"))
@@ -258,6 +278,11 @@ def render_markdown(text: str) -> str:
                 index += 1
             if language == "diff":
                 out.append(_render_diff_block(body))
+            elif language == "verdict":
+                # Prose, not code: run through inline rendering same as a paragraph
+                # would be, just wrapped for base.css's `[data-role="verdict"]` style.
+                inner = "<br>".join(render_inline(line) for line in body)
+                out.append(f'<div data-role="verdict">{inner}</div>')
             elif language == "mermaid":
                 # Rendered client-side by page.py's mermaid loader, which only appears on
                 # a page that actually has one of these — see _needs_mermaid there. The
