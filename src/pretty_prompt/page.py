@@ -333,7 +333,7 @@ _MULTI_ADDENDUM = """
 .pp-step { display: none; }
 .pp-step.pp-step-active { display: block; }
 .pp-step .pp-question { margin: 0 0 10px; }
-.pp-step .pp-free-text { margin: 10px 0 0; }
+.pp-step .pp-free-text { margin: 10px 0 16px; }
 """
 
 _TEMPLATE = """<!doctype html>
