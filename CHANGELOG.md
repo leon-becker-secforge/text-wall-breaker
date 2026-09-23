@@ -3,10 +3,18 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.6.0] - 2026-09-23
+
+Upgrading: start a fresh Claude Code session afterwards. A session that already loaded
+`ask`'s schema keeps the old one even after an MCP reconnect, so it never sees `caveat`,
+`allow_defer` or `header`, although the server accepts them.
 
 ### Added
 
+- `show` badges (`!badge[text](success|warning|danger|info)`) and ` ```verdict ` blocks,
+  both closed sets: an unrecognised value or fence stays literal text.
+- `show` deck mode (prototype): `slides` instead of `content`, one Markdown document per
+  slide with Prev/Next and arrow keys, plus optional `header`/`footer` around it.
 - `caveat` on an `ask` option: one always-visible line of inline Markdown, shown as a
   warning-tinted strip under the label even while the body is collapsed, for whatever
   could flip the choice. Capped at 160 characters and one line; longer is rejected.
@@ -24,6 +32,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - The `timeout_seconds` description now says what the page has always done: it keeps the
   call alive while visible, so the timeout only runs while the tab is hidden or closed.
   Agents had been raising it for long pages out of caution.
+
+### Fixed
+
+- The wizard's free-text field had lost its bottom margin, leaving almost no gap above
+  Back/Next/Cancel.
+- The deck progress bar now clears the theme toggle, like the wizard's already did.
 
 ## [0.5.0] - 2026-09-21
 
