@@ -102,6 +102,12 @@ banner, and leaves the free-text box open for the reason; the answer counts as g
 Send/Next. That answer then carries `"deferred": true` and an empty `selected`. Only
 answers to questions with `allow_defer` carry a `deferred` key at all.
 
+`header` (prototype, `questions` only) is Markdown shown above the progress bar, so on
+every step: typically what earlier rounds already settled, so each answer is given with
+it in view. A long header collapses behind a "Context" toggle, which also says how many
+items it holds when it is one list. Setting `header` on a single question is rejected;
+put the context in `question` instead.
+
 ### Several questions on one page
 
 `questions` (prototype) replaces `question`/`options`/`multi_select`/`allow_free_text`

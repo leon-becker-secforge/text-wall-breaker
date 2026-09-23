@@ -13,6 +13,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - `allow_defer` (prototype) on `ask` and on each entry of `questions`: a "Not yet" pill
   beside the question that locks the options and returns `deferred: true` with the reason
   in `free_text`, for a question that depends on something still open.
+- `header` (prototype) on a multi-question `ask`: Markdown shown above every step, such
+  as the decisions earlier rounds settled. A long one collapses behind a "Context" toggle.
 
 ### Changed
 

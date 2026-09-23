@@ -180,6 +180,14 @@ async def ask(
             'the result is {"answers": [...]} instead of {"selected", "free_text"}.'
         ),
     ] = None,
+    header: Annotated[
+        str,
+        Field(
+            description="Prototype, questions only: Markdown shown above every question "
+            "of the page, typically what earlier rounds already settled, so the user "
+            "answers with it in view. A long one collapses behind a Context toggle."
+        ),
+    ] = "",
 ) -> dict[str, Any]:
     request = AskRequest(
         question=question,
@@ -189,6 +197,7 @@ async def ask(
         allow_defer=allow_defer,
         timeout_seconds=timeout_seconds,
         questions=questions,
+        header=header,
     )
     try:
         request.validated()

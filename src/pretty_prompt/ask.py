@@ -181,12 +181,18 @@ class AskRequest(BaseModel):
     allow_free_text: bool = True
     allow_defer: bool = False
     questions: list[Question] | None = None
+    header: str = ""
     timeout_seconds: float = 300.0
 
     def validated(self) -> AskRequest:
         """Return self, or raise `InvalidAsk` if the page would be unanswerable."""
         if self.timeout_seconds <= 0:
             raise InvalidAsk("timeout_seconds must be positive")
+        if self.header.strip() and self.questions is None:
+            raise InvalidAsk(
+                "header needs questions: a single question is already Markdown, so put "
+                "the context there"
+            )
         if self.questions is not None:
             if self.question.strip() or self.options:
                 raise InvalidAsk("set either question/options or questions, not both")
@@ -325,6 +331,7 @@ def _build_html(
             }
             for step in steps
         ],
+        header=request.header,
         submit_url=submit_url,
         timeout_seconds=request.timeout_seconds,
         accent=_resolve_accent(),

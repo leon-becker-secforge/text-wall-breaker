@@ -408,3 +408,26 @@ def test_multi_page_offers_defer_only_on_the_steps_that_allow_it():
     first, second = body.split('data-step-index="1"', 1)
     assert 'class="pp-defer"' not in first
     assert _DEFER_BUTTON in second
+
+
+def test_multi_page_has_no_header_by_default():
+    assert 'class="pp-header' not in _body(_multi_page())
+
+
+def test_a_short_header_is_shown_flat_above_the_progress_bar():
+    body = _body(_multi_page(header="Settled: **SQLite**."))
+    header = '<div class="pp-header"><p>Settled: <strong>SQLite</strong>.</p></div>'
+    assert header in body
+    assert body.index(header) < body.index('class="pp-progress"')
+
+
+def test_a_long_header_collapses_behind_a_context_toggle():
+    body = _body(_multi_page(header="x " * 250))
+    assert '<details class="pp-header">' in body
+    assert "<summary>Context</summary>" in body
+
+
+def test_a_long_header_that_is_one_list_counts_its_items():
+    items = "\n".join(f"- decision number {i} " + "x " * 30 for i in range(7))
+    body = _body(_multi_page(header=items))
+    assert '<summary>Context <span class="pp-header-count">7 items</span></summary>' in body

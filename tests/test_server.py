@@ -71,6 +71,7 @@ def test_ask_schema_matches_the_agreed_shape():
         "allow_defer",
         "timeout_seconds",
         "questions",
+        "header",
     }
     option = schema["$defs"]["Option"]["properties"]
     assert set(option) == {"id", "label", "caveat", "body", "recommended"}

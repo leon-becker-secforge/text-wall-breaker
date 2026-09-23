@@ -372,6 +372,18 @@ main img { cursor: zoom-in; }
 # page's one static question — picked over an all-at-once stack and an accordion in a
 # three-way visual A/B/C (see the "paging style" pick in project history).
 _MULTI_ADDENDUM = """
+.pp-header { color: var(--ntw-fg-muted); font-size: 0.85em; margin: 0 40px 14px 0; }
+.pp-header > :first-child, .pp-header-body > :first-child { margin-block-start: 0; }
+.pp-header > :last-child, .pp-header-body > :last-child { margin-block-end: 0; }
+details.pp-header > summary { cursor: pointer; list-style: none; font-family: var(--pp-font-mono);
+  font-size: 0.92em; }
+details.pp-header > summary::-webkit-details-marker { display: none; }
+details.pp-header > summary::before { content: "\\203A"; display: inline-block; width: 1em;
+  transition: transform .15s; }
+details.pp-header[open] > summary::before { transform: rotate(90deg); }
+.pp-header-count { border: 1px solid var(--ntw-border); border-radius: 999px; padding: 0 7px;
+  margin-inline-start: 4px; }
+.pp-header-body { margin-block-start: 6px; }
 .pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 18px 0; }
 .pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
 .pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
@@ -745,6 +757,7 @@ __CSS__
 <main__MAIN_EXTRA__>
   <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
 
+__HEADER__
   <div class="pp-progress">
     <span class="pp-progress-label" id="pp-progress-label">__INITIAL_LABEL__</span>
     <span class="pp-progress-track">
@@ -1986,10 +1999,36 @@ def _render_step(index: int, spec: dict[str, object]) -> str:
     )
 
 
+def _render_header(header: str) -> str:
+    """The multi-question page's header block, or "" if there is none.
+
+    Muted text with no box, above the progress bar: picked over a clipped card and an
+    accent-rule panel in a three-way visual A/B/C, as the lightest option that keeps the
+    question the focus of every step. A header judged long by the same rule as an
+    option body collapses behind a "Context" toggle; when it is a single flat list, the
+    toggle also says how many items it holds, which is what a list of settled decisions
+    usually is.
+    """
+    if not header.strip():
+        return ""
+    header_html = render_markdown(header)
+    if not _is_long_body(header_html):
+        return f'  <div class="pp-header">{header_html}</div>'
+    lists = header_html.count("<ul>") + header_html.count("<ol>")
+    count = ""
+    if lists == 1:
+        count = f' <span class="pp-header-count">{header_html.count("<li>")} items</span>'
+    return (
+        f'  <details class="pp-header"><summary>Context{count}</summary>'
+        f'<div class="pp-header-body">{header_html}</div></details>'
+    )
+
+
 def build_multi_page(
     *,
     questions: list[dict[str, object]],
     submit_url: str,
+    header: str = "",
     timeout_seconds: float,
     title: str = "Claude Code is asking",
     accent: str | None = None,
@@ -2011,6 +2050,9 @@ def build_multi_page(
     picked over showing every question stacked at once and over an accordion in a
     three-way visual A/B/C (see the "paging style" pick in project history).
 
+    `header` is Markdown shown above the progress bar, so on every step; see
+    `_render_header`.
+
     `theme`, `status_url` and `generation` are as `build_page` takes them.
     """
     css = _load_base_css() + _ADDENDUM + _MULTI_ADDENDUM
@@ -2019,6 +2061,7 @@ def build_multi_page(
 
     total = len(questions)
     steps_html = "\n".join(_render_step(i, spec) for i, spec in enumerate(questions))
+    header_html = _render_header(header)
     initial_progress = round(100 / total) if total else 0
     any_gallery = any(
         _is_gallery(options) if isinstance(options := spec.get("options"), list) else False
@@ -2030,6 +2073,7 @@ def build_multi_page(
         .replace("__THEME_ATTR__", _theme_attr(theme))
         .replace("__MAIN_EXTRA__", ' class="pp-wide"' if any_gallery else "")
         .replace("__TITLE__", html.escape(title, quote=True))
+        .replace("__HEADER__", header_html)
         .replace("__STEPS__", steps_html)
         .replace("__INITIAL_LABEL__", html.escape(f"Question 1 of {total}", quote=True))
         .replace("__INITIAL_PROGRESS__", str(initial_progress))
@@ -2039,5 +2083,5 @@ def build_multi_page(
         .replace("__STEP_COUNT__", str(total))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
-        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(steps_html)))
+        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(header_html, steps_html)))
     )

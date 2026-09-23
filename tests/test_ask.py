@@ -286,6 +286,23 @@ def test_questions_and_question_together_are_rejected():
         request.validated()
 
 
+def test_header_without_questions_is_rejected():
+    with pytest.raises(InvalidAsk, match="header needs questions"):
+        AskRequest(question="q", header="settled").validated()
+
+
+def test_the_header_reaches_the_multi_question_page(browser):
+    pages = []
+
+    def respond(page):
+        pages.append(page)
+        return {"kind": "cancel", "data": {}}
+
+    browser(respond)
+    run_ask(AskRequest(header="Settled: **SQLite**.", questions=[Question(question="q")]))
+    assert "Settled: <strong>SQLite</strong>." in pages[0].split("<body>", 1)[1]
+
+
 def test_empty_questions_list_is_rejected():
     with pytest.raises(InvalidAsk, match="questions is empty"):
         AskRequest(questions=[]).validated()
