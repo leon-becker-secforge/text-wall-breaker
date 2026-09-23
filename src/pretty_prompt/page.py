@@ -255,6 +255,26 @@ main img { cursor: zoom-in; }
 .pp-question > :not(:first-child) { color: var(--ntw-fg-muted); font-size: 0.9em; }
 .pp-question img { max-width: 100%; height: auto; border-radius: 6px; }
 
+.pp-question-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 40px 14px 0; }
+.pp-question-row > .pp-question { flex: 1; margin: 0; }
+/* A wizard step's question sits below the progress bar, not level with the theme toggle,
+   so the pill can run to the options' right edge. */
+.pp-step .pp-question-row { margin-inline-end: 0; }
+.pp-defer { flex: none; font-family: var(--pp-font-mono); font-size: 0.72em; font-weight: 500;
+  border-radius: 999px; border: 1px solid var(--ntw-border); background: transparent;
+  color: var(--ntw-fg-muted); padding: 2px 10px; cursor: pointer; white-space: nowrap; }
+.pp-defer:hover { border-color: var(--ntw-warning); color: var(--ntw-warning); }
+.pp-defer[aria-pressed="true"] { border-color: var(--ntw-warning); color: var(--ntw-warning); }
+.pp-defer:disabled { opacity: 0.5; cursor: default; }
+.pp-defer-banner { border-left: 3px solid var(--ntw-warning); background: #fdf3e6;
+  padding: 6px 10px; font-size: 0.85em; border-radius: 0 6px 6px 0; margin: 0 0 8px; }
+.pp-defer-banner[hidden] { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pp-defer-banner { background: #33280f; }
+}
+:root[data-theme="dark"] .pp-defer-banner { background: #33280f; }
+.pp-options.pp-locked { opacity: 0.45; pointer-events: none; }
+
 .pp-options { display: flex; flex-direction: column; gap: 6px; margin: 0 0 16px;
   padding: 0; list-style: none; }
 .pp-option { border: 1px solid var(--ntw-border); border-radius: 6px;
@@ -377,9 +397,7 @@ __CSS__
 <body>
 <main__MAIN_EXTRA__>
   <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
-  <section class="pp-question">
-__QUESTION__
-  </section>
+__QUESTION_BLOCK__
 
   <form id="pp-form" novalidate>
 __OPTIONS__
@@ -488,6 +506,37 @@ __FREE_TEXT__
     send('theme', { theme: next });
   });
 
+  // Deferral (allow_defer): the "Not yet" pill locks the options it sits beside and
+  // clears any selection, since "not yet, but B" is not an answer the agent can act on,
+  // while the free-text box stays open for the reason. Returns a function reading the
+  // current state, so collect() can report it. Only called when the pill exists.
+  function wireDefer(root, onChange) {
+    var btn = root.querySelector('.pp-defer');
+    if (!btn) return function () { return false; };
+    var banner = root.querySelector('.pp-defer-banner');
+    var list = root.querySelector('.pp-options');
+    var text = root.querySelector('textarea[id^="pp-free-text"]');
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[data-option-id]'));
+    var placeholder = text ? text.placeholder : '';
+    var on = false;
+    btn.addEventListener('click', function () {
+      on = !on;
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? 'Deferred, undo' : 'Not yet';
+      banner.hidden = !on;
+      if (list) list.classList.toggle('pp-locked', on);
+      boxes.forEach(function (i) {
+        if (on) i.checked = false;
+        i.disabled = on;
+      });
+      if (text) text.placeholder = on ? 'Why not yet? (optional)' : placeholder;
+      onChange();
+    });
+    return function () { return on; };
+  }
+  // <main>, not the form: the pill sits beside the question, which is outside it.
+  var isDeferred = wireDefer(document.querySelector('main'), function () { refresh(); });
+
   function collect() {
     return {
       selected: inputs.filter(function (i) { return i.checked; })
@@ -496,7 +545,8 @@ __FREE_TEXT__
       // Every drawer opened at any point this page has been up, not just the ones still
       // open at submit time — see the `_wasExpanded` tracking above.
       expanded: drawers.filter(function (d) { return d._wasExpanded; })
-                        .map(function (d) { return d.dataset.optionId; })
+                        .map(function (d) { return d.dataset.optionId; }),
+      deferred: isDeferred()
     };
   }
 
@@ -508,7 +558,7 @@ __FREE_TEXT__
   // out of the way rather than sitting there as clutter for the rest of the call.
   function refresh() {
     var d = collect();
-    submitBtn.disabled = d.selected.length === 0 && d.free_text === '';
+    submitBtn.disabled = !d.deferred && d.selected.length === 0 && d.free_text === '';
     status.hidden = !submitBtn.disabled;
   }
 
@@ -524,6 +574,7 @@ __FREE_TEXT__
 
   function freeze(message) {
     inputs.forEach(function (i) { i.disabled = true; });
+    document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     if (freeText) freeText.readOnly = true;
     submitBtn.disabled = true;
     cancelBtn.disabled = true;
@@ -824,7 +875,38 @@ __STEPS__
   function stepFreeText(step) {
     return document.getElementById('pp-free-text-' + step);
   }
+  // Deferral (allow_defer): the "Not yet" pill locks the options it sits beside and
+  // clears any selection, since "not yet, but B" is not an answer the agent can act on,
+  // while the free-text box stays open for the reason. Returns a function reading the
+  // current state, so collect() can report it. Only called when the pill exists.
+  function wireDefer(root, onChange) {
+    var btn = root.querySelector('.pp-defer');
+    if (!btn) return function () { return false; };
+    var banner = root.querySelector('.pp-defer-banner');
+    var list = root.querySelector('.pp-options');
+    var text = root.querySelector('textarea[id^="pp-free-text"]');
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[data-option-id]'));
+    var placeholder = text ? text.placeholder : '';
+    var on = false;
+    btn.addEventListener('click', function () {
+      on = !on;
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? 'Deferred, undo' : 'Not yet';
+      banner.hidden = !on;
+      if (list) list.classList.toggle('pp-locked', on);
+      boxes.forEach(function (i) {
+        if (on) i.checked = false;
+        i.disabled = on;
+      });
+      if (text) text.placeholder = on ? 'Why not yet? (optional)' : placeholder;
+      onChange();
+    });
+    return function () { return on; };
+  }
+  var stepDeferred = steps.map(function (el) { return wireDefer(el, function () { refresh(); }); });
+
   function stepAnswered(step) {
+    if (stepDeferred[step]()) return true;
     var selected = stepInputs(step).some(function (i) { return i.checked; });
     var ft = stepFreeText(step);
     return selected || (ft && ft.value.trim() !== '');
@@ -838,7 +920,8 @@ __STEPS__
                                 .map(function (i) { return i.dataset.optionId; }),
         free_text: ft ? ft.value.trim() : '',
         expanded: stepDrawers(s).filter(function (d) { return d._wasExpanded; })
-                                 .map(function (d) { return d.dataset.optionId; })
+                                 .map(function (d) { return d.dataset.optionId; }),
+        deferred: stepDeferred[s]()
       });
     }
     return { answers: answers };
@@ -869,6 +952,7 @@ __STEPS__
 
   function freeze(message) {
     inputs.forEach(function (i) { i.disabled = true; });
+    document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     freeTexts.forEach(function (t) { t.readOnly = true; });
     backBtn.disabled = true;
     nextBtn.disabled = true;
@@ -1778,6 +1862,7 @@ def build_page(
     allow_free_text: bool,
     submit_url: str,
     timeout_seconds: float,
+    allow_defer: bool = False,
     title: str = "Claude Code is asking",
     accent: str | None = None,
     theme: str | None = None,
@@ -1833,7 +1918,12 @@ def build_page(
         .replace("__THEME_ATTR__", _theme_attr(theme))
         .replace("__MAIN_EXTRA__", ' class="pp-wide"' if gallery else "")
         .replace("__TITLE__", html.escape(title, quote=True))
-        .replace("__QUESTION__", question_html)
+        .replace(
+            "__QUESTION_BLOCK__",
+            _with_defer(
+                f'  <section class="pp-question">\n{question_html}\n  </section>', allow_defer
+            ),
+        )
         .replace("__OPTIONS__", options_html)
         .replace("__FREE_TEXT__", free_text)
         .replace("__HINT__", html.escape(hint, quote=True))
@@ -1843,6 +1933,23 @@ def build_page(
         .replace("__GENERATION__", _js_string(generation))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(question_html, options_html)))
     )
+
+
+# The "Not yet" pill sits beside the question rather than in the action row, and a
+# banner above the options says the question is deferred while it is: picked over an
+# action-row button (easy to overlook) and a checkbox row under the options in a
+# three-way visual A/B/C. The page's script (wireDefer) does the locking.
+_DEFER_CONTROL = '<button type="button" class="pp-defer" aria-pressed="false">Not yet</button>'
+_DEFER_BANNER = (
+    '<div class="pp-defer-banner" hidden>Deferred: this stays open for a later round.</div>'
+)
+
+
+def _with_defer(question_block: str, allow_defer: bool) -> str:
+    """`question_block` with the defer pill beside it and its banner after, if allowed."""
+    if not allow_defer:
+        return question_block
+    return f'<div class="pp-question-row">{question_block}{_DEFER_CONTROL}</div>\n{_DEFER_BANNER}'
 
 
 def _render_step(index: int, spec: dict[str, object]) -> str:
@@ -1867,9 +1974,12 @@ def _render_step(index: int, spec: dict[str, object]) -> str:
     # The wizard's JS toggles `pp-step-active` on navigation; the first step starts with
     # it already set so the page shows question one even before the script has run.
     active = " pp-step-active" if index == 0 else ""
+    question_block = _with_defer(
+        f'    <div class="pp-question">{question_html}</div>', bool(spec.get("allow_defer"))
+    )
     return (
         f'  <section class="pp-step{active}" data-step-index="{index}">\n'
-        f'    <div class="pp-question">{question_html}</div>\n'
+        f"{question_block}\n"
         f"{options_html}\n"
         f"{free_text_html}\n"
         "  </section>"

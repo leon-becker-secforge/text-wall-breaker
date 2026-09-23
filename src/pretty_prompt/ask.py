@@ -110,6 +110,14 @@ class Option(BaseModel):
     ] = False
 
 
+ALLOW_DEFER_DESCRIPTION = (
+    'Offer a "Not yet" control, for a question the user may not be ready to settle '
+    "because it depends on something still open. A deferred answer comes back with "
+    "deferred: true, no selection, and the reason (if any) in free_text. The result "
+    "only carries a deferred key when this is set."
+)
+
+
 class Question(BaseModel):
     """One question on a page — the single-question shape, reused for `questions`."""
 
@@ -117,6 +125,7 @@ class Question(BaseModel):
     options: list[Option] = []
     multi_select: bool = False
     allow_free_text: bool = True
+    allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False
 
     def validated(self, *, label: str) -> Question:
         """Return self, or raise `InvalidAsk` naming `label` if unanswerable."""
@@ -170,6 +179,7 @@ class AskRequest(BaseModel):
     options: list[Option] = []
     multi_select: bool = False
     allow_free_text: bool = True
+    allow_defer: bool = False
     questions: list[Question] | None = None
     timeout_seconds: float = 300.0
 
@@ -194,6 +204,7 @@ class AskRequest(BaseModel):
             options=self.options,
             multi_select=self.multi_select,
             allow_free_text=self.allow_free_text,
+            allow_defer=self.allow_defer,
         )
 
     @property
@@ -259,11 +270,20 @@ def _extract_answer(step: Question, raw: object) -> dict[str, Any]:
         return [value for value in raw_ids if value in known] if isinstance(raw_ids, list) else []
 
     free_text = raw.get("free_text") if isinstance(raw, dict) else None
-    return {
+    answer: dict[str, Any] = {
         "selected": _known_ids("selected"),
         "free_text": free_text.strip() if isinstance(free_text, str) else "",
         "expanded": _known_ids("expanded"),
     }
+    # Only on a step that offered it, so callers who never asked for deferral see the
+    # same shape as before. A deferred answer never carries a selection: the page locks
+    # the options while deferred, and this holds even if a payload says otherwise.
+    if step.allow_defer:
+        deferred = isinstance(raw, dict) and raw.get("deferred") is True
+        answer["deferred"] = deferred
+        if deferred:
+            answer["selected"] = []
+    return answer
 
 
 def _build_html(
@@ -286,6 +306,7 @@ def _build_html(
             options=[option.model_dump() for option in step.options],
             multi_select=step.multi_select,
             allow_free_text=step.allow_free_text,
+            allow_defer=step.allow_defer,
             submit_url=submit_url,
             timeout_seconds=request.timeout_seconds,
             accent=_resolve_accent(),
@@ -300,6 +321,7 @@ def _build_html(
                 "options": [option.model_dump() for option in step.options],
                 "multi_select": step.multi_select,
                 "allow_free_text": step.allow_free_text,
+                "allow_defer": step.allow_defer,
             }
             for step in steps
         ],

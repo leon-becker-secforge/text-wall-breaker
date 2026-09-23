@@ -169,6 +169,22 @@ def test_caveat_renders_inline_markdown_only():
     assert f"{_CAVEAT_DIV}- not a list</div>" in body
 
 
+_DEFER_BUTTON = '<button type="button" class="pp-defer" aria-pressed="false">Not yet</button>'
+_DEFER_BANNER = '<div class="pp-defer-banner" hidden>'
+
+
+def test_no_defer_control_by_default():
+    body = _body(_page())
+    assert 'class="pp-defer"' not in body
+    assert _DEFER_BANNER not in body
+
+
+def test_allow_defer_adds_the_pill_and_a_hidden_banner():
+    body = _body(_page(allow_defer=True))
+    assert _DEFER_BUTTON in body
+    assert _DEFER_BANNER in body
+
+
 def _multi_page(**overrides):
     overrides.setdefault(
         "questions",
@@ -378,3 +394,17 @@ def test_lightbox_display_rule_is_guarded_against_the_hidden_attribute():
     # page reading as uniformly, wrongly dark, not just while an image was zoomed.
     for html in (_page(), _multi_page()):
         assert ".pp-lightbox[hidden] { display: none; }" in html
+
+
+def test_multi_page_offers_defer_only_on_the_steps_that_allow_it():
+    body = _body(
+        _multi_page(
+            questions=[
+                {"question": "first", "options": [_option(id="a")]},
+                {"question": "second", "options": [_option(id="b")], "allow_defer": True},
+            ]
+        )
+    )
+    first, second = body.split('data-step-index="1"', 1)
+    assert 'class="pp-defer"' not in first
+    assert _DEFER_BUTTON in second

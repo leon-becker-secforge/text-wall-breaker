@@ -10,6 +10,9 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - `caveat` on an `ask` option: one always-visible line of inline Markdown, shown as a
   warning-tinted strip under the label even while the body is collapsed, for whatever
   could flip the choice. Capped at 160 characters and one line; longer is rejected.
+- `allow_defer` (prototype) on `ask` and on each entry of `questions`: a "Not yet" pill
+  beside the question that locks the options and returns `deferred: true` with the reason
+  in `free_text`, for a question that depends on something still open.
 
 ### Changed
 

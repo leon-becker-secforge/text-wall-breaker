@@ -20,7 +20,15 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
-from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, Question, run_ask
+from .ask import (
+    ALLOW_DEFER_DESCRIPTION,
+    AskRequest,
+    BrowserUnavailable,
+    InvalidAsk,
+    Option,
+    Question,
+    run_ask,
+)
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .show import InvalidShow, ShowRequest, run_show
 
@@ -66,8 +74,12 @@ was opened (read) at any point before the answer was sent, for options long enou
 collapse behind a drawer — it stays set even if the drawer was closed again afterwards,
 so an id can be selected without being expanded, or expanded without being selected.
 
+With `allow_defer`, the user may answer "not yet" instead: that answer carries
+`"deferred": true`, an empty `selected`, and the reason, if any, in `free_text`.
+
 `questions` (prototype) puts several questions on one page instead of one — set it
-instead of `question`/`options`/`multi_select`/`allow_free_text`, never alongside them.
+instead of `question`/`options`/`multi_select`/`allow_free_text`/`allow_defer`, never
+alongside them.
 The user answers all of them before sending, and the result's `answers` list is in the
 same order, one `{selected, free_text, expanded}` per question."""
 
@@ -149,6 +161,7 @@ async def ask(
     allow_free_text: Annotated[
         bool, Field(description="Show a free-text box alongside the options.")
     ] = True,
+    allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False,
     timeout_seconds: Annotated[
         float,
         Field(
@@ -162,7 +175,8 @@ async def ask(
         list[Question] | None,
         Field(
             description="Prototype: ask several questions on one page instead of one. "
-            "When set, question/options/multi_select/allow_free_text are ignored, and "
+            "When set, question/options/multi_select/allow_free_text/allow_defer are "
+            "ignored, and "
             'the result is {"answers": [...]} instead of {"selected", "free_text"}.'
         ),
     ] = None,
@@ -172,6 +186,7 @@ async def ask(
         options=options or [],
         multi_select=multi_select,
         allow_free_text=allow_free_text,
+        allow_defer=allow_defer,
         timeout_seconds=timeout_seconds,
         questions=questions,
     )

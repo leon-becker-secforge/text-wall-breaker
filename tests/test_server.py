@@ -68,13 +68,20 @@ def test_ask_schema_matches_the_agreed_shape():
         "options",
         "multi_select",
         "allow_free_text",
+        "allow_defer",
         "timeout_seconds",
         "questions",
     }
     option = schema["$defs"]["Option"]["properties"]
     assert set(option) == {"id", "label", "caveat", "body", "recommended"}
     question = schema["$defs"]["Question"]["properties"]
-    assert set(question) == {"question", "options", "multi_select", "allow_free_text"}
+    assert set(question) == {
+        "question",
+        "options",
+        "multi_select",
+        "allow_free_text",
+        "allow_defer",
+    }
 
 
 @pytest.mark.parametrize(
