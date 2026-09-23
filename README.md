@@ -130,7 +130,9 @@ answers `questions`. Cancel is a control of its own on the page, so an answer th
 declined to give is distinguishable from one that never arrived. `timeout_seconds` is an
 *idle* timeout, refreshed by any traffic from the page — including the probe it sends on
 load — so the window starts when the page renders rather than when the browser was
-launched.
+launched. While the tab is visible the page sends a heartbeat, so however long the user
+reads, the call stays alive; the timeout only runs while the tab is hidden or closed, and
+a long multi-question page needs no larger value than a single question.
 
 `expanded` is the ids of options whose collapsed body was opened at any point before the
 answer was sent. It stays set even if the drawer was closed again afterwards, so an id

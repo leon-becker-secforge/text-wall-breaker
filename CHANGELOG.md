@@ -16,6 +16,9 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - `recommended: true` now also shows a Recommended badge on the option, so it has a
   visible effect even on an option with a short body or none. More than one recommended
   option in a single-choice question is rejected.
+- The `timeout_seconds` description now says what the page has always done: it keeps the
+  call alive while visible, so the timeout only runs while the tab is hidden or closed.
+  Agents had been raising it for long pages out of caution.
 
 ## [0.5.0] - 2026-09-21
 

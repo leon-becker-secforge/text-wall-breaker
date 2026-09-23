@@ -150,7 +150,13 @@ async def ask(
         bool, Field(description="Show a free-text box alongside the options.")
     ] = True,
     timeout_seconds: Annotated[
-        float, Field(description="Give up after this many seconds with no activity on the page.")
+        float,
+        Field(
+            description="Give up after this many seconds without hearing from the page. "
+            "The page keeps the call alive while it is visible, however long the user "
+            "reads, so this only runs while the tab is hidden or closed. The default "
+            "suits long multi-question pages too; there is no need to raise it for them."
+        ),
     ] = 300.0,
     questions: Annotated[
         list[Question] | None,
