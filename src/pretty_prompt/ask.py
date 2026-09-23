@@ -63,6 +63,12 @@ class BrowserUnavailable(RuntimeError):
     """The page was written but no browser could be opened for it."""
 
 
+# Short enough that a caveat stays one line on the page. Enforced rather than documented:
+# the reason caveats exist is that agents write long when allowed, and a long caveat is
+# just a second body that happens to be visible.
+CAVEAT_MAX_CHARS = 160
+
+
 class Option(BaseModel):
     """One choice on the page."""
 
@@ -74,6 +80,17 @@ class Option(BaseModel):
         str,
         Field(description="Short plain-text label. Not Markdown, not rendered."),
     ]
+    caveat: Annotated[
+        str | None,
+        Field(
+            default=None,
+            description="Optional one-line precondition or cost that could flip the "
+            "choice, always shown under the label even when body is collapsed. Put "
+            "anything that could flip the choice here, not in body. Use sparingly: it "
+            "is drawn as a highlighted strip, so a caveat on every option drowns out the "
+            f"one that matters. Inline Markdown only, at most {CAVEAT_MAX_CHARS} characters.",
+        ),
+    ] = None
     body: Annotated[
         str | None,
         Field(
@@ -116,6 +133,18 @@ class Question(BaseModel):
                 raise InvalidAsk(f"{label}: every option needs a non-empty id")
             if not option.label.strip():
                 raise InvalidAsk(f"{label}: option {option.id!r} has an empty label")
+            if option.caveat is not None:
+                if "\n" in option.caveat:
+                    raise InvalidAsk(
+                        f"{label}: option {option.id!r} has a caveat spanning several "
+                        "lines; a caveat is one line, so move the rest into body"
+                    )
+                if len(option.caveat) > CAVEAT_MAX_CHARS:
+                    raise InvalidAsk(
+                        f"{label}: option {option.id!r} has a caveat of "
+                        f"{len(option.caveat)} characters; the limit is {CAVEAT_MAX_CHARS}, "
+                        "so move the rest into body"
+                    )
             if option.id in seen:
                 raise InvalidAsk(f"{label}: duplicate option id {option.id!r}")
             seen.add(option.id)

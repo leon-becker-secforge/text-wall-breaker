@@ -124,6 +124,39 @@ def test_a_drawer_input_has_an_accessible_name():
     assert 'aria-label="Postgres"' in body
 
 
+_CAVEAT_DIV = '<div class="pp-option-caveat">'
+
+
+def test_no_caveat_renders_no_caveat_element():
+    assert _CAVEAT_DIV not in _body(_page(options=[_option(body="x " * 250)]))
+
+
+def test_caveat_on_a_drawer_sits_inside_the_summary():
+    # Inside <summary>, not beside the body: a closed <details> shows only its summary,
+    # and the caveat's whole point is being visible without opening the drawer.
+    body = _body(_page(options=[_option(body="x " * 250, caveat="Needs Q3.")]))
+    summary = body.split("<summary", 1)[1].split("</summary>", 1)[0]
+    assert f"{_CAVEAT_DIV}Needs Q3.</div>" in summary
+
+
+def test_caveat_on_an_option_without_a_body():
+    body = _body(_page(options=[_option(caveat="Needs Q3.")]))
+    assert f"{_CAVEAT_DIV}Needs Q3.</div>" in body
+
+
+def test_caveat_comes_before_a_short_inline_body():
+    body = _body(_page(options=[_option(body="Short body.", caveat="Needs Q3.")]))
+    assert body.index(_CAVEAT_DIV) < body.index('<div class="pp-option-body">')
+
+
+def test_caveat_renders_inline_markdown_only():
+    body = _body(_page(options=[_option(caveat="Costs one `uv` process, **each**.")]))
+    assert f"{_CAVEAT_DIV}Costs one <code>uv</code> process, <strong>each</strong>.</div>" in body
+    # Block syntax is not rendered as a block: no <ul>, no <p> inside the caveat.
+    body = _body(_page(options=[_option(caveat="- not a list")]))
+    assert f"{_CAVEAT_DIV}- not a list</div>" in body
+
+
 def _multi_page(**overrides):
     overrides.setdefault(
         "questions",

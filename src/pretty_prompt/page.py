@@ -27,7 +27,7 @@ import os
 from importlib import resources
 from pathlib import Path
 
-from .markdown import render_markdown
+from .markdown import render_inline, render_markdown
 
 __all__ = [
     "ACCENT_ENV_VAR",
@@ -273,6 +273,26 @@ main img { cursor: zoom-in; }
 .pp-option-select { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0; }
 .pp-option-select input { margin: 0; accent-color: var(--ntw-accent); }
 .pp-option-label { font-family: var(--pp-font-mono); font-weight: 500; font-size: 0.9em; }
+/* Picked over a muted line (read as body text, easy to miss) and warning-coloured text
+   (read as harsh) in a three-way visual A/B/C: a warning-tinted strip running the full
+   width of the option's bottom edge. It wraps onto its own line inside the select row
+   (flex-basis 100% plus the row's padding), so it stays inside the <summary> a closed
+   drawer still shows. The negative margins cancel .pp-option's padding so the strip
+   meets the border; the bottom one only applies when nothing follows it in the row. */
+.pp-option-select { flex-wrap: wrap; row-gap: 0; }
+.pp-option-caveat { flex-basis: calc(100% + 20px); margin: 8px -10px 0;
+  padding: 5px 10px 5px 33px; border-left: 3px solid var(--ntw-warning);
+  background: #fdf3e6; color: var(--ntw-fg); font-size: 0.82em; font-family: inherit; }
+.pp-option > .pp-option-select:last-child .pp-option-caveat,
+.pp-option-drawer:not([open]) .pp-option-caveat { margin-bottom: -8px;
+  border-radius: 0 0 5px 5px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pp-option-caveat { background: #33280f; }
+}
+:root[data-theme="dark"] .pp-option-caveat { background: #33280f; }
+/* A gallery card has 10px padding all round, and column-reverse puts its select row at
+   the bottom whatever follows it in the markup, so the strip always meets that edge. */
+.pp-options-gallery .pp-option-caveat { margin: 8px -10px -10px; border-radius: 0 0 5px 5px; }
 .pp-option-chevron { margin-inline-start: auto; flex: none; color: var(--ntw-fg-muted);
   transition: transform .15s; }
 .pp-option-chevron::before { content: "\\203A"; }
@@ -1601,11 +1621,19 @@ def _render_options(
             f'aria-label="{label}">'
             f'<span class="pp-option-label">{label}</span>'
         )
+        # Inside the select row (the <label> or the drawer's <summary>) rather than a
+        # sibling of the body: a closed <details> shows only its <summary>, and the
+        # caveat has to stay visible without opening anything. Inline rendering only, so
+        # block syntax in a caveat stays literal text instead of breaking the row.
+        caveat = option.get("caveat")
+        caveat_html = (
+            f'<div class="pp-option-caveat">{render_inline(str(caveat))}</div>' if caveat else ""
+        )
 
         if not body:
             rows.append(
                 f'    <li class="pp-option"><label class="pp-option-select">'
-                f"{select_html}</label></li>"
+                f"{select_html}{caveat_html}</label></li>"
             )
             continue
 
@@ -1617,7 +1645,7 @@ def _render_options(
         if gallery or not _is_long_body(body_html):
             rows.append(
                 f'    <li class="pp-option"><label class="pp-option-select">'
-                f"{select_html}</label>{body_div}</li>"
+                f"{select_html}{caveat_html}</label>{body_div}</li>"
             )
             continue
 
@@ -1630,7 +1658,7 @@ def _render_options(
         rows.append(
             f'    <li class="pp-option"><details class="pp-option-drawer" '
             f'data-option-id="{option_id}"{open_attr}>'
-            f'<summary class="pp-option-select">{select_html}{chevron}</summary>'
+            f'<summary class="pp-option-select">{select_html}{chevron}{caveat_html}</summary>'
             f"{body_div}</details></li>"
         )
     ul_class = "pp-options pp-options-gallery" if gallery else "pp-options"

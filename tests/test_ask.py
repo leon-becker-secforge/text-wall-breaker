@@ -65,6 +65,14 @@ def test_duplicate_option_ids_are_rejected():
         ({"question": "q", "options": [Option(id=" ", label="A")]}, "non-empty id"),
         ({"question": "q", "options": [Option(id="a", label=" ")]}, "empty label"),
         ({"question": "q", "timeout_seconds": 0}, "must be positive"),
+        (
+            {"question": "q", "options": [Option(id="a", label="A", caveat="x" * 161)]},
+            r"option 'a'.*caveat.*161.*160",
+        ),
+        (
+            {"question": "q", "options": [Option(id="a", label="A", caveat="one\ntwo")]},
+            r"option 'a'.*caveat.*one line",
+        ),
     ],
 )
 def test_rejected_requests(kwargs, match):

@@ -47,6 +47,12 @@ options need Markdown bodies, or when it should show an image.
 `question` and each option's `body` are Markdown. Raw HTML is not rendered. Images use
 Markdown image syntax with an absolute file:// URL, e.g. `![diagram](file:///tmp/x.png)`.
 
+A long body sits behind a click the user often never makes, even for the option they
+pick. Anything that could flip the choice (a precondition, a cost, a conflict with an
+earlier answer) goes in the option's `caveat`, which is always visible, not in `body`.
+Use it sparingly: most options need none, and a caveat on every option drowns out the
+one that matters.
+
 Returns exactly one of:
   {"selected": [...], "free_text": "...", "expanded": [...]}  the user answered
   {"answers": [{"selected": [...], "free_text": "...", "expanded": [...]}, ...]}

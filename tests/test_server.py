@@ -72,7 +72,7 @@ def test_ask_schema_matches_the_agreed_shape():
         "questions",
     }
     option = schema["$defs"]["Option"]["properties"]
-    assert set(option) == {"id", "label", "body", "recommended"}
+    assert set(option) == {"id", "label", "caveat", "body", "recommended"}
     question = schema["$defs"]["Question"]["properties"]
     assert set(question) == {"question", "options", "multi_select", "allow_free_text"}
 

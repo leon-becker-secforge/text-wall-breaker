@@ -58,7 +58,8 @@ above — surfaced once at launch rather than as a page that silently ignored it
 {
   "question": "Which backend?\n\n![diagram](file:///tmp/arch.png)",
   "options": [
-    {"id": "pg", "label": "PostgreSQL", "body": "Ships with the **operator**, so no extra service."},
+    {"id": "pg", "label": "PostgreSQL", "caveat": "Needs the `pg` operator installed.",
+     "body": "Ships with the **operator**, so no extra service."},
     {"id": "sqlite", "label": "SQLite"}
   ],
   "multi_select": false,
@@ -85,6 +86,13 @@ first. Two or more image-bearing options switch the whole page to a widened, gri
 instead (comparing screenshots side by side beats one at a time behind a drawer), and
 never collapse behind one. Every image, gallery or not, is click-to-zoom: it expands
 full-size in a lightbox, dismissed by clicking again or Escape.
+
+An option's `caveat` is one line of inline Markdown (code, bold, links; at most 160
+characters) that is always visible under the label, as a tinted strip, even while a long
+body is collapsed. It is for whatever could flip the choice: a precondition, a cost, a
+conflict with an earlier answer. Users often pick an option without opening its body, so
+that sentence must not live there. Most options need no caveat; a longer or multi-line
+caveat is rejected before anything opens.
 
 ### Several questions on one page
 
