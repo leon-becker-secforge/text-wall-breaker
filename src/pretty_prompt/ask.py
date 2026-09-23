@@ -102,10 +102,10 @@ class Option(BaseModel):
     recommended: Annotated[
         bool,
         Field(
-            description="Pre-expand this option's body on the page, since the user is "
-            "reading it first. Does not pre-select it — the user still has to check it "
-            "themselves. Has no visible effect if body is not set, or is short enough "
-            "to be shown inline rather than behind a click.",
+            description="The option you lean towards: marked with a Recommended badge, "
+            "and its body pre-expanded if it is long enough to sit behind a click. Does "
+            "not pre-select it; the user still has to check it themselves. At most one "
+            "per question unless multi_select is set. Put the reason in caveat or body.",
         ),
     ] = False
 
@@ -126,6 +126,12 @@ class Question(BaseModel):
             raise InvalidAsk(
                 f"{label}: options is empty and allow_free_text is false, so it would "
                 "have no way to answer — supply options, or set allow_free_text"
+            )
+        recommended = sum(1 for option in self.options if option.recommended)
+        if recommended > 1 and not self.multi_select:
+            raise InvalidAsk(
+                f"{label}: {recommended} options are recommended but multi_select is "
+                "false; recommend at most one"
             )
         seen: set[str] = set()
         for option in self.options:

@@ -45,6 +45,17 @@ def test_empty_options_without_free_text_is_rejected():
         request.validated()
 
 
+def test_several_recommended_options_are_allowed_with_multi_select():
+    AskRequest(
+        question="q",
+        multi_select=True,
+        options=[
+            Option(id="a", label="A", recommended=True),
+            Option(id="b", label="B", recommended=True),
+        ],
+    ).validated()
+
+
 def test_empty_options_with_free_text_is_allowed():
     AskRequest(question="q", options=[], allow_free_text=True).validated()
 
@@ -65,6 +76,16 @@ def test_duplicate_option_ids_are_rejected():
         ({"question": "q", "options": [Option(id=" ", label="A")]}, "non-empty id"),
         ({"question": "q", "options": [Option(id="a", label=" ")]}, "empty label"),
         ({"question": "q", "timeout_seconds": 0}, "must be positive"),
+        (
+            {
+                "question": "q",
+                "options": [
+                    Option(id="a", label="A", recommended=True),
+                    Option(id="b", label="B", recommended=True),
+                ],
+            },
+            "2 options are recommended",
+        ),
         (
             {"question": "q", "options": [Option(id="a", label="A", caveat="x" * 161)]},
             r"option 'a'.*caveat.*161.*160",

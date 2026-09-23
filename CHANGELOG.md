@@ -11,6 +11,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   warning-tinted strip under the label even while the body is collapsed, for whatever
   could flip the choice. Capped at 160 characters and one line; longer is rejected.
 
+### Changed
+
+- `recommended: true` now also shows a Recommended badge on the option, so it has a
+  visible effect even on an option with a short body or none. More than one recommended
+  option in a single-choice question is rejected.
+
 ## [0.5.0] - 2026-09-21
 
 ### Added

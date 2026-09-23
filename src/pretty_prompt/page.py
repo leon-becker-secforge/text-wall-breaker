@@ -293,6 +293,14 @@ main img { cursor: zoom-in; }
 /* A gallery card has 10px padding all round, and column-reverse puts its select row at
    the bottom whatever follows it in the markup, so the strip always meets that edge. */
 .pp-options-gallery .pp-option-caveat { margin: 8px -10px -10px; border-radius: 0 0 5px 5px; }
+/* Picked over the solid show-style pill (loudest thing in the row, read as "already
+   chosen") and a tab on the top border (cost vertical space) in a three-way visual
+   A/B/C: small outlined accent caps pushed to the right edge, just before the chevron. */
+.pp-option-recommended { margin-inline-start: auto; font-family: var(--pp-font-mono);
+  font-size: 0.68em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
+  padding: 1px 6px; }
+.pp-option-recommended + .pp-option-chevron { margin-inline-start: 6px; }
 .pp-option-chevron { margin-inline-start: auto; flex: none; color: var(--ntw-fg-muted);
   transition: transform .15s; }
 .pp-option-chevron::before { content: "\\203A"; }
@@ -1620,6 +1628,11 @@ def _render_options(
             f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr} '
             f'aria-label="{label}">'
             f'<span class="pp-option-label">{label}</span>'
+            + (
+                '<span class="pp-option-recommended">Recommended</span>'
+                if option.get("recommended")
+                else ""
+            )
         )
         # Inside the select row (the <label> or the drawer's <summary>) rather than a
         # sibling of the body: a closed <details> shows only its <summary>, and the

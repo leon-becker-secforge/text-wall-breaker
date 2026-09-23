@@ -110,11 +110,23 @@ def test_recommended_long_body_starts_open():
     assert _DRAWER_OPEN_TAG in body
 
 
-def test_recommended_has_no_effect_on_a_short_body():
-    # No <details> exists to open — recommended is silently a no-op rather than an error.
+def test_recommended_short_body_has_no_drawer_to_open():
     body = _body(_page(options=[_option(body="short", recommended=True)]))
     assert _DRAWER_CLOSED_TAG not in body
     assert _DRAWER_OPEN_TAG not in body
+
+
+_RECOMMENDED_TAG = '<span class="pp-option-recommended">Recommended</span>'
+
+
+@pytest.mark.parametrize("body", [None, "short", "x " * 250], ids=["no-body", "short", "long"])
+def test_recommended_option_carries_a_badge_after_its_label(body):
+    html = _body(_page(options=[_option(label="Postgres", body=body, recommended=True)]))
+    assert f'<span class="pp-option-label">Postgres</span>{_RECOMMENDED_TAG}' in html
+
+
+def test_option_not_recommended_has_no_badge():
+    assert "pp-option-recommended" not in _body(_page(options=[_option()]))
 
 
 def test_a_drawer_input_has_an_accessible_name():

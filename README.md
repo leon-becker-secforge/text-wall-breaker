@@ -80,9 +80,10 @@ enables once at least one option is selected **or** the free-text box is non-emp
 an answer may carry both.
 
 An option's body over ~400 characters, or one carrying an image or a fenced code block,
-collapses behind a click-to-open row instead of always being shown; `recommended: true`
-pre-expands that row (without pre-selecting the option) for the one the user should read
-first. Two or more image-bearing options switch the whole page to a widened, grid gallery
+collapses behind a click-to-open row instead of always being shown. `recommended: true`
+marks the option you lean towards with a Recommended badge and pre-expands its row if it
+has one, without pre-selecting it. At most one option per question may be recommended
+unless `multi_select` is set. Two or more image-bearing options switch the whole page to a widened, grid gallery
 instead (comparing screenshots side by side beats one at a time behind a drawer), and
 never collapse behind one. Every image, gallery or not, is click-to-zoom: it expands
 full-size in a lightbox, dismissed by clicking again or Escape.
