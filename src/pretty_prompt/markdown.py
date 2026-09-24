@@ -67,8 +67,12 @@ _INLINE = re.compile(
     r"|\[(?P<link_text>[^\]]*)\]\((?P<link_url>[^)\s]+)\)"
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
     # first: a non-greedy close would otherwise strand the trailing marker as text.
-    r"|(?P<b>\*\*|__)(?P<b_text>.+?)(?P=b)(?![*_])"
-    r"|(?P<i>[*_])(?P<i_text>.+?)(?P=i)"
+    r"|\*\*(?P<b_text>.+?)\*\*(?![*_])"
+    # `_` only delimits at a word boundary, as in CommonMark: identifiers like set_mode
+    # in running prose must not turn into emphasis. `*` still works intraword.
+    r"|(?<!\w)__(?P<ub_text>.+?)__(?![*\w])"
+    r"|\*(?P<i_text>.+?)\*"
+    r"|(?<!\w)_(?P<ui_text>.+?)_(?!\w)"
     r"|(?P<s>~~)(?P<s_text>.+?)(?P=s)",
     re.DOTALL,
 )
@@ -129,13 +133,15 @@ def _render_match(match: re.Match[str]) -> str:
             return _escape(match.group(0))
         return f'<a href="{_escape(url)}">{render_inline(match.group("link_text"))}</a>'
 
-    if match.group("b"):
-        return f"<strong>{render_inline(match.group('b_text'))}</strong>"
+    bold = match.group("b_text") or match.group("ub_text")
+    if bold is not None:
+        return f"<strong>{render_inline(bold)}</strong>"
 
     if match.group("s"):
         return f"<del>{render_inline(match.group('s_text'))}</del>"
 
-    return f"<em>{render_inline(match.group('i_text'))}</em>"
+    italic = match.group("i_text") or match.group("ui_text")
+    return f"<em>{render_inline(italic)}</em>"
 
 
 def _split_row(line: str) -> list[str]:

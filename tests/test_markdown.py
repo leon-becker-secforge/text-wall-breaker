@@ -62,6 +62,24 @@ def test_nested_emphasis():
     assert render_inline("**a *b***") == "<strong>a <em>b</em></strong>"
 
 
+# An agent writes identifiers like set_mode in running prose far more often than it
+# means underscore emphasis mid-word, so `_` only delimits at a word boundary (as in
+# CommonMark); `*` still works intraword.
+@pytest.mark.parametrize(
+    "source",
+    ["set_mode and post_message", "a_b_c", "x__y__z", "my__init__py"],
+)
+def test_intraword_underscores_stay_literal(source):
+    assert render_inline(source) == source
+
+
+def test_underscore_emphasis_at_word_boundaries():
+    assert render_inline("an _x_ here") == "an <em>x</em> here"
+    assert render_inline("an __x__ here") == "an <strong>x</strong> here"
+    assert render_inline("_snake_case_") == "<em>snake_case</em>"
+    assert render_inline("un*frigging*believable") == "un<em>frigging</em>believable"
+
+
 def test_link_and_image():
     assert render_inline("[t](https://e.test)") == '<a href="https://e.test">t</a>'
     assert render_inline("![a](file:///tmp/x.png)") == '<img src="file:///tmp/x.png" alt="a">'
@@ -87,7 +105,9 @@ def test_unsafe_or_schemeless_urls_render_as_text(source):
 @pytest.mark.parametrize("value", ["success", "warning", "danger", "info"])
 def test_badge_renders_with_a_valid_severity_value(value):
     out = render_inline(f"!badge[recommended]({value})")
-    assert out == f'<span class="badge" data-axis="severity" data-value="{value}">recommended</span>'
+    assert (
+        out == f'<span class="badge" data-axis="severity" data-value="{value}">recommended</span>'
+    )
 
 
 def test_badge_with_an_unrecognized_value_falls_through_to_text():
@@ -230,9 +250,7 @@ def test_nested_ordered_list():
 
 def test_nested_list_mixed_markers():
     out = render_markdown("- one\n  1. one.a\n  2. one.b\n- two")
-    assert out == (
-        "<ul><li>one<ol><li>one.a</li><li>one.b</li></ol></li><li>two</li></ul>"
-    )
+    assert out == ("<ul><li>one<ol><li>one.a</li><li>one.b</li></ol></li><li>two</li></ul>")
 
 
 def test_multiple_nesting_levels():
