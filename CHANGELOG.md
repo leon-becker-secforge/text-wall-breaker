@@ -3,7 +3,13 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.7.0] - 2026-09-24
+
+Upgrading: reinstall the tool (`uv tool install --reinstall` on this directory; a plain
+install is a copy, so a reconnect alone keeps the old code), then start a fresh Claude
+Code session. A session that already loaded `ask`'s schema never sees `more_coming` or
+`ask_id`, and its description doesn't mention `not_delivered`, although the server
+returns it.
 
 ### Added
 
