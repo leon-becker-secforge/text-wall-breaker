@@ -39,6 +39,17 @@ _MAX_BODY_BYTES = 1 << 20
 # How long a single handle_request() blocks before the loop re-checks the deadline.
 _POLL_SECONDS = 0.5
 
+# A page that hasn't loaded this long after its tab was opened never will: the browser
+# didn't open it, or opened it somewhere the user can't see. Long enough for a cold
+# browser start. The caller reports that as undelivered instead of waiting out its whole
+# timeout for an answer that can't come.
+DELIVERY_SECONDS = 30.0
+
+# An open tab on the shared session reloads for a new page within ~1.5 s: it polls
+# /status. One that hasn't after this long was closed (or is an unanswered page that
+# stopped polling), so a new tab is opened instead of publishing into nothing.
+REUSE_GRACE_SECONDS = 4.0
+
 
 @dataclass(frozen=True)
 class Submission:
@@ -165,6 +176,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._respond(403, b'{"error":"bad token"}')
             return
 
+        listener.mark_seen()
         _handle_submit_payload(raw, self._respond, listener.deliver)
 
 
@@ -179,6 +191,7 @@ class LoopbackListener:
         self._token = token
         self._submission: Submission | None = None
         self._last_activity = time.monotonic()
+        self._seen = False
         # Port 0 lets the OS pick a free port, which removes the pick-then-race that
         # choosing a port ourselves would introduce.
         self._httpd = _Server(("127.0.0.1", 0), _Handler)
@@ -198,15 +211,28 @@ class LoopbackListener:
     def deliver(self, submission: Submission) -> None:
         self._submission = submission
 
+    def mark_seen(self) -> None:
+        self._seen = True
+
+    @property
+    def page_seen(self) -> bool:
+        """Whether the page has been in touch at all (its load probe, at the latest)."""
+        return self._seen
+
     def wait(self, timeout_seconds: float) -> Submission | None:
         """Block until a submission arrives, or `timeout_seconds` pass with no traffic.
 
-        Returns None on timeout. Blocking, so callers on an event loop run this in a
-        worker thread.
+        Returns None on timeout, and early, after DELIVERY_SECONDS, if the page never
+        loaded; `page_seen` tells the two apart. Blocking, so callers on an event loop
+        run this in a worker thread.
         """
         self.note_activity()
+        started = time.monotonic()
         while self._submission is None:
-            if time.monotonic() > self._last_activity + timeout_seconds:
+            now = time.monotonic()
+            if now > self._last_activity + timeout_seconds:
+                return None
+            if not self._seen and now > started + DELIVERY_SECONDS:
                 return None
             self._httpd.handle_request()
         return self._submission
@@ -266,7 +292,7 @@ class _SessionHandler(BaseHTTPRequestHandler):
         session.note_activity()
 
         if parts.path in ("", "/"):
-            page, _generation = session.current_page()
+            page = session.serve_page()
             self._respond(200, page, content_type="text/html; charset=utf-8")
             return
         if parts.path == "/status":
@@ -322,6 +348,9 @@ class SessionListener:
         self._last_activity = time.monotonic()
         self._page = b""
         self._generation = 0
+        # The generation a tab last loaded via GET /, which is how `show_in_tab` knows a
+        # published page actually reached a browser.
+        self._served_generation = 0
         self._submission: Submission | None = None
         self._answered = threading.Event()
         # A streamed ask's step fragments (every step, from 0), whether more are coming,
@@ -361,9 +390,45 @@ class SessionListener:
     def release(self) -> None:
         self._busy_lock.release()
 
+    @property
+    def page_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/?t={self._token}"
+
     def current_page(self) -> tuple[bytes, int]:
         with self._state_lock:
             return self._page, self._generation
+
+    def serve_page(self) -> bytes:
+        """The current page, for a tab loading it: records that it reached one."""
+        with self._state_lock:
+            self._served_generation = self._generation
+            return self._page
+
+    def _wait_served(self, generation: int, seconds: float) -> bool:
+        deadline = time.monotonic() + seconds
+        while True:
+            with self._state_lock:
+                if self._served_generation >= generation:
+                    return True
+            if time.monotonic() > deadline:
+                return False
+            time.sleep(0.05)
+
+    def show_in_tab(self, generation: int, open_tab: Callable[[str], None]) -> bool:
+        """Get `generation` in front of the user, returning False if no tab loads it.
+
+        Reuses the tab opened earlier if it picks the page up by itself, which an open
+        tab does within REUSE_GRACE_SECONDS. Otherwise that tab is gone, so `open_tab`
+        opens a new one. Trusting `tab_opened` alone, as this once did, published every
+        later page into a tab the user had already closed. A tab the browser throttles
+        hard in the background may miss the grace and get a second tab beside it, which
+        is the cheaper mistake.
+        """
+        if self.tab_opened and self._wait_served(generation, REUSE_GRACE_SECONDS):
+            return True
+        open_tab(self.page_url)
+        self.tab_opened = True
+        return self._wait_served(generation, DELIVERY_SECONDS)
 
     def publish(
         self,
@@ -371,7 +436,7 @@ class SessionListener:
         *,
         steps: list[str] | None = None,
         more_coming: bool = False,
-    ) -> None:
+    ) -> int:
         """Swap in the next question's page, built from the generation it will carry.
 
         `build_html` gets the new generation number so it can be baked into the page's
@@ -379,7 +444,8 @@ class SessionListener:
         reload needed; anything else means a newer question is waiting.
 
         `steps`/`more_coming` are only set by a streamed ask: the page's step fragments
-        so far, for `extend()` to append to.
+        so far, for `extend()` to append to. Returns the new generation, for
+        `show_in_tab`.
         """
         with self._state_lock:
             self._generation += 1
@@ -388,8 +454,10 @@ class SessionListener:
             self._steps = list(steps or [])
             self._more_coming = more_coming
             self._progress = None
+            generation = self._generation
         self._answered.clear()
         self.note_activity()
+        return generation
 
     def extend(
         self, build_html: Callable[[int], str], steps: list[str], *, more_coming: bool

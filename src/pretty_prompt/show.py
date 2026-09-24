@@ -134,15 +134,13 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
     submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
     status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
 
-    session.publish(
+    generation = session.publish(
         lambda generation: _build_html(
             request, submit_url=submit_url, status_url=status_url, generation=generation
         )
     )
-    if not session.tab_opened:
-        open_in_browser(f"http://127.0.0.1:{session.port}/?t={session.token}")
-        session.tab_opened = True
-
+    if not session.show_in_tab(generation, open_in_browser):
+        return {"not_delivered": True}
     if not request.wait_for_acknowledge:
         return {"opened": True}
     submission = session.wait_for_answer(request.timeout_seconds)
@@ -176,6 +174,8 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
             submission = listener.wait(request.timeout_seconds)
         finally:
             shutil.rmtree(directory, ignore_errors=True)
+        if not listener.page_seen:
+            return {"not_delivered": True}
     return _result_from_submission(submission)
 
 

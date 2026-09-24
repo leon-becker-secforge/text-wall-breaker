@@ -68,6 +68,11 @@ Returns exactly one of:
                                                              answered `questions`
   {"cancelled": true}                                      the user pressed Cancel
   {"timed_out": true}                                      nothing arrived in time
+  {"not_delivered": true}                                  the page never loaded
+
+`not_delivered` comes back within about 30 seconds and means the user never saw the
+question: ask again in the terminal instead of retrying with a longer timeout.
+`timed_out` means the page did load but went unanswered.
 
 Selecting an option and writing free text are additive, not exclusive, so `selected` and
 `free_text` can both be populated. `expanded` is the ids of options whose Markdown body
@@ -95,7 +100,9 @@ the user has reached so far (the current one may still be blank or change). Use 
 to adjust the questions you haven't sent yet. The last call sets `ask_id` and leaves
 `more_coming` unset (its `questions` may be empty); only it waits, and it returns the
 usual {"answers": [...]} for every question sent. A call may return {"cancelled": true}
-instead: then stop, and send nothing more. Short asks stay a single call."""
+instead: then stop, and send nothing more. Short asks stay a single call.
+If your `ask` has no `more_coming` parameter, your session loaded this tool before
+streaming existed; it takes a session started after the update."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
 if SHARE_INTERACTION_SIGNALS:
@@ -130,7 +137,8 @@ Turn either off with `save_button`/`acknowledge_button` when it doesn't apply â€
 Acknowledge button on a page that's purely informational and never needs confirming.
 
 Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path is only
-present for a one-off, non-reused tab) as soon as the browser has been asked to open it.
+present for a one-off, non-reused tab) as soon as the browser has the page. Either way,
+`{"not_delivered": true}` means the page never loaded, so the user hasn't seen it.
 
 `slides` puts the content in a deck instead â€” several independent Markdown documents
 shown one at a time with Prev/Next buttons and arrow-key navigation, a "N / total"

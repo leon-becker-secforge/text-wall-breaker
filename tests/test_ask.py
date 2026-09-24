@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from pretty_prompt import ask as ask_module
+from pretty_prompt import listener as listener_module
 from pretty_prompt import session as session_module
 from pretty_prompt.ask import (
     AskRequest,
@@ -141,6 +142,13 @@ def _post(url: str, payload: object) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _short_delivery_waits(monkeypatch):
+    """Delivery checks sized for a test, not a cold browser start."""
+    monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 1.0)
+    monkeypatch.setattr(listener_module, "REUSE_GRACE_SECONDS", 0.5)
+
+
+@pytest.fixture(autouse=True)
 def _isolated_shared_session():
     """Give every test its own shared-tab session, closed after, never the real one.
 
@@ -217,9 +225,15 @@ def test_cancel_is_reported_as_cancelled(browser):
     }
 
 
-def test_no_answer_times_out(browser):
+def test_a_page_that_never_loads_is_reported_undelivered(browser):
     browser(lambda page: None)
     result = run_ask(AskRequest(question="q", timeout_seconds=0.05))
+    assert result == {"not_delivered": True}
+
+
+def test_a_loaded_page_left_unanswered_times_out(browser):
+    browser(lambda page: {"kind": "probe", "data": {}})
+    result = run_ask(AskRequest(question="q", timeout_seconds=0.3))
     assert result == {"timed_out": True}
 
 
@@ -430,7 +444,10 @@ def _answer_current_generation(session, expected_generation, payload, timeout=5.
     while time.monotonic() < deadline:
         page, generation = session.current_page()
         if generation == expected_generation and page:
-            html = page.decode("utf-8")
+            # Loaded over HTTP, the way the tab's own reload does, so the session sees
+            # the page arrive.
+            with urllib.request.urlopen(session.page_url, timeout=5) as response:  # noqa: S310
+                html = response.read().decode("utf-8")
             submit_url = html.split('var SUBMIT_URL = "')[1].split('"')[0]
             _post(submit_url, payload)
             return
@@ -635,10 +652,20 @@ def _get_json(url: str) -> object:
         return json.loads(response.read())
 
 
+def _loading_opener(targets: list[object]):
+    """An open_in_browser that records the URL and loads it, like a tab would."""
+
+    def open_tab(target: object) -> None:
+        targets.append(target)
+        urllib.request.urlopen(str(target), timeout=5).read()  # noqa: S310 (loopback)
+
+    return open_tab
+
+
 @pytest.fixture
 def opened(monkeypatch):
     targets: list[object] = []
-    monkeypatch.setattr(ask_module, "open_in_browser", targets.append)
+    monkeypatch.setattr(ask_module, "open_in_browser", _loading_opener(targets))
     return targets
 
 
@@ -733,3 +760,42 @@ def test_an_abandoned_stream_frees_the_shared_tab(opened, monkeypatch):
 def test_rejected_stream_requests(kwargs, match):
     with pytest.raises(InvalidAsk, match=match):
         AskRequest(**kwargs).validated()
+
+
+def test_a_closed_tab_gets_replaced_instead_of_published_into(monkeypatch):
+    session = session_module.get_shared_session()
+    opened: list[object] = []
+    monkeypatch.setattr(ask_module, "open_in_browser", _loading_opener(opened))
+    cancel = {"kind": "cancel", "data": {}}
+
+    def answer_from_the_new_tab():
+        # The closed tab never reloads; only the replacement one loads and answers.
+        while len(opened) < 2:
+            time.sleep(0.02)
+        _post(session.page_url.replace("/?", "/submit?"), cancel)
+
+    threading.Timer(0.1, _post, (session.page_url.replace("/?", "/submit?"), cancel)).start()
+    assert run_ask(AskRequest(question="first")) == {"cancelled": True}
+    thread = threading.Thread(target=answer_from_the_new_tab)
+    thread.start()
+    assert run_ask(AskRequest(question="second")) == {"cancelled": True}
+    thread.join(timeout=5)
+    assert len(opened) == 2
+
+
+def test_a_shared_tab_that_never_loads_is_reported_undelivered(monkeypatch):
+    opened: list[object] = []
+    monkeypatch.setattr(ask_module, "open_in_browser", opened.append)
+    assert run_ask(AskRequest(question="q")) == {"not_delivered": True}
+    assert len(opened) == 1
+    # Not left claimed: the next call can use the shared tab.
+    assert session_module.get_shared_session().try_claim()
+    session_module.get_shared_session().release()
+
+
+def test_an_undelivered_stream_is_not_left_open(monkeypatch):
+    monkeypatch.setattr(ask_module, "open_in_browser", lambda target: None)
+    result = run_ask(AskRequest(questions=[_q("one")], more_coming=True))
+    assert result == {"not_delivered": True}
+    assert session_module.get_shared_session().try_claim()
+    session_module.get_shared_session().release()

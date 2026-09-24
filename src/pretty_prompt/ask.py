@@ -73,6 +73,10 @@ _OPEN_TIMEOUT_SECONDS = 20.0
 # nor mentioned in the tool description. `expanded` predates it and is not covered.
 SHARE_INTERACTION_SIGNALS = True
 
+# The page never loaded, so nobody saw the question: the agent should fall back at once,
+# not treat it like an unanswered `timed_out`. See listener.DELIVERY_SECONDS.
+NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
+
 
 class InvalidAsk(ValueError):
     """The request cannot produce an answerable page."""
@@ -430,16 +434,15 @@ def _run_ask_reusing_tab(
     submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
     status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
 
-    session.publish(
+    generation = session.publish(
         lambda generation: _build_html(
             request, steps, submit_url=submit_url, status_url=status_url, generation=generation
         )
     )
-    if not session.tab_opened:
-        open_in_browser(f"http://127.0.0.1:{session.port}/?t={session.token}")
-        session.tab_opened = True
-    # An already-open tab picks up the new content on its own — see page.py's
-    # startReusePolling — nothing further to do here to make it appear.
+    # An already-open tab picks up the new content on its own (see page.py's
+    # startReusePolling); show_in_tab only opens one if it doesn't.
+    if not session.show_in_tab(generation, open_in_browser):
+        return NOT_DELIVERED
 
     submission = session.wait_for_answer(request.timeout_seconds)
     return _answer_from_submission(steps, submission, multi=request.questions is not None)
@@ -465,6 +468,8 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
             submission = listener.wait(request.timeout_seconds)
         finally:
             shutil.rmtree(directory, ignore_errors=True)
+        if not listener.page_seen:
+            return NOT_DELIVERED
 
     return _answer_from_submission(steps, submission, multi=request.questions is not None)
 
@@ -574,21 +579,26 @@ def _start_stream(request: AskRequest) -> dict[str, Any]:
         header=request.header,
         last_call=time.monotonic(),
     )
-    try:
-        session.publish(
-            _stream_page(stream, request.timeout_seconds, more_coming=True),
-            steps=build_step_fragments(_step_specs(steps)),
-            more_coming=True,
-        )
-        if not session.tab_opened:
-            open_in_browser(f"http://127.0.0.1:{session.port}/?t={session.token}")
-            session.tab_opened = True
-    except BaseException:
+
+    def give_up() -> None:
         if shared:
             session.release()
         else:
             session.close()
+
+    try:
+        generation = session.publish(
+            _stream_page(stream, request.timeout_seconds, more_coming=True),
+            steps=build_step_fragments(_step_specs(steps)),
+            more_coming=True,
+        )
+        delivered = session.show_in_tab(generation, open_in_browser)
+    except BaseException:
+        give_up()
         raise
+    if not delivered:
+        give_up()
+        return NOT_DELIVERED
     ask_id = secrets.token_hex(8)
     with _streams_lock:
         _streams[ask_id] = stream
@@ -633,7 +643,8 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
 def run_ask(request: AskRequest) -> dict[str, Any]:
     """Open the page for `request` and block until it is answered, cancelled or idle.
 
-    Returns `{"cancelled": True}` or `{"timed_out": True}` either way. Otherwise, for a
+    Returns `{"cancelled": True}` or `{"timed_out": True}` either way, or
+    `{"not_delivered": True}` if the page never loaded in a browser at all. Otherwise, for a
     single question (the `question` shorthand), `{"selected", "free_text", "expanded"}`;
     for `questions`, `{"answers": [{"selected", "free_text", "expanded"}, ...]}`, one
     entry per question, in order. `expanded` is the option ids whose body drawer was

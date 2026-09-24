@@ -19,6 +19,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Fixed
 
+- After the user closed the shared tab, every later `ask` and `show` in that process
+  published into the closed tab and never opened a new one, so an `ask` waited out its
+  whole timeout for a question nobody saw. The server now checks that a tab loaded each
+  page: it opens a new tab when the old one doesn't pick the page up, and returns
+  `{"not_delivered": true}` within about 30 seconds when no tab loads it at all.
 - `_` and `__` only open or close emphasis at a word boundary, as in CommonMark, so
   identifiers like `set_mode and post_message` in prose stay literal instead of turning
   the text between them italic. `*` and `**` still work inside a word.

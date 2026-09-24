@@ -163,6 +163,7 @@ Exactly one of:
 {"answers": [{"selected": ["pg"], "free_text": "", "expanded": []}, ...]}
 {"cancelled": true}
 {"timed_out": true}
+{"not_delivered": true}
 ```
 
 The first shape answers `question`; the second, one entry per question in order,
@@ -173,6 +174,11 @@ load — so the window starts when the page renders rather than when the browser
 launched. While the tab is visible the page sends a heartbeat, so however long the user
 reads, the call stays alive; the timeout only runs while the tab is hidden or closed, and
 a long multi-question page needs no larger value than a single question.
+
+`not_delivered` means the page never loaded in a browser, so the user never saw the
+question. It comes back within about 30 seconds of opening the tab, not after the whole
+timeout, so the agent can fall back to asking in the terminal. A page that loaded and was
+then left alone still ends in `timed_out`.
 
 `expanded` is the ids of options whose collapsed body was opened at any point before the
 answer was sent. It stays set even if the drawer was closed again afterwards, so an id
@@ -227,11 +233,15 @@ The page carries two buttons, on by default, either can be turned off:
 {"opened": true, "path": "..."}
 {"acknowledged": true}
 {"timed_out": true}
+{"not_delivered": true}
 ```
 
 Without `wait_for_acknowledge`, always `{"opened": true}`, plus `path` when the call
 didn't reuse an already-open tab (see below). With it, `{"acknowledged": true}` once
-Acknowledge is clicked, or `{"timed_out": true}` after `timeout_seconds` idle.
+Acknowledge is clicked, or `{"timed_out": true}` after `timeout_seconds` idle. Either
+way, `{"not_delivered": true}` means the page never loaded (see `ask`'s Result). A
+one-off page without `wait_for_acknowledge` has no listener to tell, so it always
+reports `opened`.
 
 ## Markdown
 
@@ -292,6 +302,12 @@ A one-off `show` call that isn't waiting for Acknowledge skips step 1 and 3 enti
 socket, no token, nothing to block on — just a static page, written and opened. Its
 Acknowledge button still shows, but with no listener behind it, a click is a local-only
 mark rather than something sent anywhere.
+
+Reusing the tab is checked, not assumed: an open tab reloads for a new page within about
+1.5 seconds, and if none has after 4 seconds, the tab was closed, so a new one opens.
+Every call then waits for some tab to load its page; if none does within 30 seconds, it
+returns `not_delivered`. A tab the browser throttles hard in the background can miss the
+4 seconds and end up with a second tab beside it, which is the cheaper mistake.
 
 A streamed ask keeps its tab across calls instead: the page polls `/status` for new
 steps, fetches them from `/steps` and appends them, and reports the answers so far back
