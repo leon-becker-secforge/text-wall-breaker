@@ -34,6 +34,11 @@ A question the operator declines to settle yet because it depends on something s
 Distinct from cancelling, which ends the whole ask.
 _Avoid_: skipped, postponed, unanswered
 
+**Streamed ask**:
+An ask sent in chunks over several calls, each adding questions to the page the operator
+is already answering. Only the last call waits for the answers.
+_Avoid_: incremental ask, paged ask, append mode
+
 **Header**:
 Markdown shown above every question of a multi-question page, typically what is already
 settled.

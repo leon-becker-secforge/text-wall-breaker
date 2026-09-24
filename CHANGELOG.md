@@ -3,6 +3,28 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `changed_from` on every `ask` answer: option ids picked and then abandoned, in the
+  order first picked. Each entry of `answers` also gets `visits`, how often that
+  question was shown. Both can be switched off with `SHARE_INTERACTION_SIGNALS` in
+  `ask.py`.
+- Streamed `ask` (prototype): `more_coming: true` opens the page with the questions
+  written so far and returns an `ask_id` at once; later calls with that `ask_id` append
+  their questions to the open page without a reload and return the answers so far, and
+  the call without `more_coming` waits for the answers. The user starts answering while
+  the agent is still writing.
+
+### Fixed
+
+- `_` and `__` only open or close emphasis at a word boundary, as in CommonMark, so
+  identifiers like `set_mode and post_message` in prose stay literal instead of turning
+  the text between them italic. `*` and `**` still work inside a word.
+- An option label long enough to wrap stays beside its radio or checkbox, with the
+  Recommended badge and chevron on the same row, instead of dropping onto a line below.
+
 ## [0.6.0] - 2026-09-23
 
 Upgrading: start a fresh Claude Code session afterwards. A session that already loaded

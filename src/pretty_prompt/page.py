@@ -292,7 +292,10 @@ main img { cursor: zoom-in; }
 .pp-option-drawer > summary::-webkit-details-marker { display: none; }
 .pp-option-select { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0; }
 .pp-option-select input { margin: 0; accent-color: var(--ntw-accent); }
-.pp-option-label { font-family: var(--pp-font-mono); font-weight: 500; font-size: 0.9em; }
+/* Grows into the row and wraps its own text: the row wraps (for the caveat below), so a
+   label left at its natural width would drop onto a line of its own under the input. */
+.pp-option-label { flex: 1 1 0; min-width: 0; font-family: var(--pp-font-mono);
+  font-weight: 500; font-size: 0.9em; }
 /* Picked over a muted line (read as body text, easy to miss) and warning-coloured text
    (read as harsh) in a three-way visual A/B/C: a warning-tinted strip running the full
    width of the option's bottom edge. It wraps onto its own line inside the select row
@@ -319,7 +322,7 @@ main img { cursor: zoom-in; }
 .pp-option-recommended { margin-inline-start: auto; font-family: var(--pp-font-mono);
   font-size: 0.68em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
-  padding: 1px 6px; }
+  padding: 1px 6px; flex: none; white-space: nowrap; }
 .pp-option-recommended + .pp-option-chevron { margin-inline-start: 6px; }
 .pp-option-chevron { margin-inline-start: auto; flex: none; color: var(--ntw-fg-muted);
   transition: transform .15s; }
@@ -345,7 +348,8 @@ main img { cursor: zoom-in; }
    duplicated in _MULTI_ADDENDUM, since neither pair of ids ever coexists on one page. */
 #pp-submit, #pp-next { border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
   color: var(--ntw-accent-contrast); }
-#pp-cancel, #pp-back { border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
+#pp-cancel, #pp-back { border: 1px solid var(--ntw-border); background: transparent;
+  color: var(--ntw-fg); }
 .pp-actions button:disabled { opacity: 0.5; cursor: default; }
 #pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
 
@@ -473,7 +477,9 @@ __FREE_TEXT__
   var status = document.getElementById('pp-status');
   var freeText = document.getElementById('pp-free-text');
   var inputs = Array.prototype.slice.call(document.querySelectorAll('input[data-option-id]'));
-  var drawers = Array.prototype.slice.call(document.querySelectorAll('.pp-option-drawer[data-option-id]'));
+  var drawers = Array.prototype.slice.call(
+    document.querySelectorAll('.pp-option-drawer[data-option-id]')
+  );
   // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
   // now" — with several long-bodied options, closing one after reading it to get to the
   // next is the expected motion, and a snapshot at submit time would read that as never
@@ -482,6 +488,16 @@ __FREE_TEXT__
   drawers.forEach(function (d) {
     d._wasExpanded = d.open;
     d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
+  });
+  // `changed_from` (in collect()): every input ever checked, in first-checked order.
+  // The server drops the ones still in the final selection, so what reaches the agent
+  // is only what was picked and then abandoned. Only a user's own change counts: the
+  // reload reset below and deferral uncheck without firing `change`.
+  var picked = [];
+  inputs.forEach(function (i) {
+    i.addEventListener('change', function () {
+      if (i.checked && picked.indexOf(i) === -1) picked.push(i);
+    });
   });
 
   // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
@@ -558,6 +574,7 @@ __FREE_TEXT__
       // open at submit time — see the `_wasExpanded` tracking above.
       expanded: drawers.filter(function (d) { return d._wasExpanded; })
                         .map(function (d) { return d.dataset.optionId; }),
+      changed_from: picked.map(function (i) { return i.dataset.optionId; }),
       deferred: isDeferred()
     };
   }
@@ -799,19 +816,26 @@ __STEPS__
   // below is then a no-op.
   var STATUS_URL = __STATUS_URL__;
   var GENERATION = __GENERATION__;
+  // A streamed ask (`more_coming`, see ask.py): the agent is still writing questions.
+  // While true, the last step so far can't be sent, and pollForSteps() below appends
+  // new steps from STEPS_URL as they arrive, without a reload.
+  var MORE_COMING = __MORE_COMING__;
+  var STEPS_URL = __STEPS_URL__;
+  var MERMAID_SRC = __MERMAID_SRC__;
 
   // Any image (a gallery thumbnail or one in an option/question body) expands full-size
   // on click — a thumbnail is otherwise too small to actually compare against another.
   var lightbox = document.getElementById('pp-lightbox');
   var lightboxImg = document.getElementById('pp-lightbox-img');
-  document.querySelectorAll('main img').forEach(function (img) {
+  function wireLightbox(img) {
     img.addEventListener('click', function (e) {
       e.stopPropagation();
       lightboxImg.src = img.src;
       lightboxImg.alt = img.alt;
       lightbox.hidden = false;
     });
-  });
+  }
+  document.querySelectorAll('main img').forEach(wireLightbox);
   lightbox.addEventListener('click', function () {
     lightbox.hidden = true;
     lightboxImg.src = '';
@@ -823,17 +847,60 @@ __STEPS__
     }
   });
 
-  var steps = Array.prototype.slice.call(document.querySelectorAll('.pp-step'));
+  var form = document.getElementById('pp-form');
+  var actions = form.querySelector('.pp-actions');
   var backBtn = document.getElementById('pp-back');
   var nextBtn = document.getElementById('pp-next');
   var cancelBtn = document.getElementById('pp-cancel');
   var status = document.getElementById('pp-status');
   var progressLabel = document.getElementById('pp-progress-label');
   var progressFill = document.getElementById('pp-progress-fill');
-  var inputs = Array.prototype.slice.call(document.querySelectorAll('input[data-option-id]'));
-  var drawers = Array.prototype.slice.call(document.querySelectorAll('.pp-option-drawer[data-option-id]'));
-  var freeTexts = Array.prototype.slice.call(document.querySelectorAll('textarea[data-step]'));
+  var steps = [];
+  var inputs = [];
+  var drawers = [];
+  var freeTexts = [];
+  var stepDeferred = [];
+  // `changed_from` and `visits` (in collect()): see the single-question page for
+  // `picked`. Inputs, not ids, since two steps may reuse an option id. `visits` counts
+  // showStep() calls per step, so the first view is 1 and each Back or Next onto it adds 1.
+  var picked = [];
+  var visits = [];
   var current = 0;
+  // The furthest step shown so far, for the answers-so-far a streamed ask reports.
+  var furthest = 0;
+  var frozen = false;
+
+  // Everything one step needs, for the steps on the page at load and for each step a
+  // streamed ask appends later alike.
+  function wireStep(el) {
+    steps.push(el);
+    visits.push(0);
+    el.querySelectorAll('input[data-option-id]').forEach(function (i) {
+      inputs.push(i);
+      i.addEventListener('change', function () {
+        if (i.checked && picked.indexOf(i) === -1) picked.push(i);
+        refresh();
+      });
+      // See page.py's _render_options: a long body wraps the input in <summary>, so a
+      // click on the checkbox/radio would otherwise also toggle the drawer open.
+      i.addEventListener('click', function (e) { e.stopPropagation(); });
+    });
+    // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
+    // now": with several long-bodied options, closing one after reading it to move to
+    // the next is the expected motion, and a snapshot at submit time would read that as
+    // never having been opened. The initial `open` attribute (recommended: true) counts
+    // as having been shown too, seeded here rather than waiting for a first `toggle`.
+    el.querySelectorAll('.pp-option-drawer[data-option-id]').forEach(function (d) {
+      drawers.push(d);
+      d._wasExpanded = d.open;
+      d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
+    });
+    el.querySelectorAll('textarea[data-step]').forEach(function (t) {
+      freeTexts.push(t);
+      t.addEventListener('input', refresh);
+    });
+    stepDeferred.push(wireDefer(el, function () { refresh(); }));
+  }
 
   // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
   // genuinely new set of questions, never the ones just answered — but the browser
@@ -841,18 +908,9 @@ __STEPS__
   // a plain reload keyed by field identity/position. Since the new questions' fields can
   // occupy the same identity as the old ones, that restore has to be undone before
   // anything else reads these fields, or a new question can silently start pre-answered.
-  inputs.forEach(function (i) { i.checked = false; });
-  freeTexts.forEach(function (t) { t.value = ''; });
-
-  // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
-  // now" — with several long-bodied options, closing one after reading it to move to
-  // the next is the expected motion, and a snapshot at submit time would read that as
-  // never having been opened. The initial `open` attribute (recommended: true) counts
-  // as having been shown too, seeded here rather than waiting for a first `toggle`.
-  drawers.forEach(function (d) {
-    d._wasExpanded = d.open;
-    d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
-  });
+  document.querySelectorAll('input[data-option-id]').forEach(function (i) { i.checked = false; });
+  document.querySelectorAll('textarea[data-step]').forEach(function (t) { t.value = ''; });
+  document.querySelectorAll('.pp-step').forEach(wireStep);
 
   // The server already set the theme attribute from its own saved state whenever it has
   // one (see page.py's __THEME_ATTR__); localStorage is only the fallback for the very
@@ -916,7 +974,6 @@ __STEPS__
     });
     return function () { return on; };
   }
-  var stepDeferred = steps.map(function (el) { return wireDefer(el, function () { refresh(); }); });
 
   function stepAnswered(step) {
     if (stepDeferred[step]()) return true;
@@ -934,6 +991,9 @@ __STEPS__
         free_text: ft ? ft.value.trim() : '',
         expanded: stepDrawers(s).filter(function (d) { return d._wasExpanded; })
                                  .map(function (d) { return d.dataset.optionId; }),
+        changed_from: picked.filter(function (i) { return i.dataset.step === String(s); })
+                            .map(function (i) { return i.dataset.optionId; }),
+        visits: visits[s],
         deferred: stepDeferred[s]()
       });
     }
@@ -941,29 +1001,109 @@ __STEPS__
   }
 
   function showStep(index) {
+    visits[index] += 1;
+    furthest = Math.max(furthest, index);
     steps.forEach(function (el, i) { el.classList.toggle('pp-step-active', i === index); });
-    progressLabel.textContent = 'Question ' + (index + 1) + ' of ' + STEP_COUNT;
-    progressFill.style.width = ((index + 1) / STEP_COUNT * 100) + '%';
     backBtn.disabled = index === 0;
-    nextBtn.textContent = index === STEP_COUNT - 1 ? 'Send answers' : 'Next';
     refresh();
   }
 
   // Only the current step's answer gates Next — earlier steps were already checked on
-  // their own way past, and later ones haven't been seen yet.
+  // their own way past, and later ones haven't been seen yet. On the last step of a
+  // streamed ask there is nothing to go Next to yet, so it waits instead.
   function refresh() {
-    nextBtn.disabled = !stepAnswered(current);
+    // After Send or Cancel: a step arriving late must not re-enable anything.
+    if (frozen) return;
+    var last = current === STEP_COUNT - 1;
+    var waiting = last && MORE_COMING;
+    progressLabel.textContent = 'Question ' + (current + 1) + ' of ' + STEP_COUNT +
+      (MORE_COMING ? ', more coming' : '');
+    progressFill.style.width = ((current + 1) / STEP_COUNT * 100) + '%';
+    nextBtn.textContent = waiting
+      ? 'Waiting for the next question\\u2026'
+      : (last ? 'Send answers' : 'Next');
+    nextBtn.disabled = waiting || !stepAnswered(current);
+    reportProgress();
   }
 
-  inputs.forEach(function (i) { i.addEventListener('change', refresh); });
-  // See page.py's _render_options: a long body wraps the input in <summary>, so a click
-  // on the checkbox/radio would otherwise also toggle the drawer open.
-  inputs.forEach(function (i) {
-    i.addEventListener('click', function (e) { e.stopPropagation(); });
-  });
-  freeTexts.forEach(function (t) { t.addEventListener('input', refresh); });
+  // A streamed ask returns the answers so far to each of the agent's later calls, so
+  // it can shape the questions it hasn't written yet. Debounced: refresh() runs on
+  // every keystroke in a free-text box.
+  var progressTimer = null;
+  function reportProgress() {
+    if (!STEPS_URL) return;
+    clearTimeout(progressTimer);
+    progressTimer = setTimeout(function () {
+      send('progress', { answers: collect().answers.slice(0, furthest + 1) });
+    }, 400);
+  }
+
+  // Loaded on first use: a step with a diagram can arrive after the page, which only
+  // loads mermaid itself when it had one from the start (see _mermaid_script).
+  function renderMermaid(nodes) {
+    if (!nodes.length) return;
+    function run() { nodes.forEach(function (el) { mermaid.run({ nodes: [el] }); }); }
+    if (window.mermaid) { run(); return; }
+    var script = document.createElement('script');
+    script.src = MERMAID_SRC;
+    script.onload = function () {
+      var dark = document.documentElement.dataset.theme
+        ? document.documentElement.dataset.theme === 'dark'
+        : matchMedia('(prefers-color-scheme: dark)').matches;
+      mermaid.initialize({
+        startOnLoad: false, theme: dark ? 'dark' : 'default', securityLevel: 'strict'
+      });
+      run();
+    };
+    document.head.appendChild(script);
+  }
+
+  function appendSteps(fragments) {
+    fragments.forEach(function (fragment) {
+      var holder = document.createElement('div');
+      holder.innerHTML = fragment;
+      var el = holder.firstElementChild;
+      form.insertBefore(el, actions);
+      wireStep(el);
+      el.querySelectorAll('img').forEach(wireLightbox);
+      if (el.querySelector('.pp-options-gallery')) {
+        document.querySelector('main').classList.add('pp-wide');
+      }
+      renderMermaid(Array.prototype.slice.call(el.querySelectorAll('.mermaid')));
+    });
+    STEP_COUNT = steps.length;
+  }
+
+  // While the agent is still writing: check for new steps and append them. Stops once
+  // it says nothing more is coming, and hands over to a reload if a different ask has
+  // taken the tab (the generation moved).
+  function pollForSteps() {
+    if (!MORE_COMING || !STATUS_URL) return;
+    var timer = setInterval(async function () {
+      if (frozen) { clearInterval(timer); return; }
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+          return;
+        }
+        if (body.step_count <= STEP_COUNT && body.more_coming) return;
+        var more = await fetch(STEPS_URL + '&from=' + STEP_COUNT);
+        if (!more.ok) return;
+        var data = await more.json();
+        appendSteps(data.steps);
+        MORE_COMING = data.more_coming;
+        if (!MORE_COMING) clearInterval(timer);
+        refresh();
+      } catch (e) { /* process gone, nothing more will come */ }
+    }, 1000);
+  }
 
   function freeze(message) {
+    frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
     document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     freeTexts.forEach(function (t) { t.readOnly = true; });
@@ -1033,14 +1173,14 @@ __STEPS__
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        if (kind !== 'probe') {
+        if (kind !== 'probe' && kind !== 'progress') {
           fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
         }
         return false;
       }
       return true;
     } catch (err) {
-      if (kind !== 'probe') {
+      if (kind !== 'probe' && kind !== 'progress') {
         fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
       }
       return false;
@@ -1066,6 +1206,7 @@ __STEPS__
       showStep(current);
       return;
     }
+    if (MORE_COMING) return;
     var data = collect();
     freeze('Sending\\u2026');
     if (await send('submit', data)) {
@@ -1098,6 +1239,7 @@ __STEPS__
   // the operator has spent any time answering. Never consumes the one submission.
   send('probe', {});
   startHeartbeat();
+  pollForSteps();
 }());
 </script>
 __MERMAID__
@@ -1419,12 +1561,16 @@ __ACK_BUTTON__
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        if (kind !== 'probe') fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
+        if (kind !== 'probe') {
+          fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
+        }
         return false;
       }
       return true;
     } catch (err) {
-      if (kind !== 'probe') fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      if (kind !== 'probe') {
+        fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      }
       return false;
     }
   }
@@ -1852,14 +1998,17 @@ def _deck_script(needed: bool) -> str:
     index = (next + slides.length) % slides.length;
     slides[index].classList.add('is-active');
     if (progressLabel) progressLabel.textContent = 'Slide ' + (index + 1) + ' of ' + slides.length;
-    if (progressFill) progressFill.style.width = Math.round((index + 1) / slides.length * 100) + '%';
+    if (progressFill) {
+      progressFill.style.width = Math.round((index + 1) / slides.length * 100) + '%';
+    }
   }
   var prevBtn = document.querySelector('[data-deck-prev]');
   var nextBtn = document.querySelector('[data-deck-next]');
   if (prevBtn) prevBtn.addEventListener('click', function () { show(index - 1); });
   if (nextBtn) nextBtn.addEventListener('click', function () { show(index + 1); });
   document.addEventListener('keydown', function (event) {
-    if (event.target.matches('input, textarea, [contenteditable]') || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.target.matches('input, textarea, [contenteditable]')) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === 'ArrowRight') show(index + 1);
     if (event.key === 'ArrowLeft') show(index - 1);
   });
@@ -1999,6 +2148,16 @@ def _render_step(index: int, spec: dict[str, object]) -> str:
     )
 
 
+def build_step_fragments(questions: list[dict[str, object]], start: int = 0) -> list[str]:
+    """One `<section class="pp-step">` per question, numbered from `start`.
+
+    What `build_multi_page` puts in the page, and what a streamed ask's open tab appends
+    later: a step's index is baked into its input names and ids, so a step added after
+    the first `start` has to be numbered as the page will hold it.
+    """
+    return [_render_step(start + i, spec) for i, spec in enumerate(questions)]
+
+
 def _render_header(header: str) -> str:
     """The multi-question page's header block, or "" if there is none.
 
@@ -2035,6 +2194,8 @@ def build_multi_page(
     theme: str | None = None,
     status_url: str | None = None,
     generation: int = 0,
+    steps_url: str | None = None,
+    more_coming: bool = False,
 ) -> str:
     """Return the complete HTML document for an `ask` call carrying several questions.
 
@@ -2054,15 +2215,25 @@ def build_multi_page(
     `_render_header`.
 
     `theme`, `status_url` and `generation` are as `build_page` takes them.
+
+    `steps_url`/`more_coming` are for a streamed ask (see `ask.py`): while
+    `more_coming`, the last step waits instead of offering Send, and the page appends
+    each further step it finds at `steps_url` (fragments from `build_step_fragments`).
+    `steps_url` also turns on the answers-so-far reports the stream returns to the agent.
     """
     css = _load_base_css() + _ADDENDUM + _MULTI_ADDENDUM
     if accent is not None:
         css += _accent_css(accent)
 
     total = len(questions)
-    steps_html = "\n".join(_render_step(i, spec) for i, spec in enumerate(questions))
+    steps_html = "\n".join(build_step_fragments(questions))
     header_html = _render_header(header)
     initial_progress = round(100 / total) if total else 0
+    initial_label = f"Question 1 of {total}" + (", more coming" if more_coming else "")
+    if total > 1:
+        initial_next = "Next"
+    else:
+        initial_next = "Waiting for the next question\u2026" if more_coming else "Send answers"
     any_gallery = any(
         _is_gallery(options) if isinstance(options := spec.get("options"), list) else False
         for spec in questions
@@ -2075,13 +2246,16 @@ def build_multi_page(
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__HEADER__", header_html)
         .replace("__STEPS__", steps_html)
-        .replace("__INITIAL_LABEL__", html.escape(f"Question 1 of {total}", quote=True))
+        .replace("__INITIAL_LABEL__", html.escape(initial_label, quote=True))
         .replace("__INITIAL_PROGRESS__", str(initial_progress))
-        .replace("__INITIAL_NEXT_LABEL__", "Send answers" if total == 1 else "Next")
+        .replace("__INITIAL_NEXT_LABEL__", initial_next)
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STEP_COUNT__", str(total))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
+        .replace("__MORE_COMING__", _js_string(more_coming))
+        .replace("__STEPS_URL__", _js_string(steps_url))
+        .replace("__MERMAID_SRC__", _js_string(_MERMAID_SRC))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(header_html, steps_html)))
     )

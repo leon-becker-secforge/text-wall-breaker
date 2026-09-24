@@ -127,6 +127,33 @@ Each entry takes the same keys `question`/`options`/`multi_select`/`allow_free_t
 takes for one question. The result carries one answer per question, in order, under
 `answers` instead of at the top level; see Result below.
 
+### Streamed ask
+
+With several questions, or long bodies, the user would otherwise wait while the agent
+writes all of them. A streamed ask (prototype) sends them in chunks instead: the page
+opens with the first chunk, and each later call adds its questions to that same page
+without a reload, so nothing already answered is lost.
+
+```json
+{"questions": [{"question": "Which backend?", "options": [...]}], "more_coming": true}
+{"ask_id": "3f2c9a1b7d4e8f60", "questions": [{"question": "Which region?"}], "more_coming": true}
+{"ask_id": "3f2c9a1b7d4e8f60", "questions": [{"question": "Which plan?"}]}
+```
+
+A call with `more_coming: true` returns at once with
+`{"ask_id": "...", "answers_so_far": [...]}`: one answer (the same shape as in
+`answers`) per question the user has reached, so later questions can build on earlier
+ones. The one the user is on may still be blank or change. The call that leaves
+`more_coming` unset is the only one that waits, and it returns the usual `{"answers":
+[...]}` for every question sent; its `questions` may be empty. Only the first call takes
+`header`.
+
+While more are coming, the progress bar says so, and the last question so far shows a
+disabled "Waiting for the next question…" in place of Send. A cancel returns
+`{"cancelled": true}` to the agent's next call and ends the stream. A stream holds its tab
+between calls (its own tab if the shared one is busy); one the agent never finishes is
+given up after 15 minutes without a call, freeing the tab.
+
 ### Result
 
 Exactly one of:
@@ -151,6 +178,21 @@ a long multi-question page needs no larger value than a single question.
 answer was sent. It stays set even if the drawer was closed again afterwards, so an id
 can be expanded without being selected, or selected without ever being expanded (a short
 option, or one never opened).
+
+`changed_from` is the ids that were picked at some point but are not in `selected`, in
+the order they were first picked: what the user considered and gave up. In the
+`questions` shape each entry also carries `visits`, how often that question was shown;
+1 means the user never came back to it, more means they returned via Back.
+
+```json
+{"answers": [{"selected": ["b"], "free_text": "", "expanded": [], "changed_from": ["a"], "visits": 2}]}
+```
+
+> [!IMPORTANT]
+> `expanded`, `changed_from` and `visits` record how the user reached an answer, not just
+> the answer, and all three are sent to the agent. Tell the people answering. To stop
+> sending `changed_from` and `visits`, set `SHARE_INTERACTION_SIGNALS = False` in
+> `src/pretty_prompt/ask.py`; the tool description then stops mentioning them too.
 
 ## The `show` tool (prototype)
 
@@ -250,6 +292,12 @@ A one-off `show` call that isn't waiting for Acknowledge skips step 1 and 3 enti
 socket, no token, nothing to block on — just a static page, written and opened. Its
 Acknowledge button still shows, but with no listener behind it, a click is a local-only
 mark rather than something sent anywhere.
+
+A streamed ask keeps its tab across calls instead: the page polls `/status` for new
+steps, fetches them from `/steps` and appends them, and reports the answers so far back
+with a `progress` message that never counts as the answer. If the shared tab is busy it
+gets a session listener of its own, not a one-off one, since a one-off listener can't
+outlive the call that opened it.
 
 The tab title gets a checkmark or cross prefix once its question is answered or
 cancelled, so an answered tab left open (or waiting its turn, with tab reuse) is

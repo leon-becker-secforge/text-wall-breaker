@@ -183,7 +183,7 @@ def test_submission_returns_ids_and_free_text(browser):
     result = run_ask(
         AskRequest(question="q", options=[Option(id="a", label="A"), Option(id="b", label="B")])
     )
-    assert result == {"selected": ["b"], "free_text": "hi", "expanded": []}
+    assert result == {"selected": ["b"], "free_text": "hi", "expanded": [], "changed_from": []}
 
 
 def test_submission_returns_expanded_ids(browser):
@@ -196,7 +196,7 @@ def test_submission_returns_expanded_ids(browser):
     result = run_ask(
         AskRequest(question="q", options=[Option(id="a", label="A"), Option(id="b", label="B")])
     )
-    assert result == {"selected": ["b"], "free_text": "", "expanded": ["a"]}
+    assert result == {"selected": ["b"], "free_text": "", "expanded": ["a"], "changed_from": []}
 
 
 def test_unknown_expanded_ids_are_dropped(browser):
@@ -207,7 +207,7 @@ def test_unknown_expanded_ids_are_dropped(browser):
         }
     )
     result = run_ask(AskRequest(question="q", options=[Option(id="a", label="A")]))
-    assert result == {"selected": [], "free_text": "", "expanded": ["a"]}
+    assert result == {"selected": [], "free_text": "", "expanded": ["a"], "changed_from": []}
 
 
 def test_cancel_is_reported_as_cancelled(browser):
@@ -226,7 +226,7 @@ def test_no_answer_times_out(browser):
 def test_unknown_ids_in_a_submission_are_dropped(browser):
     browser(lambda page: {"kind": "submit", "data": {"selected": ["a", "nope"]}})
     result = run_ask(AskRequest(question="q", options=[Option(id="a", label="A")]))
-    assert result == {"selected": ["a"], "free_text": "", "expanded": []}
+    assert result == {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": []}
 
 
 def test_the_page_carries_the_options_and_a_matching_token(browser):
@@ -336,8 +336,14 @@ def test_multi_question_submission_returns_one_answer_per_question(browser):
     )
     assert result == {
         "answers": [
-            {"selected": ["a"], "free_text": "", "expanded": []},
-            {"selected": [], "free_text": "second", "expanded": []},
+            {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": [], "visits": 0},
+            {
+                "selected": [],
+                "free_text": "second",
+                "expanded": [],
+                "changed_from": [],
+                "visits": 0,
+            },
         ]
     }
 
@@ -352,7 +358,11 @@ def test_multi_question_filters_unknown_ids_per_question(browser):
     result = run_ask(
         AskRequest(questions=[Question(question="q", options=[Option(id="a", label="A")])])
     )
-    assert result == {"answers": [{"selected": ["a"], "free_text": "", "expanded": []}]}
+    assert result == {
+        "answers": [
+            {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": [], "visits": 0}
+        ]
+    }
 
 
 def test_multi_question_missing_answers_are_padded_empty(browser):
@@ -367,8 +377,8 @@ def test_multi_question_missing_answers_are_padded_empty(browser):
     )
     assert result == {
         "answers": [
-            {"selected": [], "free_text": "", "expanded": []},
-            {"selected": [], "free_text": "", "expanded": []},
+            {"selected": [], "free_text": "", "expanded": [], "changed_from": [], "visits": 0},
+            {"selected": [], "free_text": "", "expanded": [], "changed_from": [], "visits": 0},
         ]
     }
 
@@ -479,7 +489,13 @@ def test_a_deferred_answer_is_reported_with_its_reason(browser):
     result = run_ask(
         AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")])
     )
-    assert result == {"selected": [], "free_text": "needs Q3", "expanded": [], "deferred": True}
+    assert result == {
+        "selected": [],
+        "free_text": "needs Q3",
+        "expanded": [],
+        "changed_from": [],
+        "deferred": True,
+    }
 
 
 def test_an_answer_that_could_have_been_deferred_says_it_was_not(browser):
@@ -487,7 +503,13 @@ def test_an_answer_that_could_have_been_deferred_says_it_was_not(browser):
     result = run_ask(
         AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")])
     )
-    assert result == {"selected": ["a"], "free_text": "", "expanded": [], "deferred": False}
+    assert result == {
+        "selected": ["a"],
+        "free_text": "",
+        "expanded": [],
+        "changed_from": [],
+        "deferred": False,
+    }
 
 
 def test_deferred_is_ignored_and_absent_unless_allowed(browser):
@@ -498,7 +520,7 @@ def test_deferred_is_ignored_and_absent_unless_allowed(browser):
         }
     )
     result = run_ask(AskRequest(question="q", options=[Option(id="a", label="A")]))
-    assert result == {"selected": ["a"], "free_text": "", "expanded": []}
+    assert result == {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": []}
 
 
 def test_multi_question_defer_is_per_question(browser):
@@ -523,8 +545,15 @@ def test_multi_question_defer_is_per_question(browser):
     )
     assert result == {
         "answers": [
-            {"selected": ["a"], "free_text": "", "expanded": []},
-            {"selected": [], "free_text": "later", "expanded": [], "deferred": True},
+            {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": [], "visits": 0},
+            {
+                "selected": [],
+                "free_text": "later",
+                "expanded": [],
+                "changed_from": [],
+                "visits": 0,
+                "deferred": True,
+            },
         ]
     }
 
@@ -539,3 +568,168 @@ def test_the_page_offers_defer_only_when_allowed(browser):
     browser(respond)
     run_ask(AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")]))
     assert 'class="pp-defer"' in pages[0].split("<body>", 1)[1]
+
+
+def test_changed_from_reports_abandoned_picks_only(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"selected": ["b"], "changed_from": ["a", "nope", "b", "a"]},
+        }
+    )
+    result = run_ask(
+        AskRequest(question="q", options=[Option(id="a", label="A"), Option(id="b", label="B")])
+    )
+    assert result["changed_from"] == ["a"]
+
+
+def test_a_deferred_answer_keeps_what_was_picked_before_deferring(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"selected": ["a"], "changed_from": ["a"], "deferred": True},
+        }
+    )
+    result = run_ask(
+        AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")])
+    )
+    assert result["selected"] == []
+    assert result["changed_from"] == ["a"]
+
+
+@pytest.mark.parametrize(("raw", "expected"), [(3, 3), (-1, 0), (True, 0), ("2", 0)])
+def test_visits_are_reported_per_question(browser, raw, expected):
+    browser(lambda page: {"kind": "submit", "data": {"answers": [{"visits": raw}]}})
+    result = run_ask(AskRequest(questions=[Question(question="q", allow_free_text=True)]))
+    assert result["answers"][0]["visits"] == expected
+
+
+def test_interaction_signals_can_be_switched_off(browser, monkeypatch):
+    monkeypatch.setattr(ask_module, "SHARE_INTERACTION_SIGNALS", False)
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"answers": [{"selected": ["a"], "changed_from": ["a"], "visits": 2}]},
+        }
+    )
+    result = run_ask(
+        AskRequest(questions=[Question(question="q", options=[Option(id="a", label="A")])])
+    )
+    assert result == {"answers": [{"selected": ["a"], "free_text": "", "expanded": []}]}
+
+
+# A streamed ask: no page runs here, so each test plays the tab itself, fetching steps
+# and posting progress/answers to the session the way the wizard's script does.
+
+
+def _q(question: str, option_id: str = "a") -> Question:
+    return Question(question=question, options=[Option(id=option_id, label="A")])
+
+
+def _session_url(session, path: str) -> str:
+    return f"http://127.0.0.1:{session.port}{path}?t={session.token}"
+
+
+def _get_json(url: str) -> object:
+    with urllib.request.urlopen(url, timeout=5) as response:  # noqa: S310 (loopback)
+        return json.loads(response.read())
+
+
+@pytest.fixture
+def opened(monkeypatch):
+    targets: list[object] = []
+    monkeypatch.setattr(ask_module, "open_in_browser", targets.append)
+    return targets
+
+
+def test_a_streamed_ask_returns_at_once_and_grows_the_page_in_place(opened):
+    session = session_module.get_shared_session()
+    first = run_ask(AskRequest(questions=[_q("one")], more_coming=True))
+    assert first == {"ask_id": first["ask_id"], "answers_so_far": []}
+    assert _get_json(_session_url(session, "/status"))["step_count"] == 1
+
+    run_ask(AskRequest(ask_id=first["ask_id"], questions=[_q("two")], more_coming=True))
+    status = _get_json(_session_url(session, "/status"))
+    assert status["step_count"] == 2
+    assert status["more_coming"] is True
+    assert status["generation"] == 1  # grown, not republished: the tab must not reload
+    added = _get_json(_session_url(session, "/steps") + "&from=1")["steps"]
+    assert len(added) == 1
+    assert 'data-step-index="1"' in added[0]
+    assert len(opened) == 1
+
+    answers = {"answers": [{"selected": ["a"]}, {"selected": ["a"], "free_text": "x"}]}
+    timer = threading.Timer(
+        0.2, _post, (_session_url(session, "/submit"), {"kind": "submit", "data": answers})
+    )
+    timer.start()
+    result = run_ask(AskRequest(ask_id=first["ask_id"]))
+    timer.join()
+    assert [answer["selected"] for answer in result["answers"]] == [["a"], ["a"]]
+    assert result["answers"][1]["free_text"] == "x"
+    assert _get_json(_session_url(session, "/status"))["more_coming"] is False
+    # Finished: the shared tab is free again.
+    assert session.try_claim()
+    session.release()
+
+
+def test_a_streamed_ask_reports_the_answers_so_far(opened):
+    session = session_module.get_shared_session()
+    ask_id = run_ask(AskRequest(questions=[_q("one", "x")], more_coming=True))["ask_id"]
+    progress = {"answers": [{"selected": ["x", "nope"], "changed_from": ["y"]}]}
+    _post(_session_url(session, "/submit"), {"kind": "progress", "data": progress})
+
+    result = run_ask(AskRequest(ask_id=ask_id, questions=[_q("two")], more_coming=True))
+    assert len(result["answers_so_far"]) == 1
+    assert result["answers_so_far"][0]["selected"] == ["x"]
+
+
+def test_cancelling_a_streamed_ask_ends_it(opened):
+    session = session_module.get_shared_session()
+    ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
+    _post(_session_url(session, "/submit"), {"kind": "cancel", "data": {}})
+
+    assert run_ask(AskRequest(ask_id=ask_id, questions=[_q("two")], more_coming=True)) == {
+        "cancelled": True
+    }
+    with pytest.raises(InvalidAsk, match="no open ask"):
+        run_ask(AskRequest(ask_id=ask_id))
+
+
+def test_a_streamed_ask_gets_its_own_tab_when_the_shared_one_is_busy(opened):
+    session = session_module.get_shared_session()
+    assert session.try_claim()
+    try:
+        ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
+        assert f":{session.port}/" not in str(opened[0])
+    finally:
+        session.release()
+    _post(str(opened[0]).replace("/?", "/submit?"), {"kind": "cancel", "data": {}})
+    assert run_ask(AskRequest(ask_id=ask_id)) == {"cancelled": True}
+
+
+def test_an_abandoned_stream_frees_the_shared_tab(opened, monkeypatch):
+    session = session_module.get_shared_session()
+    ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
+    assert not session.try_claim()
+
+    monkeypatch.setattr(ask_module, "_STREAM_IDLE_SECONDS", 0.0)
+    with pytest.raises(InvalidAsk, match="expired"):
+        run_ask(AskRequest(ask_id=ask_id))
+    assert session.try_claim()
+    session.release()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"question": "q", "more_coming": True}, "more_coming needs questions"),
+        ({"ask_id": "x", "question": "q"}, "adds questions"),
+        ({"ask_id": "x", "header": "h"}, "first call"),
+        ({"ask_id": "x", "more_coming": True}, "questions is empty"),
+        ({"ask_id": "x", "questions": [Question(question=" ")]}, r"questions\[0\]"),
+    ],
+)
+def test_rejected_stream_requests(kwargs, match):
+    with pytest.raises(InvalidAsk, match=match):
+        AskRequest(**kwargs).validated()

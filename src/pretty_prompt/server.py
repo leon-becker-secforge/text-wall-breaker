@@ -22,6 +22,7 @@ from pydantic import Field
 
 from .ask import (
     ALLOW_DEFER_DESCRIPTION,
+    SHARE_INTERACTION_SIGNALS,
     AskRequest,
     BrowserUnavailable,
     InvalidAsk,
@@ -82,6 +83,30 @@ instead of `question`/`options`/`multi_select`/`allow_free_text`/`allow_defer`, 
 alongside them.
 The user answers all of them before sending, and the result's `answers` list is in the
 same order, one `{selected, free_text, expanded}` per question."""
+
+_ASK_DESCRIPTION += """
+
+Streamed ask (prototype): with three or more questions, or long bodies, don't make the
+user wait while you write them all. Send the first question(s) with `more_coming: true`;
+the page opens and the call returns {"ask_id", "answers_so_far": []} at once. Then call
+again with that `ask_id`, the next question(s) and `more_coming: true` for each further
+chunk; the page grows in place, and each such call returns the answers to the questions
+the user has reached so far (the current one may still be blank or change). Use them only
+to adjust the questions you haven't sent yet. The last call sets `ask_id` and leaves
+`more_coming` unset (its `questions` may be empty); only it waits, and it returns the
+usual {"answers": [...]} for every question sent. A call may return {"cancelled": true}
+instead: then stop, and send nothing more. Short asks stay a single call."""
+
+# Only described when returned, so an agent never reads about fields it won't get.
+if SHARE_INTERACTION_SIGNALS:
+    _ASK_DESCRIPTION += """
+
+Every answer also has `changed_from`: ids picked at some point and then abandoned (not in
+`selected`), in the order first picked. Each entry of `answers` also has `visits`: how
+often that question was shown, 1 if the user never came back to it. These are weak
+hints about how the answer was reached. Use them to decide what to ask next, e.g. a
+follow-up on the option given up; never quote them back to the user or read feelings
+into them."""
 
 _SHOW_DESCRIPTION = """Show the user a formatted result in a local browser page (prototype).
 
@@ -188,6 +213,23 @@ async def ask(
             "answers with it in view. A long one collapses behind a Context toggle."
         ),
     ] = "",
+    more_coming: Annotated[
+        bool,
+        Field(
+            description="Prototype, questions only: more questions follow in later "
+            "calls. The page opens with these and the call returns {ask_id, "
+            "answers_so_far} at once, so the user starts answering while you write the "
+            "rest. See the streamed ask section of this tool's description."
+        ),
+    ] = False,
+    ask_id: Annotated[
+        str | None,
+        Field(
+            description="Prototype: the ask_id a more_coming call returned. Appends "
+            "questions to that open page instead of opening a new one; only questions, "
+            "more_coming and timeout_seconds apply."
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     request = AskRequest(
         question=question,
@@ -198,6 +240,8 @@ async def ask(
         timeout_seconds=timeout_seconds,
         questions=questions,
         header=header,
+        more_coming=more_coming,
+        ask_id=ask_id,
     )
     try:
         request.validated()

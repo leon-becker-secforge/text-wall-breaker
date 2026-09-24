@@ -52,6 +52,7 @@ def _handle_submit_payload(
     raw: bytes,
     respond: Callable[[int, bytes], None],
     deliver: Callable[[Submission], None],
+    progress: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
     """Parse one POST /submit body and act on it via `respond`/`deliver`.
 
@@ -85,6 +86,15 @@ def _handle_submit_payload(
             save_theme(theme)
         respond(204, b"")
         return
+    if kind == "progress":
+        # A streamed ask's page reporting the answers so far (see SessionListener's
+        # `progress`). Never consumes the submission; a listener with nowhere to keep
+        # it just acknowledges it.
+        data = payload.get("data")
+        if progress is not None and isinstance(data, dict):
+            progress(data)
+        respond(204, b"")
+        return
     # "submit"/"cancel" are ask's answer kinds; "acknowledge" is show's — see
     # show.run_show. All three are "the one submission this listener exists to
     # collect", handled identically from here on; only the caller distinguishes them
@@ -94,8 +104,10 @@ def _handle_submit_payload(
         return
 
     data = payload.get("data")
-    respond(200, b'{"ok":true}')
+    # Stored before the page is told it arrived, so "ok" never outruns the answer: a
+    # streamed ask checks for a cancel whenever the agent's next call lands.
     deliver(Submission(kind=kind, data=data if isinstance(data, dict) else {}))
+    respond(200, b'{"ok":true}')
 
 
 class _Server(HTTPServer):
@@ -258,8 +270,13 @@ class _SessionHandler(BaseHTTPRequestHandler):
             self._respond(200, page, content_type="text/html; charset=utf-8")
             return
         if parts.path == "/status":
-            _page, generation = session.current_page()
-            body = json.dumps({"generation": generation}).encode("utf-8")
+            body = json.dumps(session.status()).encode("utf-8")
+            self._respond(200, body)
+            return
+        if parts.path == "/steps":
+            raw_start = parse_qs(parts.query).get("from", ["0"])[0]
+            start = int(raw_start) if raw_start.isdigit() else 0
+            body = json.dumps(session.steps_from(start)).encode("utf-8")
             self._respond(200, body)
             return
         self._respond(404)
@@ -277,7 +294,7 @@ class _SessionHandler(BaseHTTPRequestHandler):
             self._respond(403, b'{"error":"bad token"}')
             return
 
-        _handle_submit_payload(raw, self._respond, session.deliver)
+        _handle_submit_payload(raw, self._respond, session.deliver, session.set_progress)
 
 
 class SessionListener:
@@ -289,7 +306,10 @@ class SessionListener:
     calls `publish()` with each new question, already-open tab notices the change itself
     — the page polls `GET /status` once it is done with the question it has, and reloads
     when the generation number moves, landing on `GET /` for the new one (see page.py's
-    `startReusePolling`). Concurrent `ask` calls cannot share one tab without one
+    `startReusePolling`). A streamed `ask` (`more_coming`) instead grows the page it
+    already published via `extend()`: the open tab fetches the new steps from
+    `GET /steps` and appends them without a reload, so nothing already answered is lost.
+    Concurrent `ask` calls cannot share one tab without one
     clobbering the other's in-progress question, so only one caller may hold this at a
     time — see `try_claim`/`release` — and a caller that can't claim it falls back to its
     own one-off `LoopbackListener` tab instead of blocking on this one.
@@ -304,6 +324,11 @@ class SessionListener:
         self._generation = 0
         self._submission: Submission | None = None
         self._answered = threading.Event()
+        # A streamed ask's step fragments (every step, from 0), whether more are coming,
+        # and the latest answers-so-far the page reported. Reset by publish().
+        self._steps: list[str] = []
+        self._more_coming = False
+        self._progress: dict[str, Any] | None = None
         self.tab_opened = False
         # Port 0 lets the OS pick a free port, same reasoning as LoopbackListener.
         self._httpd = _SessionServer(("127.0.0.1", 0), _SessionHandler)
@@ -340,19 +365,72 @@ class SessionListener:
         with self._state_lock:
             return self._page, self._generation
 
-    def publish(self, build_html: Callable[[int], str]) -> None:
+    def publish(
+        self,
+        build_html: Callable[[int], str],
+        *,
+        steps: list[str] | None = None,
+        more_coming: bool = False,
+    ) -> None:
         """Swap in the next question's page, built from the generation it will carry.
 
         `build_html` gets the new generation number so it can be baked into the page's
         own `GENERATION` — a page it matches means it's already showing this content, no
         reload needed; anything else means a newer question is waiting.
+
+        `steps`/`more_coming` are only set by a streamed ask: the page's step fragments
+        so far, for `extend()` to append to.
         """
         with self._state_lock:
             self._generation += 1
             self._page = build_html(self._generation).encode("utf-8")
             self._submission = None
+            self._steps = list(steps or [])
+            self._more_coming = more_coming
+            self._progress = None
         self._answered.clear()
         self.note_activity()
+
+    def extend(
+        self, build_html: Callable[[int], str], steps: list[str], *, more_coming: bool
+    ) -> None:
+        """Add `steps` to the page already published, without bumping the generation.
+
+        The open tab picks them up from `GET /steps` and appends them in place. The
+        whole page is rebuilt too, at the same generation, so a manual reload still
+        shows every step so far (though not what was typed into them).
+        """
+        with self._state_lock:
+            self._page = build_html(self._generation).encode("utf-8")
+            self._steps.extend(steps)
+            self._more_coming = more_coming
+        self.note_activity()
+
+    def status(self) -> dict[str, Any]:
+        with self._state_lock:
+            return {
+                "generation": self._generation,
+                "step_count": len(self._steps),
+                "more_coming": self._more_coming,
+            }
+
+    def steps_from(self, start: int) -> dict[str, Any]:
+        with self._state_lock:
+            return {"steps": self._steps[start:], "more_coming": self._more_coming}
+
+    def set_progress(self, data: dict[str, Any]) -> None:
+        with self._state_lock:
+            self._progress = data
+
+    def progress(self) -> dict[str, Any] | None:
+        """The answers-so-far the page last reported for a streamed ask, if any."""
+        with self._state_lock:
+            return self._progress
+
+    def submission(self) -> Submission | None:
+        """The current page's submission if one has arrived, without waiting for it."""
+        with self._state_lock:
+            return self._submission
 
     def deliver(self, submission: Submission) -> None:
         with self._state_lock:
