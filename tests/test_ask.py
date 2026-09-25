@@ -5,6 +5,7 @@ import threading
 import time
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -647,7 +648,7 @@ def _session_url(session, path: str) -> str:
     return f"http://127.0.0.1:{session.port}{path}?t={session.token}"
 
 
-def _get_json(url: str) -> object:
+def _get_json(url: str) -> dict[str, Any]:
     with urllib.request.urlopen(url, timeout=5) as response:  # noqa: S310 (loopback)
         return json.loads(response.read())
 
