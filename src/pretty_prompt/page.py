@@ -440,9 +440,11 @@ __FREE_TEXT__
   var SUBMIT_URL = __SUBMIT_URL__;
   var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var THEME_KEY = 'no-text-wall:theme';
-  // So the tab bar shows whether this question is done without switching to the tab —
-  // useful once several are open, or once one is answered and left to wait its turn.
+  // So the tab bar shows whether this question is open or done without switching to the
+  // tab — useful once several are open, or once one is answered and left to wait its
+  // turn. The pending mark goes on right away; submit/cancel below replace it.
   var BASE_TITLE = document.title;
+  document.title = '\\u2753 ' + BASE_TITLE;
   // Set only when this tab is reused across `ask` calls (see listener.py's
   // SessionListener) — null on the ordinary one-shot page, where startReusePolling()
   // below is then a no-op.
@@ -809,9 +811,11 @@ __STEPS__
   var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var STEP_COUNT = __STEP_COUNT__;
   var THEME_KEY = 'no-text-wall:theme';
-  // So the tab bar shows whether this question is done without switching to the tab —
-  // useful once several are open, or once one is answered and left to wait its turn.
+  // So the tab bar shows whether this question is open or done without switching to the
+  // tab — useful once several are open, or once one is answered and left to wait its
+  // turn. The pending mark goes on right away; submit/cancel below replace it.
   var BASE_TITLE = document.title;
+  document.title = '\\u2753 ' + BASE_TITLE;
   // Set only when this tab is reused across `ask` calls (see listener.py's
   // SessionListener) — null on the ordinary one-shot page, where startReusePolling()
   // below is then a no-op.
