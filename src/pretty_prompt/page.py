@@ -26,6 +26,7 @@ import json
 import os
 from importlib import resources
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .markdown import render_inline, render_markdown
 
@@ -1628,7 +1629,12 @@ def _filename_base(title: str) -> str:
     return stem or "report"
 
 
-def _render_deck(slides: list[str], header: str | None, footer: str | None) -> tuple[str, str]:
+def _render_deck(
+    slides: list[str],
+    header: str | None,
+    footer: str | None,
+    asset_base_url: str | None = None,
+) -> tuple[str, str]:
     """Return (content_html, raw_markdown) for a deck-mode `show` call.
 
     Each of `header`/`footer`/every entry of `slides` is its own independent Markdown
@@ -1637,8 +1643,8 @@ def _render_deck(slides: list[str], header: str | None, footer: str | None) -> t
     slides on a `---` line; that line is never parsed back (there is no deck-from-Markdown
     path), it only has to read sensibly as a saved file.
     """
-    header_html = render_markdown(header) if header else ""
-    footer_html = render_markdown(footer) if footer else ""
+    header_html = render_markdown(header, asset_base_url=asset_base_url) if header else ""
+    footer_html = render_markdown(footer, asset_base_url=asset_base_url) if footer else ""
     total = len(slides)
     initial_progress = round(100 / total) if total else 0
     progress_html = (
@@ -1653,7 +1659,7 @@ def _render_deck(slides: list[str], header: str | None, footer: str | None) -> t
     slide_parts = []
     for index, slide in enumerate(slides):
         active = " is-active" if index == 0 else ""
-        slide_html = render_markdown(slide)
+        slide_html = render_markdown(slide, asset_base_url=asset_base_url)
         slide_parts.append(f'<section class="deck-slide card{active}">{slide_html}</section>')
     nav_html = (
         '<div class="deck-nav">'
@@ -1717,10 +1723,11 @@ def build_show_page(
     if acknowledge_button:
         ack_html = '    <button type="button" id="pp-ack">Acknowledge</button>'
 
+    asset_base_url = _asset_base_url(status_url)
     if slides is not None:
-        content_html, raw_content = _render_deck(slides, header, footer)
+        content_html, raw_content = _render_deck(slides, header, footer, asset_base_url)
     else:
-        content_html = render_markdown(content)
+        content_html = render_markdown(content, asset_base_url=asset_base_url)
         raw_content = content
 
     return (
@@ -1835,6 +1842,21 @@ def _has_image_body(option: dict[str, object]) -> bool:
     return isinstance(body, str) and "![" in body
 
 
+def _asset_base_url(status_url: str | None) -> str | None:
+    """The `/asset?t=...` URL local `file://` images should rewrite to, or None.
+
+    Derived from `status_url` rather than taking its own parameter: the two are set
+    together exactly when this page is served by a `listener.SessionListener` (see
+    `build_page`'s docstring) — the same, and only, case where a `file://` image needs
+    rewriting at all, since a plain `file://`-opened page loads one directly. Same host,
+    port and token as `status_url`, just a different path.
+    """
+    if status_url is None:
+        return None
+    split = urlsplit(status_url)
+    return f"{split.scheme}://{split.netloc}/asset?{split.query}"
+
+
 def _is_gallery(options: list[dict[str, object]]) -> bool:
     """Two or more image-bearing options make this a gallery, auto-detected the same way
     a long body already auto-collapses into a drawer — nothing for the caller to flag.
@@ -1853,6 +1875,7 @@ def _render_options(
     name: str = "pp-option",
     data_step: str | None = None,
     gallery: bool = False,
+    asset_base_url: str | None = None,
 ) -> str:
     if not options:
         return ""
@@ -1882,9 +1905,8 @@ def _render_options(
         # caveat has to stay visible without opening anything. Inline rendering only, so
         # block syntax in a caveat stays literal text instead of breaking the row.
         caveat = option.get("caveat")
-        caveat_html = (
-            f'<div class="pp-option-caveat">{render_inline(str(caveat))}</div>' if caveat else ""
-        )
+        caveat_inline = render_inline(str(caveat), asset_base_url=asset_base_url) if caveat else ""
+        caveat_html = f'<div class="pp-option-caveat">{caveat_inline}</div>' if caveat else ""
 
         if not body:
             rows.append(
@@ -1893,7 +1915,7 @@ def _render_options(
             )
             continue
 
-        body_html = render_markdown(str(body))
+        body_html = render_markdown(str(body), asset_base_url=asset_base_url)
         body_div = f'<div class="pp-option-body">{body_html}</div>'
 
         # A gallery never drawers its images behind a click — the whole point is seeing
@@ -2072,8 +2094,11 @@ def build_page(
         hint = "Write an answer."
 
     gallery = _is_gallery(options)
-    question_html = render_markdown(question)
-    options_html = _render_options(options, multi_select, gallery=gallery)
+    asset_base_url = _asset_base_url(status_url)
+    question_html = render_markdown(question, asset_base_url=asset_base_url)
+    options_html = _render_options(
+        options, multi_select, gallery=gallery, asset_base_url=asset_base_url
+    )
 
     return (
         _TEMPLATE.replace("__CSS__", css)
@@ -2114,8 +2139,8 @@ def _with_defer(question_block: str, allow_defer: bool) -> str:
     return f'<div class="pp-question-row">{question_block}{_DEFER_CONTROL}</div>\n{_DEFER_BANNER}'
 
 
-def _render_step(index: int, spec: dict[str, object]) -> str:
-    question_html = render_markdown(str(spec.get("question", "")))
+def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None = None) -> str:
+    question_html = render_markdown(str(spec.get("question", "")), asset_base_url=asset_base_url)
     raw_options = spec.get("options")
     options = list(raw_options) if isinstance(raw_options, list) else []
     multi_select = bool(spec.get("multi_select"))
@@ -2125,6 +2150,7 @@ def _render_step(index: int, spec: dict[str, object]) -> str:
         name=f"pp-option-step-{index}",
         data_step=str(index),
         gallery=_is_gallery(options),
+        asset_base_url=asset_base_url,
     )
     free_text_html = ""
     if spec.get("allow_free_text", True):
@@ -2148,17 +2174,23 @@ def _render_step(index: int, spec: dict[str, object]) -> str:
     )
 
 
-def build_step_fragments(questions: list[dict[str, object]], start: int = 0) -> list[str]:
+def build_step_fragments(
+    questions: list[dict[str, object]], start: int = 0, asset_base_url: str | None = None
+) -> list[str]:
     """One `<section class="pp-step">` per question, numbered from `start`.
 
     What `build_multi_page` puts in the page, and what a streamed ask's open tab appends
     later: a step's index is baked into its input names and ids, so a step added after
     the first `start` has to be numbered as the page will hold it.
+
+    `asset_base_url` is `listener.SessionListener.asset_base_url` for a streamed ask
+    (always session-backed — see `ask._stream_page`/`_start_stream`/`_continue_stream`),
+    or the value `build_multi_page` derived from its own `status_url`.
     """
-    return [_render_step(start + i, spec) for i, spec in enumerate(questions)]
+    return [_render_step(start + i, spec, asset_base_url) for i, spec in enumerate(questions)]
 
 
-def _render_header(header: str) -> str:
+def _render_header(header: str, asset_base_url: str | None = None) -> str:
     """The multi-question page's header block, or "" if there is none.
 
     Muted text with no box, above the progress bar: picked over a clipped card and an
@@ -2170,7 +2202,7 @@ def _render_header(header: str) -> str:
     """
     if not header.strip():
         return ""
-    header_html = render_markdown(header)
+    header_html = render_markdown(header, asset_base_url=asset_base_url)
     if not _is_long_body(header_html):
         return f'  <div class="pp-header">{header_html}</div>'
     lists = header_html.count("<ul>") + header_html.count("<ol>")
@@ -2226,8 +2258,9 @@ def build_multi_page(
         css += _accent_css(accent)
 
     total = len(questions)
-    steps_html = "\n".join(build_step_fragments(questions))
-    header_html = _render_header(header)
+    asset_base_url = _asset_base_url(status_url)
+    steps_html = "\n".join(build_step_fragments(questions, asset_base_url=asset_base_url))
+    header_html = _render_header(header, asset_base_url=asset_base_url)
     initial_progress = round(100 / total) if total else 0
     initial_label = f"Question 1 of {total}" + (", more coming" if more_coming else "")
     if total > 1:

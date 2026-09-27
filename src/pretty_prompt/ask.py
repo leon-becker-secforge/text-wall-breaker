@@ -589,7 +589,7 @@ def _start_stream(request: AskRequest) -> dict[str, Any]:
     try:
         generation = session.publish(
             _stream_page(stream, request.timeout_seconds, more_coming=True),
-            steps=build_step_fragments(_step_specs(steps)),
+            steps=build_step_fragments(_step_specs(steps), asset_base_url=session.asset_base_url),
             more_coming=True,
         )
         delivered = session.show_in_tab(generation, open_in_browser)
@@ -626,7 +626,9 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
     stream.steps.extend(added)
     stream.session.extend(
         _stream_page(stream, request.timeout_seconds, more_coming=request.more_coming),
-        build_step_fragments(_step_specs(added), start),
+        build_step_fragments(
+            _step_specs(added), start, asset_base_url=stream.session.asset_base_url
+        ),
         more_coming=request.more_coming,
     )
     if request.more_coming:

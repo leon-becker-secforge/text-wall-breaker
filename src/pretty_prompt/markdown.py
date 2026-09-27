@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import html
 import re
+from urllib.parse import quote
 
 __all__ = ["render_inline", "render_markdown"]
 
@@ -95,19 +96,40 @@ def _safe_url(url: str) -> str | None:
     return None
 
 
-def render_inline(text: str) -> str:
-    """Render the inline span constructs in `text`, escaping everything else."""
+def render_inline(text: str, *, asset_base_url: str | None = None) -> str:
+    """Render the inline span constructs in `text`, escaping everything else.
+
+    `asset_base_url`, if set, is where a `file://` image is rewritten to instead of
+    embedding the `file://` URL as-is — see `_render_match`'s image branch for why.
+    """
     out: list[str] = []
     pos = 0
     for match in _INLINE.finditer(text):
         out.append(_escape(text[pos : match.start()]))
-        out.append(_render_match(match))
+        out.append(_render_match(match, asset_base_url))
         pos = match.end()
     out.append(_escape(text[pos:]))
     return "".join(out)
 
 
-def _render_match(match: re.Match[str]) -> str:
+def _image_src(url: str, asset_base_url: str | None) -> str:
+    """The `src` to embed for image `url`, rewriting a `file://` one if asked to.
+
+    A page opened straight from disk (`file://`) can load a `file://` image with no
+    help; a page served over `http://` (a reused `ask`/`show` tab — see
+    `listener.SessionListener`) cannot, since browsers refuse a `file://` subresource
+    referenced from a non-`file://` document. `asset_base_url` is that session's
+    `/asset?t=...` route (see `SessionListener.asset_base_url`/`read_asset`), which
+    reads the file itself and streams it back over the same `http://` origin the page
+    already trusts. `asset_base_url` is None exactly when there is no such session — the
+    ordinary `file://`-opened page — where the raw URL already works.
+    """
+    if asset_base_url is not None and url.lower().startswith("file://"):
+        return f"{asset_base_url}&path={quote(url[len('file://') :], safe='')}"
+    return url
+
+
+def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
     if match.group("tick"):
         # Code spans are escaped but not recursed into: backticks win over every other
         # inline marker, so `**x**` in code stays as typed.
@@ -117,7 +139,7 @@ def _render_match(match: re.Match[str]) -> str:
         value = match.group("badge_value").lower()
         if value not in _BADGE_VALUES:
             return _escape(match.group(0))
-        text = render_inline(match.group("badge_text"))
+        text = render_inline(match.group("badge_text"), asset_base_url=asset_base_url)
         return f'<span class="badge" data-axis="severity" data-value="{value}">{text}</span>'
 
     if match.group("img_url") is not None:
@@ -125,23 +147,26 @@ def _render_match(match: re.Match[str]) -> str:
         alt = _escape(match.group("img_alt"))
         if url is None:
             return _escape(match.group(0))
-        return f'<img src="{_escape(url)}" alt="{alt}">'
+        src = _image_src(url, asset_base_url)
+        return f'<img src="{_escape(src)}" alt="{alt}">'
 
     if match.group("link_url") is not None:
         url = _safe_url(match.group("link_url"))
         if url is None:
             return _escape(match.group(0))
-        return f'<a href="{_escape(url)}">{render_inline(match.group("link_text"))}</a>'
+        link_text = render_inline(match.group("link_text"), asset_base_url=asset_base_url)
+        return f'<a href="{_escape(url)}">{link_text}</a>'
 
     bold = match.group("b_text") or match.group("ub_text")
     if bold is not None:
-        return f"<strong>{render_inline(bold)}</strong>"
+        return f"<strong>{render_inline(bold, asset_base_url=asset_base_url)}</strong>"
 
     if match.group("s"):
-        return f"<del>{render_inline(match.group('s_text'))}</del>"
+        s_text = render_inline(match.group("s_text"), asset_base_url=asset_base_url)
+        return f"<del>{s_text}</del>"
 
     italic = match.group("i_text") or match.group("ui_text")
-    return f"<em>{render_inline(italic)}</em>"
+    return f"<em>{render_inline(italic, asset_base_url=asset_base_url)}</em>"
 
 
 def _split_row(line: str) -> list[str]:
@@ -172,22 +197,33 @@ def _is_table_separator(line: str) -> bool:
     return bool(cells) and all(_TABLE_SEPARATOR_CELL.match(cell) for cell in cells)
 
 
-def _render_table_row(tag: str, cells: list[str], aligns: list[str | None]) -> str:
+def _render_table_row(
+    tag: str, cells: list[str], aligns: list[str | None], asset_base_url: str | None
+) -> str:
     rendered = []
     for index, cell in enumerate(cells):
         align = aligns[index] if index < len(aligns) else None
         style = f' style="text-align:{align}"' if align else ""
-        rendered.append(f"<{tag}{style}>{render_inline(cell)}</{tag}>")
+        cell_html = render_inline(cell, asset_base_url=asset_base_url)
+        rendered.append(f"<{tag}{style}>{cell_html}</{tag}>")
     return "<tr>" + "".join(rendered) + "</tr>"
 
 
-def _render_table(header: list[str], aligns: list[str | None], rows: list[list[str]]) -> str:
-    thead = f"<thead>{_render_table_row('th', header, aligns)}</thead>"
-    tbody = "<tbody>" + "".join(_render_table_row("td", row, aligns) for row in rows) + "</tbody>"
+def _render_table(
+    header: list[str],
+    aligns: list[str | None],
+    rows: list[list[str]],
+    asset_base_url: str | None,
+) -> str:
+    thead = f"<thead>{_render_table_row('th', header, aligns, asset_base_url)}</thead>"
+    body_rows = "".join(_render_table_row("td", row, aligns, asset_base_url) for row in rows)
+    tbody = f"<tbody>{body_rows}</tbody>"
     return f"<table>{thead}{tbody}</table>"
 
 
-def _render_list(entries: list[tuple[int, str, str]], start: int) -> tuple[str, int]:
+def _render_list(
+    entries: list[tuple[int, str, str]], start: int, asset_base_url: str | None
+) -> tuple[str, int]:
     """Render one `<ul>`/`<ol>` from `entries` starting at `start`, returning (html, next).
 
     `entries` is a flat (indent, tag, text) sequence for a contiguous run of list lines;
@@ -201,10 +237,10 @@ def _render_list(entries: list[tuple[int, str, str]], start: int) -> tuple[str, 
     items: list[str] = []
     index = start
     while index < len(entries) and entries[index][0] == indent and entries[index][1] == tag:
-        content = render_inline(entries[index][2])
+        content = render_inline(entries[index][2], asset_base_url=asset_base_url)
         index += 1
         if index < len(entries) and entries[index][0] > indent:
-            nested_html, index = _render_list(entries, index)
+            nested_html, index = _render_list(entries, index, asset_base_url)
             content += nested_html
         items.append(f"<li>{content}</li>")
     return f"<{tag}>{''.join(items)}</{tag}>", index
@@ -232,8 +268,11 @@ def _render_diff_block(body_lines: list[str]) -> str:
     return '<div class="pp-diff">' + "".join(rows) + "</div>"
 
 
-def render_markdown(text: str) -> str:
-    """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input."""
+def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
+    """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input.
+
+    `asset_base_url` is threaded down to every inline render — see `_image_src`.
+    """
     if not text or not text.strip():
         return ""
 
@@ -245,20 +284,22 @@ def render_markdown(text: str) -> str:
 
     def flush_paragraph() -> None:
         if paragraph:
-            out.append("<p>" + "<br>".join(render_inline(line) for line in paragraph) + "</p>")
+            rendered = (render_inline(line, asset_base_url=asset_base_url) for line in paragraph)
+            out.append("<p>" + "<br>".join(rendered) + "</p>")
             paragraph.clear()
 
     def flush_list() -> None:
         if list_entries:
             index = 0
             while index < len(list_entries):
-                html, index = _render_list(list_entries, index)
+                html, index = _render_list(list_entries, index, asset_base_url)
                 out.append(html)
             list_entries.clear()
 
     def flush_quote() -> None:
         if quote_lines:
-            body = "<br>".join(render_inline(line) for line in quote_lines)
+            rendered = (render_inline(line, asset_base_url=asset_base_url) for line in quote_lines)
+            body = "<br>".join(rendered)
             out.append(f"<blockquote><p>{body}</p></blockquote>")
             quote_lines.clear()
 
@@ -287,7 +328,8 @@ def render_markdown(text: str) -> str:
             elif language == "verdict":
                 # Prose, not code: run through inline rendering same as a paragraph
                 # would be, just wrapped for base.css's `[data-role="verdict"]` style.
-                inner = "<br>".join(render_inline(line) for line in body)
+                rendered = (render_inline(line, asset_base_url=asset_base_url) for line in body)
+                inner = "<br>".join(rendered)
                 out.append(f'<div data-role="verdict">{inner}</div>')
             elif language == "mermaid":
                 # Rendered client-side by page.py's mermaid loader, which only appears on
@@ -311,7 +353,8 @@ def render_markdown(text: str) -> str:
         if heading is not None:
             flush_all()
             level = len(heading.group(1))
-            out.append(f"<h{level}>{render_inline(heading.group(2))}</h{level}>")
+            heading_html = render_inline(heading.group(2), asset_base_url=asset_base_url)
+            out.append(f"<h{level}>{heading_html}</h{level}>")
             index += 1
             continue
 
@@ -335,7 +378,7 @@ def render_markdown(text: str) -> str:
             while index < len(lines) and lines[index].strip() and "|" in lines[index]:
                 body_rows.append(_split_row(lines[index]))
                 index += 1
-            out.append(_render_table(header, aligns, body_rows))
+            out.append(_render_table(header, aligns, body_rows, asset_base_url))
             continue
 
         bullet = _BULLET.match(line)

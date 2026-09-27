@@ -25,12 +25,31 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 from .page import save_theme
 
 __all__ = ["LoopbackListener", "SessionListener", "Submission"]
+
+# Extensions `GET /asset` (see `SessionListener.read_asset`) will actually read and
+# serve, each mapped to the Content-Type it's served as. A closed set for the same
+# reason `markdown._SAFE_SCHEMES` is one: the route reads whatever local path the page
+# asks for, gated only by the session token, so it must not double as a way to read an
+# arbitrary file off disk just because it happens to sit next to a real screenshot.
+_ASSET_CONTENT_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".svg": "image/svg+xml",
+}
+
+# Comfortably above a full-resolution screenshot, the actual use case this exists for;
+# not so high that a bad path turns the route into a memory hog.
+_MAX_ASSET_BYTES = 25 * 1024 * 1024
 
 # Bodies larger than this are rejected unread. Nothing legitimate approaches it — a
 # submission is a handful of option ids and a free-text box.
@@ -305,6 +324,11 @@ class _SessionHandler(BaseHTTPRequestHandler):
             body = json.dumps(session.steps_from(start)).encode("utf-8")
             self._respond(200, body)
             return
+        if parts.path == "/asset":
+            path = parse_qs(parts.query).get("path", [""])[0]
+            status, body, content_type = session.read_asset(path)
+            self._respond(status, body, content_type=content_type or "application/octet-stream")
+            return
         self._respond(404)
 
     def do_POST(self) -> None:
@@ -393,6 +417,41 @@ class SessionListener:
     @property
     def page_url(self) -> str:
         return f"http://127.0.0.1:{self.port}/?t={self._token}"
+
+    @property
+    def asset_base_url(self) -> str:
+        """Where the page can fetch a local image through, instead of a `file://` URL.
+
+        Passed to `markdown.render_markdown`/`render_inline` as `asset_base_url` — see
+        `_image_src` there for why a page this session serves (over `http://`) needs
+        this instead of the `file://` URL an agent wrote working as-is.
+        """
+        return f"http://127.0.0.1:{self.port}/asset?t={self._token}"
+
+    def read_asset(self, path: str) -> tuple[int, bytes, str]:
+        """Read a local image file for `GET /asset`, returning (status, body, content_type).
+
+        `path` is the absolute filesystem path a `file://` image URL held (see
+        `markdown._image_src`) — this is what stands in for the browser loading it
+        directly, which it refuses to do from an `http://` document. Restricted to a
+        closed set of image extensions and a size cap (see `_ASSET_CONTENT_TYPES`/
+        `_MAX_ASSET_BYTES`): the token gates who can reach this route at all, the same
+        as `/submit`, but that's no reason to let it double as an arbitrary local file
+        read.
+        """
+        candidate = Path(path)
+        content_type = _ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
+        if content_type is None or not candidate.is_absolute():
+            return 404, b"", ""
+        try:
+            if not candidate.is_file():
+                return 404, b"", ""
+            if candidate.stat().st_size > _MAX_ASSET_BYTES:
+                return 413, b"", ""
+            data = candidate.read_bytes()
+        except OSError:
+            return 404, b"", ""
+        return 200, data, content_type
 
     def current_page(self) -> tuple[bytes, int]:
         with self._state_lock:
