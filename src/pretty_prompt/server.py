@@ -55,6 +55,10 @@ options need Markdown bodies, or when it should show an image.
 
 `question` and each option's `body` are Markdown. Raw HTML is not rendered. Images use
 Markdown image syntax with an absolute file:// URL, e.g. `![diagram](file:///tmp/x.png)`.
+A paragraph break is a real newline in the string you pass, same as any other Markdown
+field here — not the two-character `\n` escape sequence, which prints as literal text if
+typed outside a fenced code block (it is still recovered as a line break, but a real
+newline is what to write).
 
 A long body sits behind a click the user often never makes, even for the option they
 pick. Anything that could flip the choice (a precondition, a cost, a conflict with an
@@ -121,7 +125,8 @@ Opens a page with `content` rendered as Markdown. By default returns immediately
 there's no answer to wait for. Use this instead of a long terminal reply when the
 content is a report, a comparison, a diff, a long table, or anything else that would
 otherwise be a wall of text: the same Markdown subset `ask` renders (headings, lists,
-tables, code, images, blockquotes) applies here too.
+tables, code, images, blockquotes) applies here too, including that a paragraph break is
+a real newline, not a typed `\n` escape.
 
 Reuses the same browser tab `ask` uses, so a `show` and an `ask` in the same session
 don't pile up separate tabs.

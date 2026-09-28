@@ -26,6 +26,14 @@ page never sees a string it has to trust.
 Line breaks inside a paragraph are preserved as `<br>`, which is GitHub's behaviour
 rather than CommonMark's (where they collapse to a space). A prompt is written in a JSON
 string with explicit newlines in it; honouring them is what the author meant.
+
+A literal two-character `\n` (backslash then `n`, not a real newline byte) is treated the
+same way, outside fenced blocks — see `_expand_literal_newlines`. An agent authoring a
+tool-call argument has no interpreter turning `\n` into a control character first, so it
+sometimes writes the escape where it means a line break; without this, that text would
+print as a visible `\n` instead. The one gap this doesn't cover: a literal `\n` shown
+deliberately inside an inline code span (as this docstring just did) is still expanded,
+since the expansion runs before inline parsing knows where the code spans are.
 """
 
 from __future__ import annotations
@@ -47,6 +55,10 @@ _FENCE = re.compile(r"^```\s*([A-Za-z0-9_+-]*)\s*$")
 _BULLET = re.compile(r"^([ \t]*)[-*]\s+(.*)$")
 _ORDERED = re.compile(r"^([ \t]*)\d+[.)]\s+(.*)$")
 _QUOTE = re.compile(r"^>\s?(.*)$")
+
+# The two-character escape a literal `\n` is authored as, distinct from the real newline
+# byte `split("\n")` below already breaks lines on.
+_LITERAL_NEWLINE = re.compile(r"\\n")
 
 # A GFM pipe-table separator cell: optional colons around one or more dashes, e.g. `---`,
 # `:---`, `---:` or `:---:`. The row this belongs to is what tells a table apart from a
@@ -268,6 +280,27 @@ def _render_diff_block(body_lines: list[str]) -> str:
     return '<div class="pp-diff">' + "".join(rows) + "</div>"
 
 
+def _expand_literal_newlines(lines: list[str]) -> list[str]:
+    """Split a literal `\\n` escape into a real line break, everywhere except a fence.
+
+    Skips fenced blocks (tracked the same way the main loop tracks them, via `_FENCE`)
+    because a literal `\\n` there is often the point — regex source, JSON shown as text —
+    and expanding it would corrupt code the author meant literally.
+    """
+    out: list[str] = []
+    in_fence = False
+    for line in lines:
+        if _FENCE.match(line.strip()):
+            in_fence = not in_fence
+            out.append(line)
+            continue
+        if in_fence:
+            out.append(line)
+            continue
+        out.extend(_LITERAL_NEWLINE.split(line))
+    return out
+
+
 def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
     """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input.
 
@@ -277,6 +310,7 @@ def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
         return ""
 
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    lines = _expand_literal_newlines(lines)
     out: list[str] = []
     paragraph: list[str] = []
     list_entries: list[tuple[int, str, str]] = []

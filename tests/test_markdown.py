@@ -18,6 +18,19 @@ def test_blank_line_separates_paragraphs():
     assert render_markdown("one\n\ntwo") == "<p>one</p><p>two</p>"
 
 
+def test_literal_backslash_n_escape_is_treated_as_a_line_break():
+    assert render_markdown("one\\ntwo") == "<p>one<br>two</p>"
+
+
+def test_literal_backslash_n_n_escape_separates_paragraphs():
+    assert render_markdown("one\\n\\ntwo") == "<p>one</p><p>two</p>"
+
+
+def test_literal_backslash_n_inside_a_fence_is_not_expanded():
+    out = render_markdown("```\na\\nb\n```")
+    assert out == '<pre class="code-block"><code>a\\nb</code></pre>'
+
+
 @pytest.mark.parametrize("level", range(1, 7))
 def test_headings(level):
     hashes = "#" * level
