@@ -3,6 +3,26 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0] - 2026-09-28
+
+### Added
+
+- A pending mark (❓) on an `ask`'s tab title as soon as the page loads, so the tab bar
+  shows a question is open and waiting, not just an ordinary tab, without switching to
+  it. Submit/cancel still overwrite it exactly as before.
+
+### Fixed
+
+- A literal two-character `\n` escape typed in a `question`/`content`/`body` field
+  rendered as visible `\n` text instead of a line break. It's now expanded into a real
+  line break outside fenced code blocks, where a literal `\n` is often the point (regex
+  source, JSON shown as text) and expanding it would corrupt code meant literally.
+- A reused-tab `ask`/`show` session serves its page over `http://127.0.0.1`, where a
+  browser refuses to load a `file://` image embedded in Markdown — it silently rendered
+  as blank space. The server now streams a local image back over that same `http://`
+  origin instead of embedding the `file://` URL as-is; a one-shot page opened straight
+  from disk is unaffected.
+
 ## [0.7.0] - 2026-09-24
 
 Upgrading: reinstall the tool (`uv tool install --reinstall` on this directory; a plain
