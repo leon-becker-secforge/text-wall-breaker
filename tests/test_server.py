@@ -67,9 +67,9 @@ def test_no_tool_description_risks_truncation():
     # streamed-ask section and more were invisible to every agent until it was compressed.
     tools = anyio.run(server.list_tools)
     over_limit = {
-        tool.name: len(tool.description)
+        tool.name: len(tool.description or "")
         for tool in tools
-        if len(tool.description) > MAX_TOOL_DESCRIPTION_CHARS
+        if len(tool.description or "") > MAX_TOOL_DESCRIPTION_CHARS
     }
     assert over_limit == {}
 
