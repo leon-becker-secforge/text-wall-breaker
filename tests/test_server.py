@@ -4,7 +4,12 @@ import anyio
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 
-from pretty_prompt.server import accent_config_problem, environment_problem, server
+from pretty_prompt.server import (
+    MAX_TOOL_DESCRIPTION_CHARS,
+    accent_config_problem,
+    environment_problem,
+    server,
+)
 
 
 def test_environment_is_accepted_when_both_checks_pass(monkeypatch):
@@ -53,6 +58,20 @@ def test_accent_config_is_refused_when_not_a_hex_colour(monkeypatch):
 def test_ask_show_and_review_are_the_only_registered_tools():
     tools = anyio.run(server.list_tools)
     assert [tool.name for tool in tools] == ["ask", "show", "review"]
+
+
+def test_no_tool_description_risks_truncation():
+    # The MCP client silently truncates a tool's description past this length — a hard
+    # prefix cut, mid-sentence, with no signal to the agent that anything was cut. This
+    # caught `ask`'s description once (4268 chars) doing exactly that; the tool's whole
+    # streamed-ask section and more were invisible to every agent until it was compressed.
+    tools = anyio.run(server.list_tools)
+    over_limit = {
+        tool.name: len(tool.description)
+        for tool in tools
+        if len(tool.description) > MAX_TOOL_DESCRIPTION_CHARS
+    }
+    assert over_limit == {}
 
 
 def test_ask_schema_matches_the_agreed_shape():

@@ -34,7 +34,21 @@ from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .review import InvalidReview, Page, ReviewRequest, run_review
 from .show import InvalidShow, ShowRequest, run_show
 
-__all__ = ["accent_config_problem", "environment_problem", "main", "server"]
+__all__ = [
+    "MAX_TOOL_DESCRIPTION_CHARS",
+    "accent_config_problem",
+    "environment_problem",
+    "main",
+    "server",
+]
+
+# The MCP client silently truncates a tool's description at this length — a hard prefix
+# cut, mid-sentence, with no signal to the agent that anything was cut. `_ASK_DESCRIPTION`
+# once exceeded it (4268 chars) and lost everything from partway through `expanded`
+# onward (allow_defer, questions, streamed ask, changed_from/visits) invisibly; see
+# test_server.py's test_no_tool_description_risks_truncation, which now guards every
+# registered tool against a repeat, at a margin below this rather than flush against it.
+MAX_TOOL_DESCRIPTION_CHARS = 2048
 
 server = MCPServer(
     name="pretty-prompt",
@@ -50,139 +64,106 @@ server = MCPServer(
     ),
 )
 
-_ASK_DESCRIPTION = """Ask the user a question in a local browser page and wait for the answer.
+# Compressed to fit under MAX_TOOL_DESCRIPTION_CHARS (see its own comment) rather than
+# split across tools/fields, since an agent only ever sees the one description for a
+# name it already knows to call.
+_ASK_DESCRIPTION = """Ask the user a question in a local browser page; blocks until answered,
+cancelled, or timed out. Use over AskUserQuestion for >4 options, a Markdown option
+body, or an image.
 
-Opens a page on the user's desktop, then blocks until they answer, cancel, or the timeout
-elapses. Use instead of AskUserQuestion when the question has more than four options, when
-options need Markdown bodies, or when it should show an image.
+`question`/`body` are Markdown, not HTML. Images: `![alt](file:///abs/path)`.
+Paragraph breaks are real newlines, not the two-character `\\n` escape (recovered
+either way, but write a real one).
 
-`question` and each option's `body` are Markdown. Raw HTML is not rendered. Images use
-Markdown image syntax with an absolute file:// URL, e.g. `![diagram](file:///tmp/x.png)`.
-A paragraph break is a real newline in the string you pass, same as any other Markdown
-field here — not the two-character `\n` escape sequence, which prints as literal text if
-typed outside a fenced code block (it is still recovered as a line break, but a real
-newline is what to write).
+A long `body` sits behind a click users often skip. Anything that could flip the
+choice goes in `caveat` instead — always visible, used sparingly.
 
-A long body sits behind a click the user often never makes, even for the option they
-pick. Anything that could flip the choice (a precondition, a cost, a conflict with an
-earlier answer) goes in the option's `caveat`, which is always visible, not in `body`.
-Use it sparingly: most options need none, and a caveat on every option drowns out the
-one that matters.
+Returns one of:
+  {"selected":[...], "free_text":"...", "expanded":[...]}   answered
+  {"answers":[{selected, free_text, expanded}, ...]}         answered `questions`
+  {"cancelled": true} / {"timed_out": true} / {"not_delivered": true}
 
-Returns exactly one of:
-  {"selected": [...], "free_text": "...", "expanded": [...]}  the user answered
-  {"answers": [{"selected": [...], "free_text": "...", "expanded": [...]}, ...]}
-                                                             answered `questions`
-  {"cancelled": true}                                      the user pressed Cancel
-  {"timed_out": true}                                      nothing arrived in time
-  {"not_delivered": true}                                  the page never loaded
+`not_delivered` (~30s): user never saw it, ask again rather than retry longer.
+`timed_out`: seen, unanswered.
 
-`not_delivered` comes back within about 30 seconds and means the user never saw the
-question: ask again in the terminal instead of retrying with a longer timeout.
-`timed_out` means the page did load but went unanswered.
+`selected`/`free_text` are additive. `expanded`: option ids whose body was ever
+opened, even if closed again.
 
-Selecting an option and writing free text are additive, not exclusive, so `selected` and
-`free_text` can both be populated. `expanded` is the ids of options whose Markdown body
-was opened (read) at any point before the answer was sent, for options long enough to
-collapse behind a drawer — it stays set even if the drawer was closed again afterwards,
-so an id can be selected without being expanded, or expanded without being selected.
+`allow_defer`: user may answer "not yet" → `{"deferred": true, "selected": [],
+"free_text": <reason>}`.
 
-With `allow_defer`, the user may answer "not yet" instead: that answer carries
-`"deferred": true`, an empty `selected`, and the reason, if any, in `free_text`.
+`questions` (prototype): several questions on one page, instead of
+`question`/`options`/etc, never both. Returns `{"answers": [...]}`, one
+`{selected, free_text, expanded}` per question, in order.
 
-`questions` (prototype) puts several questions on one page instead of one — set it
-instead of `question`/`options`/`multi_select`/`allow_free_text`/`allow_defer`, never
-alongside them.
-The user answers all of them before sending, and the result's `answers` list is in the
-same order, one `{selected, free_text, expanded}` per question."""
-
-_ASK_DESCRIPTION += """
-
-Streamed ask (prototype): with three or more questions, or long bodies, don't make the
-user wait while you write them all. Send the first question(s) with `more_coming: true`;
-the page opens and the call returns {"ask_id", "answers_so_far": []} at once. Then call
-again with that `ask_id`, the next question(s) and `more_coming: true` for each further
-chunk; the page grows in place, and each such call returns the answers to the questions
-the user has reached so far (the current one may still be blank or change). Use them only
-to adjust the questions you haven't sent yet. The last call sets `ask_id` and leaves
-`more_coming` unset (its `questions` may be empty); only it waits, and it returns the
-usual {"answers": [...]} for every question sent. A call may return {"cancelled": true}
-instead: then stop, and send nothing more. Short asks stay a single call.
-If your `ask` has no `more_coming` parameter, your session loaded this tool before
-streaming existed; it takes a session started after the update."""
+Streamed ask (prototype, `questions`+`more_coming`): send in chunks so the user
+starts answering while you write the rest. First call returns `{"ask_id",
+"answers_so_far": []}`; later calls add `questions` under that id; the final call
+(no `more_coming`) waits and returns `{"answers": [...]}` or `{"cancelled": true}`.
+Skip this for a short ask."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
 if SHARE_INTERACTION_SIGNALS:
     _ASK_DESCRIPTION += """
 
-Every answer also has `changed_from`: ids picked at some point and then abandoned (not in
-`selected`), in the order first picked. Each entry of `answers` also has `visits`: how
-often that question was shown, 1 if the user never came back to it. These are weak
-hints about how the answer was reached. Use them to decide what to ask next, e.g. a
-follow-up on the option given up; never quote them back to the user or read feelings
-into them."""
+Every answer also has `changed_from` (option ids picked then abandoned) and each
+`answers` entry has `visits` (times shown). Weak signals for what to ask next —
+never quote them back to the user."""
 
+# Compressed to fit under MAX_TOOL_DESCRIPTION_CHARS with margin — see its own comment.
 _SHOW_DESCRIPTION = """Show the user a formatted result in a local browser page (prototype).
 
-Opens a page with `content` rendered as Markdown. By default returns immediately —
-there's no answer to wait for. Use this instead of a long terminal reply when the
-content is a report, a comparison, a diff, a long table, or anything else that would
-otherwise be a wall of text: the same Markdown subset `ask` renders (headings, lists,
-tables, code, images, blockquotes) applies here too, including that a paragraph break is
-a real newline, not a typed `\n` escape.
+Opens a page with `content` as Markdown; returns immediately, no answer to wait
+for. Use instead of a long terminal reply for a report, comparison, table, or
+anything that would be a wall of text — same Markdown subset as `ask` (headings,
+lists, tables, code, images, blockquotes), and a paragraph break is a real newline,
+not the two-character `\\n` escape.
 
-Reuses the same browser tab `ask` uses, so a `show` and an `ask` in the same session
-don't pile up separate tabs.
+Reuses the same tab `ask` uses, so the two don't pile up separate tabs.
 
-The page carries two buttons, on by default:
-  - Save report — lets the user download the content, as the original Markdown or as
-    the rendered HTML page. Purely client-side; never reported back here.
-  - Acknowledge — marks the report as seen. Set `wait_for_acknowledge` to actually block
-    on it (like `ask`), which then returns `{"acknowledged": true}` or, if nothing
-    arrives before `timeout_seconds`, `{"timed_out": true}`. Left false (the default),
-    clicking it is a local-only mark for the user, not reported back.
-Turn either off with `save_button`/`acknowledge_button` when it doesn't apply — e.g. no
-Acknowledge button on a page that's purely informational and never needs confirming.
+Two buttons, on by default:
+  - Save report — downloads the content as Markdown or the rendered HTML. Client-side
+    only, never reported back.
+  - Acknowledge — marks it seen. `wait_for_acknowledge` blocks on it (like `ask`),
+    returning `{"acknowledged": true}` or `{"timed_out": true}`. Left false (default),
+    a click is local-only.
+Turn either off with `save_button`/`acknowledge_button` when it doesn't apply.
 
-Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path is only
-present for a one-off, non-reused tab) as soon as the browser has the page. Either way,
-`{"not_delivered": true}` means the page never loaded, so the user hasn't seen it.
+Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path only
+for a one-off tab) once the browser has it. `{"not_delivered": true}` can come back
+instead whether or not `wait_for_acknowledge` is set — it means the page never loaded.
 
-`slides` puts the content in a deck instead — several independent Markdown documents
-shown one at a time with Prev/Next buttons and arrow-key navigation, a "N / total"
-position indicator between them. Set it instead of `content`, never alongside it.
-`header`/`footer` are each one more Markdown document, shown above/below the slide on
-every slide — only meaningful alongside `slides`."""
+`slides` makes a deck instead — independent Markdown documents, one at a time, with
+Prev/Next and arrow-key nav. Set instead of `content`, never alongside it.
+`header`/`footer` are one more Markdown block each, shown above/below every slide —
+only meaningful with `slides`."""
 
 _REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page and wait for comments.
 
-Opens a page showing one file's diff per navigable page (Prev/Next and arrow keys, same
-as `show`'s deck mode), then blocks until they submit, cancel, or the timeout elapses.
-Use this instead of `ask` when the user's reaction needs to attach to specific lines of a
-diff rather than reduce to a discrete choice — reviewing a set of code changes, for
-example. For a question with options, use `ask` instead.
+Opens one file's diff per navigable page (Prev/Next and arrow keys, same as
+`show`'s deck mode), then blocks until submit, cancel, or timeout. Use this over
+`ask` when the reaction needs to attach to specific lines of a diff rather than
+reduce to a discrete choice — e.g. reviewing code changes. For a question with
+options, use `ask`.
 
-Each entry of `pages` is one file: `path`, `diff` (raw unified diff text, e.g. straight
-`git diff` output — a `@@ -a,b +c,d @@` hunk header is required so a line's coordinate
-can be resolved), and an optional `blurb` (Markdown, shown at the top of that page only,
-e.g. why this file changed). `header` is one more Markdown block, shown above every page.
+Each `pages` entry is one file: `path`, `diff` (raw unified diff text, e.g. `git
+diff` output — a `@@ -a,b +c,d @@` hunk header is required; a diff with none is
+refused with an error before any page opens), and an optional `blurb` (Markdown,
+shown atop that page only, e.g. why it changed). `header` is one more Markdown
+block, shown above every page.
 
-On the page, clicking a diff line opens a text box anchored to it (a small bubble icon on
-hover marks a line as commentable). Comments are single-line only — there is no range
-selection. An "Overall note" box below the pages holds one free-text remark for the whole
-call, not tied to any line.
+Clicking a diff line opens a text box anchored to it (a bubble icon marks a line as
+commentable on hover). Comments are single-line only, no range selection. An
+"Overall note" box below the pages holds one free-text remark for the whole call.
 
 Returns `{"comments": [...], "overall_note": "..." | null}` on Submit — one
-`{"path", "side", "line", "text", "context"}` per comment left, `side` being "old" or
-"new", `line` that side's 1-based line number in the file at `path` (resolved from the
-diff you gave, not from its position in the diff text), and `context` that line's own
-text so you don't have to re-parse your diff to see what the comment was about. Cancel
-returns the same shape plus `"cancelled": true` — whatever comments and overall note
-already existed are still returned, not discarded, since the user may cancel
-deliberately after a partial pass intending you to act on what's flagged so far.
-`{"timed_out": true}` means nothing arrived before `timeout_seconds` of idle time;
-`{"not_delivered": true}` means the page never loaded at all, so the user never saw it —
-same ~30-second window as `ask`."""
+`{"path", "side", "line", "text", "context"}` per comment, `side` "old"/"new",
+`line` that side's 1-based number in `path` (resolved from the diff, not its
+position in the text), `context` that line's own text. Cancel returns the same
+shape plus `"cancelled": true` — comments/note already left are kept, not
+discarded, since a cancel may be deliberate after a partial pass. `{"timed_out":
+true}`: nothing arrived in time. `{"not_delivered": true}`: the page never loaded,
+same ~30s window as `ask`."""
 
 
 def environment_problem() -> str | None:

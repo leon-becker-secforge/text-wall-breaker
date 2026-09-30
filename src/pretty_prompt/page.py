@@ -1300,6 +1300,10 @@ _SHOW_ADDENDUM = """
 html { font-size: 18px; }
 body { margin: 0; padding: 20px 16px 40px; }
 main { max-width: 680px; margin: 0 auto; position: relative; }
+/* Same value and trigger condition as _ADDENDUM's main.pp-wide (_needs_wide_layout) —
+   a ```diff/code fence or a table hits its own horizontal scrollbar well before an
+   ordinary report would, at this width. */
+main.pp-wide { max-width: 920px; }
 
 code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--ntw-code-bg);
   padding: 0.1em 0.35em; border-radius: 4px; }
@@ -1401,7 +1405,7 @@ __CSS__
 </style>
 </head>
 <body>
-<main>
+<main__MAIN_EXTRA__>
   <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
   <div class="pp-content">
 __CONTENT__
@@ -1735,10 +1739,12 @@ def build_show_page(
     else:
         content_html = render_markdown(content, asset_base_url=asset_base_url)
         raw_content = content
+    wide = _needs_wide_layout(content_html)
 
     return (
         _SHOW_TEMPLATE.replace("__CSS__", css)
         .replace("__THEME_ATTR__", _theme_attr(theme))
+        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if wide else "")
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__CONTENT__", content_html)
         .replace("__DECK_SCRIPT__", _deck_script(slides is not None))
@@ -2555,6 +2561,24 @@ def _needs_mermaid(*fragments: str) -> bool:
     return any('class="mermaid"' in fragment for fragment in fragments)
 
 
+def _needs_wide_layout(*fragments: str) -> bool:
+    """True if any rendered fragment carries a ```diff/code fence or a table.
+
+    These are exactly the content shapes that hit their own horizontal scrollbar
+    (`.pp-diff`/`pre.code-block`/`table` all set `overflow-x: auto` or scroll their
+    container) well before an ordinary question or report would — `review`'s page hit
+    this with a fixed max-width that left most of the window unused (see its own
+    width fix). Widened the same way a gallery question already is (`_is_gallery`),
+    not by a length threshold: a merely long paragraph doesn't benefit from extra
+    width the way a wide structured block does — prose gets harder to read wider, not
+    easier.
+    """
+    return any(
+        'class="pp-diff"' in fragment or 'class="code-block"' in fragment or "<table" in fragment
+        for fragment in fragments
+    )
+
+
 def _mermaid_script(needed: bool) -> str:
     """The `<script>` pair loading and running mermaid, or "" if this page has none.
 
@@ -2686,11 +2710,12 @@ def build_page(
     options_html = _render_options(
         options, multi_select, gallery=gallery, asset_base_url=asset_base_url
     )
+    wide = gallery or _needs_wide_layout(question_html, options_html)
 
     return (
         _TEMPLATE.replace("__CSS__", css)
         .replace("__THEME_ATTR__", _theme_attr(theme))
-        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if gallery else "")
+        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if wide else "")
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace(
             "__QUESTION_BLOCK__",
@@ -2858,11 +2883,12 @@ def build_multi_page(
         _is_gallery(options) if isinstance(options := spec.get("options"), list) else False
         for spec in questions
     )
+    wide = any_gallery or _needs_wide_layout(steps_html, header_html)
 
     return (
         _MULTI_TEMPLATE.replace("__CSS__", css)
         .replace("__THEME_ATTR__", _theme_attr(theme))
-        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if any_gallery else "")
+        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if wide else "")
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__HEADER__", header_html)
         .replace("__STEPS__", steps_html)
