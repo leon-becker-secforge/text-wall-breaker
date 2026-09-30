@@ -1,6 +1,7 @@
 # pretty-prompt
 
-An MCP server that asks the user a question, or shows them a result, in a browser page.
+An MCP server that asks the user a question, shows them a result, or has them review a
+diff, in a browser page.
 
 A wall of unformatted text is hard to read, and HTML is the tool for fixing that. But
 hand-writing a page per question doesn't scale, and a model generating HTML inline tends
@@ -13,9 +14,10 @@ options, plain-text previews, no images. `pretty-prompt` opens a real page on th
 instead, so a question can carry any number of options, a Markdown body per option, and
 images.
 
-The server exposes two tools: `ask`, which waits for an answer, and `show` (prototype),
-which doesn't — it opens a page for a result the user only needs to read, like a report,
-a comparison, or a diff, and returns as soon as the browser has it.
+The server exposes three tools: `ask`, which waits for an answer; `show` (prototype),
+which doesn't — it opens a page for a result the user only needs to read, like a report
+or a comparison, and returns as soon as the browser has it; and `review`, which waits for
+line-anchored comments on a diff instead of a discrete answer.
 
 ## Installing
 
@@ -39,8 +41,9 @@ error in the client rather than as a failure inside the first question asked.
 ### Accent colour
 
 The page's accent — the selected-option border and tint, the submit/Acknowledge button,
-focus rings — defaults to green, for both `ask` and `show`. Set `PRETTY_PROMPT_ACCENT`
-to a `#rrggbb` hex colour to use something else instead, in both light and dark theme:
+focus rings — defaults to green, for `ask`, `show`, and `review` alike. Set
+`PRETTY_PROMPT_ACCENT` to a `#rrggbb` hex colour to use something else instead, in both
+light and dark theme:
 
 ```bash
 claude mcp add pretty-prompt --env PRETTY_PROMPT_ACCENT=#2563eb -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
@@ -243,6 +246,62 @@ way, `{"not_delivered": true}` means the page never loaded (see `ask`'s Result).
 one-off page without `wait_for_acknowledge` has no listener to tell, so it always
 reports `opened`.
 
+## The `review` tool
+
+```json
+{
+  "pages": [
+    {"path": "src/foo.py", "diff": "--- a/src/foo.py\n+++ b/src/foo.py\n@@ -1,3 +1,3 @@\n def foo():\n-    return 1\n+    return 2\n",
+     "blurb": "Why this file changed."}
+  ],
+  "header": "Reviewing PR #42 — focus on the error-handling path.",
+  "timeout_seconds": 300
+}
+```
+
+Unlike `ask` and `show`, a `review` call's reaction doesn't reduce to a discrete choice
+or a plain acknowledgement — it attaches to specific lines of a diff. It blocks the same
+way `ask` does, waiting for the user to submit, cancel, or the idle timeout to elapse.
+
+Each entry of `pages` is one file's diff, raw unified diff text (e.g. straight `git diff`
+output) — a `@@ -a,b +c,d @@` hunk header is required so a line's coordinate can be
+resolved; a diff with none is rejected before anything opens. `blurb` is optional
+Markdown shown at the top of that page only, e.g. why that file changed. `header` is one
+more Markdown block, shown above every page.
+
+With more than one page, the user navigates freely between them (Prev/Next, arrow keys,
+a progress bar); with exactly one, that chrome is skipped entirely rather than shown
+inert.
+
+Clicking anywhere on a diff line opens a text box anchored to it — a small bubble icon
+marks a line as commentable on hover, but the whole row is the click/keyboard target, not
+just the icon. Comments are single-line only; there is no range selection. An "Overall
+note" box below the pages holds one free-text remark for the whole call, not tied to any
+line. Once Submit or Cancel is sent, every line and the note box stop accepting further
+input.
+
+### Result
+
+```json
+{"comments": [{"path": "src/foo.py", "side": "new", "line": 2, "text": "why 2?", "context": "    return 2"}],
+ "overall_note": "Looks fine overall."}
+{"cancelled": true, "comments": [...], "overall_note": null}
+{"timed_out": true}
+{"not_delivered": true}
+```
+
+Submit always succeeds — an empty review (no comments, no overall note) is itself a
+valid answer, since there's nothing to validate. Each comment is resolved server-side
+from the diff you gave, not trusted from the page: `side` is `"old"` or `"new"`, `line`
+is that side's 1-based line number in the file at `path` (not its position in the diff
+text), and `context` is that line's own source text, so the agent doesn't have to
+re-parse its diff to see what a comment was about.
+
+Cancel returns the same shape as Submit, plus `"cancelled": true` — whatever comments and
+overall note already existed are kept, not discarded, since the user may cancel
+deliberately after a partial pass, intending the agent to act on what's already flagged.
+This is the one deliberate difference from `ask`'s all-or-nothing cancel.
+
 ## Markdown
 
 A deliberate subset: headings, paragraphs, fenced and inline code, unordered and ordered
@@ -275,21 +334,30 @@ There is no separate images field and no base64 inlining. The page is opened fro
 so `file://` resolves directly. URLs are restricted to `http`, `https`, `file`, `mailto`
 and `data:image/`; anything else, `javascript:` above all, renders as text.
 
+An `ask` or `show` page widens itself automatically when its content carries a
+` ```diff `/` ```code ` fence or a table — the same content shapes that would otherwise
+hit their own horizontal scrollbar early, at the normal width. This is a structural
+check, not a length one: a merely long paragraph stays at the normal width, since prose
+gets harder to read wider, not easier. Two or more image-bearing options trigger the
+same widened layout (see `ask`, above). `review`'s own page always sizes itself to the
+window instead, so it doesn't need this.
+
 ## How a call works
 
-Every process keeps one shared browser tab (prototype), used by `ask` and `show` alike —
-an `ask` followed by a `show` (or the reverse) lands in the same tab, not two. A call
-tries to reuse it first, and the already-open tab notices the new content and reloads in
-place, so a sequence of calls doesn't open a new tab each time. A call that finds the
-shared tab already busy with another call falls back to its own one-off tab instead of
-waiting for it, so two overlapping calls stay safe. The one-off path is the original,
-always-safe behaviour:
+Every process keeps one shared browser tab (prototype), used by `ask`, `show`, and
+`review` alike — an `ask` followed by a `show` followed by a `review` (in any order)
+lands in the same tab, not three. A call tries to reuse it first, and the already-open
+tab notices the new content and reloads in place, so a sequence of calls doesn't open a
+new tab each time. A call that finds the shared tab already busy with another call falls
+back to its own one-off tab instead of waiting for it, so two overlapping calls stay
+safe. The one-off path is the original, always-safe behaviour:
 
-A `show` page on the shared tab polls for updates from the moment it loads (`ask`'s only
-starts once its one answer is in, so a reload can't sweep away an answer mid-composition
-— `show` has no answer to protect). That makes a later `show` call reusing the same
-session a live update of the open tab: republish new content — a progress readout, say —
-and the page picks it up within about 1.5 seconds, no new tab, no action from the user.
+A `show` page on the shared tab polls for updates from the moment it loads (`ask` and
+`review`'s only start once their one answer is in, so a reload can't sweep away an
+answer mid-composition — `show` has no answer to protect). That makes a later `show`
+call reusing the same session a live update of the open tab: republish new content — a
+progress readout, say — and the page picks it up within about 1.5 seconds, no new tab, no
+action from the user.
 
 1. A loopback socket binds an OS-chosen port on `127.0.0.1`, and a fresh
    `secrets.token_hex(16)` token is generated — both **before** the page is written, so
@@ -328,14 +396,15 @@ the page's submit script is adapted from; `assets/base.css` is vendored verbatim
 same skill and kept byte-identical so it stays diffable against its source.
 
 The blocking wait runs in a worker thread, off the server's event loop, so two
-overlapping calls — `ask`, `show`, or a mix — open two tabs with their own port and
-token. Nothing is serialised between them.
+overlapping calls — `ask`, `show`, `review`, or a mix — open two tabs with their own
+port and token. Nothing is serialised between them.
 
-If an `ask` page cannot reach the listener — a stale token, or a call that already timed
-out — it shows the answer in a selected, read-only textarea rather than losing it. It
-does not copy anything to the clipboard on its own; copying is left to the user. `show`'s
-own fallback only reports the failure, without a textarea — there is nothing to lose the
-way an unreachable answer would be, since the report itself is still on screen either way.
+If an `ask` or `review` page cannot reach the listener — a stale token, or a call that
+already timed out — it shows the answer (or the comments/overall note) in a selected,
+read-only textarea rather than losing it. It does not copy anything to the clipboard on
+its own; copying is left to the user. `show`'s own fallback only reports the failure,
+without a textarea — there is nothing to lose the way an unreachable answer would be,
+since the report itself is still on screen either way.
 
 ## Developing
 
