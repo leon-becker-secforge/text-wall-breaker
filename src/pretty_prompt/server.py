@@ -350,12 +350,12 @@ async def show(
 async def review(
     pages: Annotated[
         list[Page],
-        Field(description="One entry per file: path, diff (raw unified diff text), "
-        "and an optional blurb (Markdown, shown at the top of that page only)."),
+        Field(
+            description="One entry per file: path, diff (raw unified diff text), "
+            "and an optional blurb (Markdown, shown at the top of that page only)."
+        ),
     ],
-    header: Annotated[
-        str | None, Field(description="Markdown shown above every page.")
-    ] = None,
+    header: Annotated[str | None, Field(description="Markdown shown above every page.")] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
     timeout_seconds: Annotated[
         float,

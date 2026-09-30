@@ -2223,9 +2223,7 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         active = " is-active" if index == 0 else ""
         path = str(page["path"])
         blurb = page.get("blurb")
-        blurb_html = (
-            render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
-        )
+        blurb_html = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
         diff_html = _render_review_diff(path, str(page["diff"]))
         slide_parts.append(
             f'<section class="deck-slide card{active}">'

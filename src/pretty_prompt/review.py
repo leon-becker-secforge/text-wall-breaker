@@ -101,8 +101,7 @@ def _build_html(
 ) -> str:
     return build_review_page(
         pages=[
-            {"path": page.path, "diff": page.diff, "blurb": page.blurb}
-            for page in request.pages
+            {"path": page.path, "diff": page.diff, "blurb": page.blurb} for page in request.pages
         ],
         header=request.header,
         title=request.title,
