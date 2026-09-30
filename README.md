@@ -33,10 +33,37 @@ Or from the released wheel, with no checkout:
 claude mcp add pretty-prompt -- uvx --index https://index.example.com/simple/ --from pretty-prompt pretty-prompt-mcp
 ```
 
-The server refuses to start on a host it cannot show a page on. It checks at launch that
-`xdg-open` is on `PATH` and that `DISPLAY` or `WAYLAND_DISPLAY` is set, and exits with
-status 2 and a message on stderr if either is missing. That surfaces as a connection
-error in the client rather than as a failure inside the first question asked.
+The server refuses to start on a host it cannot show a page on, and exits with status 2
+and a message on stderr instead. That surfaces as a connection error in the client
+rather than as a failure inside the first question asked. What it opens pages with, and
+so what it checks for at launch, depends on the platform:
+
+| Platform | Opener | Refuses to start when |
+| --- | --- | --- |
+| Linux desktop | `xdg-open` | `xdg-open` is missing, or neither `DISPLAY` nor `WAYLAND_DISPLAY` is set |
+| WSL | `wslview` if installed, else `explorer.exe` | neither is on `PATH` (Windows interop off) |
+| macOS | `open` | `open` is missing |
+| Windows | `os.startfile` | never |
+
+Under WSL, pages open in the Windows browser, not a Linux one inside WSLg, and no
+display variable is needed. With the `explorer.exe` fallback, a one-shot page's file is
+first translated to its `\\wsl.localhost\...` path with `wslpath -w`; explorer.exe's exit
+status is ignored, since it reports 1 even on success, so a page that never opened
+shows up as `not_delivered` instead. `file://` images on such a one-shot page still
+point at Linux paths the Windows browser can't read; pages on the shared tab load
+images over the loopback listener and are unaffected.
+
+### Opener override
+
+Set `PRETTY_PROMPT_OPENER` to a command line to open pages with that instead, for a
+setup the table above gets wrong. The page's path or URL is appended as the last
+argument; the command is split shell-style but not run through a shell. An override
+also skips the display check. At launch, the first word must resolve on `PATH` (or be
+a path to an executable), otherwise the server refuses to start:
+
+```bash
+claude mcp add pretty-prompt --env PRETTY_PROMPT_OPENER="firefox --new-tab" -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
+```
 
 ### Accent colour
 
@@ -52,7 +79,7 @@ claude mcp add pretty-prompt --env PRETTY_PROMPT_ACCENT=#2563eb -- uv run --dire
 The text colour on top of the accent (e.g. the submit button's label) and the tint
 behind a selected option are derived from the colour given, not configured separately.
 An unset or invalid value falls back to the default green; an invalid one also makes
-the server refuse to start, for the same reason as the `xdg-open`/`DISPLAY` checks
+the server refuse to start, for the same reason as the opener checks
 above — surfaced once at launch rather than as a page that silently ignored it.
 
 ## The `ask` tool
@@ -362,7 +389,8 @@ action from the user.
 1. A loopback socket binds an OS-chosen port on `127.0.0.1`, and a fresh
    `secrets.token_hex(16)` token is generated — both **before** the page is written, so
    they can be baked into its submit URL.
-2. The page is written to a per-call temp directory and handed to `xdg-open`.
+2. The page is written to a per-call temp directory and handed to the platform's opener
+   (see above).
 3. The call blocks on that socket until the token-matched POST arrives, a cancel arrives,
    or the idle timeout elapses. The temp directory is removed on every exit path.
 

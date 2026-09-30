@@ -12,6 +12,14 @@ from pretty_prompt.server import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _plain_linux(monkeypatch):
+    """Pin the environment checks to a non-WSL Linux host with no opener override."""
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr("pretty_prompt.opener.is_wsl", lambda: False)
+    monkeypatch.delenv("PRETTY_PROMPT_OPENER", raising=False)
+
+
 def test_environment_is_accepted_when_both_checks_pass(monkeypatch):
     monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/xdg-open")
     monkeypatch.setenv("DISPLAY", ":0")

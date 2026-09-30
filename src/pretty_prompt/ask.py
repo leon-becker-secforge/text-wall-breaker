@@ -29,7 +29,6 @@ from __future__ import annotations
 import os
 import secrets
 import shutil
-import subprocess
 import tempfile
 import threading
 import time
@@ -41,6 +40,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from .listener import LoopbackListener, SessionListener, Submission
+from .opener import BrowserUnavailable, find_opener
 from .page import (
     ACCENT_ENV_VAR,
     InvalidAccent,
@@ -61,11 +61,6 @@ __all__ = [
     "run_ask",
 ]
 
-# xdg-open hands the file to the desktop's browser and returns immediately. If it has
-# not returned by now something is wrong with the desktop session, and failing is better
-# than blocking for the caller's whole timeout with no window on screen.
-_OPEN_TIMEOUT_SECONDS = 20.0
-
 # Whether an answer carries how it was reached: `changed_from` (options picked, then
 # abandoned) and, per entry of `questions`, `visits` (how often that step was shown).
 # The user is the one being observed, so this is a single switch rather than something
@@ -80,10 +75,6 @@ NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
 
 class InvalidAsk(ValueError):
     """The request cannot produce an answerable page."""
-
-
-class BrowserUnavailable(RuntimeError):
-    """The page was written but no browser could be opened for it."""
 
 
 # Short enough that a caveat stays one line on the page. Enforced rather than documented:
@@ -266,29 +257,16 @@ class AskRequest(BaseModel):
 
 
 def open_in_browser(target: Path | str) -> None:
-    """Hand `target` to the desktop's browser, raising `BrowserUnavailable` if it refuses.
+    """Hand `target` to the user's browser, raising `BrowserUnavailable` if it refuses.
 
     `target` is a `file://`-openable path for a one-shot page, or a `http://127.0.0.1:...`
-    URL for a reused-tab session (see `SessionListener`) — `xdg-open` takes either.
+    URL for a reused-tab session (see `SessionListener`). Which program opens it is
+    `opener.find_opener`'s call.
     """
-    opener = shutil.which("xdg-open")
-    if opener is None:
-        raise BrowserUnavailable("xdg-open is not on PATH")
-    try:
-        # Fixed argv, no shell, and the only caller-influenced part is a path this
-        # process just wrote into its own temp directory, or a loopback URL it owns.
-        result = subprocess.run(  # noqa: S603 — fixed executable, no shell
-            [opener, str(target)],
-            capture_output=True,
-            text=True,
-            timeout=_OPEN_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise BrowserUnavailable("xdg-open did not return") from exc
-    if result.returncode != 0:
-        detail = result.stderr.strip() or f"exit status {result.returncode}"
-        raise BrowserUnavailable(f"xdg-open failed: {detail}")
+    opener = find_opener()
+    if isinstance(opener, str):
+        raise BrowserUnavailable(opener)
+    opener.open(target)
 
 
 def _resolve_accent() -> str | None:

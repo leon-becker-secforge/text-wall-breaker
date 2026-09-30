@@ -11,7 +11,6 @@ later — but nothing in this module is generalised ahead of a second one existi
 from __future__ import annotations
 
 import os
-import shutil
 import sys
 from typing import Annotated, Any
 
@@ -30,6 +29,7 @@ from .ask import (
     Question,
     run_ask,
 )
+from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .review import InvalidReview, Page, ReviewRequest, run_review
 from .show import InvalidShow, ShowRequest, run_show
@@ -173,11 +173,8 @@ def environment_problem() -> str | None:
     `ask`, and failing at launch makes that visible in the MCP client's connection error
     instead of inside the first question the agent asks.
     """
-    if shutil.which("xdg-open") is None:
-        return "xdg-open is not on PATH — pretty-prompt needs it to open the question page"
-    if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-        return "neither DISPLAY nor WAYLAND_DISPLAY is set — there is no desktop to open a page on"
-    return None
+    opener = find_opener()
+    return opener if isinstance(opener, str) else None
 
 
 def accent_config_problem() -> str | None:
