@@ -1,9 +1,16 @@
 # pretty-prompt
 
-An MCP server that lets an agent ask the operator a question, or show them a result, in a
-browser page instead of the terminal.
+An MCP server that lets an agent ask the operator a question, show them a result, or have
+them review an artifact, in a browser page instead of the terminal.
 
 ## Language
+
+### Shared
+
+**Header**:
+Markdown shown above every question or page of a multi-step call, typically what is
+already settled. Used by both an `ask` wizard and a `review` call.
+_Avoid_: context, preamble, settled panel
 
 ### Asking
 
@@ -39,7 +46,33 @@ An ask sent in chunks over several calls, each adding questions to the page the 
 is already answering. Only the last call waits for the answers.
 _Avoid_: incremental ask, paged ask, append mode
 
-**Header**:
-Markdown shown above every question of a multi-question page, typically what is already
-settled.
-_Avoid_: context, preamble, settled panel
+### Review
+
+A `review` call presents one diff per page and blocks until the operator submits, so the
+agent gets back exactly what was flagged, in one round trip. "Feedback" is the informal
+umbrella term for this family of tools (`review` today, perhaps a ranking/slider tool
+later) — never the name of a tool itself; see
+[ADR 0001](./docs/adr/0001-review-is-a-separate-tool-from-ask.md).
+
+**Page** (review):
+One file's diff, submitted as raw unified diff text. The unit `review` paginates by,
+freely navigable in either direction. Distinct from a `show` slide: a page carries an
+addressable diff, not arbitrary content.
+_Avoid_: slide, file, tab
+
+**Blurb**:
+Optional Markdown at the top of a single page, explaining that file's change. Distinct
+from `header`, which spans every page of the call.
+_Avoid_: description, intro, page context
+
+**Comment**:
+A remark anchored to one line of a page's diff, addressed by path, side (old/new), and
+line number in that file — not by its position in the diff text. Returned alongside its
+`context`: that line's own text, so the agent isn't required to re-parse its diff to see
+what the remark was about.
+_Avoid_: annotation, note
+
+**Overall note**:
+The one free-text remark the operator can leave for the whole call, in addition to any
+per-page comments. Never a forced approve/reject verdict.
+_Avoid_: summary, verdict, review body

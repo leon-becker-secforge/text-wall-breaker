@@ -31,6 +31,7 @@ from .ask import (
     run_ask,
 )
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
+from .review import InvalidReview, Page, ReviewRequest, run_review
 from .show import InvalidShow, ShowRequest, run_show
 
 __all__ = ["accent_config_problem", "environment_problem", "main", "server"]
@@ -38,12 +39,14 @@ __all__ = ["accent_config_problem", "environment_problem", "main", "server"]
 server = MCPServer(
     name="pretty-prompt",
     instructions=(
-        "Ask the user a question, or show them a formatted result, in a browser page "
-        "instead of the terminal. Use `ask` over AskUserQuestion when the question has "
-        "more than four options, when an option needs more than a line of explanation, "
-        "or when the answer is easier to give while looking at an image. Use `show` "
-        "when a result — a report, a comparison, a diff, a long table — would otherwise "
-        "be a wall of text in the terminal and doesn't need an answer back."
+        "Ask the user a question, show them a formatted result, or have them review an "
+        "artifact, in a browser page instead of the terminal. Use `ask` over "
+        "AskUserQuestion when the question has more than four options, when an option "
+        "needs more than a line of explanation, or when the answer is easier to give "
+        "while looking at an image. Use `show` when a result — a report, a comparison, "
+        "a long table — would otherwise be a wall of text in the terminal and doesn't "
+        "need an answer back. Use `review` when the user's reaction needs to attach to "
+        "specific lines of a diff, not just a discrete choice."
     ),
 )
 
@@ -150,6 +153,36 @@ shown one at a time with Prev/Next buttons and arrow-key navigation, a "N / tota
 position indicator between them. Set it instead of `content`, never alongside it.
 `header`/`footer` are each one more Markdown document, shown above/below the slide on
 every slide — only meaningful alongside `slides`."""
+
+_REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page and wait for comments.
+
+Opens a page showing one file's diff per navigable page (Prev/Next and arrow keys, same
+as `show`'s deck mode), then blocks until they submit, cancel, or the timeout elapses.
+Use this instead of `ask` when the user's reaction needs to attach to specific lines of a
+diff rather than reduce to a discrete choice — reviewing a set of code changes, for
+example. For a question with options, use `ask` instead.
+
+Each entry of `pages` is one file: `path`, `diff` (raw unified diff text, e.g. straight
+`git diff` output — a `@@ -a,b +c,d @@` hunk header is required so a line's coordinate
+can be resolved), and an optional `blurb` (Markdown, shown at the top of that page only,
+e.g. why this file changed). `header` is one more Markdown block, shown above every page.
+
+On the page, clicking a diff line opens a text box anchored to it (a small bubble icon on
+hover marks a line as commentable). Comments are single-line only — there is no range
+selection. An "Overall note" box below the pages holds one free-text remark for the whole
+call, not tied to any line.
+
+Returns `{"comments": [...], "overall_note": "..." | null}` on Submit — one
+`{"path", "side", "line", "text", "context"}` per comment left, `side` being "old" or
+"new", `line` that side's 1-based line number in the file at `path` (resolved from the
+diff you gave, not from its position in the diff text), and `context` that line's own
+text so you don't have to re-parse your diff to see what the comment was about. Cancel
+returns the same shape plus `"cancelled": true` — whatever comments and overall note
+already existed are still returned, not discarded, since the user may cancel
+deliberately after a partial pass intending you to act on what's flagged so far.
+`{"timed_out": true}` means nothing arrived before `timeout_seconds` of idle time;
+`{"not_delivered": true}` means the page never loaded at all, so the user never saw it —
+same ~30-second window as `ask`."""
 
 
 def environment_problem() -> str | None:
@@ -330,6 +363,45 @@ async def show(
         return await anyio.to_thread.run_sync(run_show, request)
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the page: {exc}") from exc
+
+
+@server.tool(name="review", description=_REVIEW_DESCRIPTION)
+async def review(
+    pages: Annotated[
+        list[Page],
+        Field(description="One entry per file: path, diff (raw unified diff text), "
+        "and an optional blurb (Markdown, shown at the top of that page only)."),
+    ],
+    header: Annotated[
+        str | None, Field(description="Markdown shown above every page.")
+    ] = None,
+    title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
+    timeout_seconds: Annotated[
+        float,
+        Field(
+            description="Give up after this many seconds without hearing from the "
+            "page. The page keeps the call alive while it is visible, however long the "
+            "user takes to review, so this only runs while the tab is hidden or closed."
+        ),
+    ] = 300.0,
+) -> dict[str, Any]:
+    request = ReviewRequest(
+        pages=pages,
+        header=header,
+        title=title,
+        timeout_seconds=timeout_seconds,
+    )
+    try:
+        request.validated()
+    except InvalidReview as exc:
+        raise ToolError(str(exc)) from exc
+
+    try:
+        # run_review owns a socket and, ordinarily, a browser tab for its whole
+        # duration — off the event loop for the same reason ask's run_ask is.
+        return await anyio.to_thread.run_sync(run_review, request)
+    except BrowserUnavailable as exc:
+        raise ToolError(f"could not open the review page: {exc}") from exc
 
 
 def main() -> None:

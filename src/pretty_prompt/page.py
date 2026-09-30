@@ -28,6 +28,7 @@ from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from .diff import DiffLine, parse_unified_diff
 from .markdown import render_inline, render_markdown
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "InvalidAccent",
     "build_multi_page",
     "build_page",
+    "build_review_page",
     "build_show_page",
     "parse_accent",
     "read_saved_theme",
@@ -1749,6 +1751,587 @@ def build_show_page(
         .replace("__GENERATION__", _js_string(generation))
         .replace("__RAW_CONTENT__", _js_string(raw_content))
         .replace("__FILENAME_BASE__", _js_string(_filename_base(title)))
+    )
+
+
+# A `review` call's own compact components, same reasoning as _SHOW_ADDENDUM/_ADDENDUM
+# for why this duplicates rather than shares their palette/font/actions/fallback rules —
+# see the module docstring. The new pieces here (from `.pp-review-path` down) are its
+# own: a whole-row comment target per addressable diff line, and the overall-note box —
+# see CONTEXT.md's "Review" section. The row/box styling is the synthesis chosen in a
+# three-variant review (see pretty-prompt's CLAUDE.md): whole-row click to open, a
+# decorative bubble glyph, and a callout-shaped box.
+_REVIEW_ADDENDUM = """
+* { box-sizing: border-box; }
+:root {
+  --pp-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --ntw-bg: #fafaf9;
+  --ntw-bg-elevated: #ffffff;
+  --ntw-fg: #0a0a0a;
+  --ntw-fg-muted: #54595f;
+  --ntw-border: #c7cbd1;
+  --ntw-accent: #1f7a4c;
+  --ntw-accent-contrast: #ffffff;
+  --ntw-verdict-bg: #e3f3ea;
+  --ntw-code-bg: #f0f0f0;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ntw-bg: #1e1e1e;
+    --ntw-bg-elevated: #262626;
+    --ntw-fg: #e6e6e6;
+    --ntw-fg-muted: #9d9d9d;
+    --ntw-border: #3f3f3f;
+    --ntw-accent: #3ddc84;
+    --ntw-accent-contrast: #00150a;
+    --ntw-verdict-bg: #16281f;
+    --ntw-code-bg: #2a2a2a;
+  }
+}
+:root[data-theme="dark"] {
+  --ntw-bg: #1e1e1e;
+  --ntw-bg-elevated: #262626;
+  --ntw-fg: #e6e6e6;
+  --ntw-fg-muted: #9d9d9d;
+  --ntw-border: #3f3f3f;
+  --ntw-accent: #3ddc84;
+  --ntw-accent-contrast: #00150a;
+  --ntw-verdict-bg: #16281f;
+  --ntw-code-bg: #2a2a2a;
+}
+html { font-size: 18px; }
+/* 8px, not _ADDENDUM/_SHOW_ADDENDUM's 16px: a diff line is often wider than an ask
+   question or show report, so review gives it back the few extra px of width before
+   falling into .pp-review-diff's own horizontal scroll — caught by Operator hitting it
+   on an ordinary function-signature-length line. */
+body { margin: 0; padding: 20px 8px 40px; }
+/* A fixed 760px (_ADDENDUM/_SHOW_ADDENDUM's shape) left most of a normal window unused
+   while a diff line still hit .pp-review-diff's horizontal scroll — the real ceiling was
+   this, not the body padding above. min(1200px, 96vw) instead: still capped so it
+   doesn't stretch unreadably wide on an ultrawide monitor, but scales with the window on
+   anything smaller instead of a fixed number picked for prose width. */
+main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
+
+#pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
+  background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
+  font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
+#pp-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
+
+.pp-content > :first-child { margin-block-start: 0; }
+.pp-content > :last-child { margin-block-end: 0; }
+
+.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 16px 0; }
+.pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
+.pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
+  overflow: hidden; }
+.pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
+  transition: width .15s; }
+
+.pp-review-path { font-family: var(--pp-font-mono); font-size: 0.82em; color: var(--ntw-fg-muted);
+  margin-block-end: 8px; word-break: break-all; }
+.pp-review-diff { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0.6em 0;
+  border: 1px solid var(--ntw-border); border-radius: 6px; overflow: hidden; overflow-x: auto; }
+.pp-review-row.hunk { color: var(--ntw-fg-muted); padding: 2px 10px;
+  background: var(--ntw-code-bg); }
+/* Whole row is the click/keyboard target — chosen over a separate gutter button in a
+   three-variant review (see pretty-prompt's CLAUDE.md): nothing small to aim for, and the
+   bubble glyph below is purely decorative, not itself a click target
+   (`pointer-events: none`). The box that opens reads as a callout pointing back at the
+   line, picked in that same review over a plain panel. */
+.pp-review-row-wrap { position: relative; cursor: pointer; }
+/* Once Submit/Cancel has been sent (body.pp-review-frozen, set by the script's freeze())
+   a row no longer looks clickable — the comments it would collect have already left. */
+body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
+.pp-review-row { display: flex; align-items: flex-start; padding: 1px 10px 1px 2px;
+  white-space: pre; border-left: 3px solid transparent; position: relative; }
+.pp-review-row.add { border-left-color: #1f7a4c; background: rgba(31, 122, 76, 0.08); }
+.pp-review-row.del { border-left-color: #b3261e; background: rgba(179, 38, 30, 0.06);
+  color: var(--ntw-fg-muted); }
+.pp-review-row-wrap:hover .pp-review-row,
+.pp-review-row-wrap:focus-within .pp-review-row { background: var(--ntw-border); }
+body.pp-review-frozen .pp-review-row-wrap:hover .pp-review-row,
+body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { background: none; }
+.pp-review-comment-icon { position: absolute; right: 8px; top: 1px; font-size: 0.85em;
+  opacity: 0; color: var(--ntw-fg-muted); pointer-events: none; }
+.pp-review-row-wrap:hover .pp-review-comment-icon,
+.pp-review-row-wrap.has-comment .pp-review-comment-icon { opacity: 1; }
+.pp-review-row-wrap.has-comment .pp-review-comment-icon { color: var(--ntw-accent); }
+.pp-review-gutter { flex: none; width: 2.8em; text-align: right; padding-inline-end: 8px;
+  color: var(--ntw-fg-muted); user-select: none; }
+.pp-review-comment-box { display: none; position: relative; margin: 6px 10px 14px 46px;
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--ntw-accent);
+  background: var(--ntw-verdict-bg); }
+.pp-review-comment-box::before { content: ""; position: absolute; top: -7px; right: 24px;
+  width: 12px; height: 12px; background: var(--ntw-verdict-bg);
+  border-inline-start: 1px solid var(--ntw-accent);
+  border-block-start: 1px solid var(--ntw-accent); transform: rotate(45deg); }
+.pp-review-comment-box.is-open { display: block; }
+.pp-review-comment-box textarea { width: 100%; min-height: 2.4em; font: inherit;
+  font-size: 0.85em; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
+
+#pp-overall-note-label { font-size: 0.8em; color: var(--ntw-fg-muted); display: block;
+  margin: 18px 0 4px; }
+#pp-overall-note { width: 100%; min-height: 4em; font: inherit; font-size: 0.9em;
+  padding: 8px 10px; border-radius: 6px; border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
+
+.pp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-block-start: 16px; position: relative; }
+.pp-actions button { border-radius: 6px; padding: 7px 14px; font: inherit;
+  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
+#pp-submit { border-color: var(--ntw-accent); background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); }
+.pp-actions button:disabled { opacity: 0.5; cursor: default; }
+#pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
+
+#pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
+  background: #fef2f2; padding: 12px 14px; margin-block-start: 12px; }
+#pp-fallback strong { color: var(--ntw-danger); }
+#pp-fallback textarea { width: 100%; font-family: var(--pp-font-mono); font-size: 0.8em;
+  margin-block-start: 8px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #pp-fallback { background: #3f1d1d; }
+}
+:root[data-theme="dark"] #pp-fallback { background: #3f1d1d; }
+"""
+
+_REVIEW_TEMPLATE = """<!doctype html>
+<html lang="en"__THEME_ATTR__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__
+</style>
+</head>
+<body>
+<main>
+  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+__HEADER_BLOCK__
+  <div class="pp-content">
+__CONTENT__
+  </div>
+
+  <label id="pp-overall-note-label" for="pp-overall-note">Overall note (optional)</label>
+  <textarea id="pp-overall-note"
+    placeholder="Anything for the whole call, beyond the per-line comments above"></textarea>
+
+  <div class="pp-actions">
+    <button type="button" id="pp-submit">Send review</button>
+    <button type="button" id="pp-cancel">Cancel</button>
+    <span id="pp-status"></span>
+  </div>
+
+  <div id="pp-fallback" hidden>
+    <strong>Couldn't reach Claude Code</strong>
+    <p data-role="body" id="pp-fallback-reason"></p>
+    <textarea readonly rows="6"></textarea>
+  </div>
+</main>
+
+<script>
+(function () {
+  var SUBMIT_URL = __SUBMIT_URL__;
+  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+  var THEME_KEY = 'no-text-wall:theme';
+  // Same reasoning as ask's page — see there.
+  var BASE_TITLE = document.title;
+  document.title = '\\u2753 ' + BASE_TITLE;
+
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
+  document.getElementById('pp-theme').addEventListener('click', function () {
+    var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
+    var next = document.documentElement.dataset.theme
+      ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      : (dark ? 'light' : 'dark');
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+    send('theme', { theme: next });
+  });
+
+  // The whole row opens/closes its comment box — see page.py's _render_review_diff and
+  // its CSS comment for why (three-variant review). Every page stays in the DOM the
+  // whole time (deck-nav only toggles which .deck-slide is visible), so a comment
+  // survives navigating away from its page and back without any extra state to track.
+  // `frozen` (set by freeze() below, once Submit/Cancel has been sent) stops a row from
+  // opening a box, and a box already open from accepting more text, after the comments
+  // it would collect have already left — editing then would silently go nowhere.
+  var frozen = false;
+  var reviewRows = document.querySelectorAll('.pp-review-row-wrap');
+  Array.prototype.slice.call(reviewRows).forEach(function (wrap) {
+    var row = wrap.querySelector('.pp-review-row');
+    var box = wrap.querySelector('.pp-review-comment-box');
+    var textarea = box ? box.querySelector('textarea') : null;
+    if (!row || !box || !textarea) return;
+    function toggleBox() {
+      if (frozen) return;
+      var opening = !box.classList.contains('is-open');
+      box.classList.toggle('is-open', opening);
+      if (opening) textarea.focus();
+    }
+    row.addEventListener('click', toggleBox);
+    row.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleBox();
+      }
+    });
+    textarea.addEventListener('input', function () {
+      wrap.classList.toggle('has-comment', textarea.value.trim() !== '');
+    });
+  });
+
+  function collectComments() {
+    var comments = [];
+    var boxes = document.querySelectorAll('.pp-review-comment-box textarea');
+    Array.prototype.slice.call(boxes).forEach(function (textarea) {
+      var text = textarea.value.trim();
+      if (!text) return;
+      comments.push({
+        path: textarea.dataset.path,
+        side: textarea.dataset.side,
+        line: parseInt(textarea.dataset.line, 10),
+        text: text
+      });
+    });
+    return comments;
+  }
+
+  var submitBtn = document.getElementById('pp-submit');
+  var cancelBtn = document.getElementById('pp-cancel');
+  var status = document.getElementById('pp-status');
+  var overallNote = document.getElementById('pp-overall-note');
+
+  function collect() {
+    return { comments: collectComments(), overall_note: overallNote.value.trim() };
+  }
+
+  function freeze(message) {
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    overallNote.readOnly = true;
+    frozen = true;
+    document.body.classList.add('pp-review-frozen');
+    Array.prototype.slice.call(document.querySelectorAll('.pp-review-comment-box textarea'))
+      .forEach(function (t) { t.readOnly = true; });
+    status.textContent = message;
+    stopHeartbeat();
+  }
+
+  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  var heartbeatTimer = null;
+  function heartbeat() {
+    if (document.visibilityState === 'visible') send('probe', {});
+  }
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') heartbeat();
+  });
+
+  function fallback(payload, reason) {
+    var box = document.getElementById('pp-fallback');
+    var text = JSON.stringify(payload, null, 2);
+    box.hidden = false;
+    var textarea = box.querySelector('textarea');
+    textarea.value = text;
+    document.getElementById('pp-fallback-reason').textContent =
+      reason + ' \\u2014 copy the text below and paste it to Claude Code.';
+    textarea.select();
+  }
+
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
+  async function send(kind, data) {
+    var payload = { kind: kind, data: data };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        if (kind !== 'probe') {
+          fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
+        }
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (kind !== 'probe') {
+        fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      }
+      return false;
+    }
+  }
+
+  function doneMessage(base) {
+    if (STATUS_URL) return base + ' Waiting for the next thing\\u2026';
+    return base + ' You can close this tab.';
+  }
+
+  submitBtn.addEventListener('click', async function () {
+    var data = collect();
+    freeze('Sending\\u2026');
+    if (await send('submit', data)) {
+      freeze(doneMessage('Review sent.'));
+      document.title = '\\u2705 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+
+  cancelBtn.addEventListener('click', async function () {
+    // Cancel still sends whatever comments/overall note already exist — see
+    // review.run_review's docstring and ADR 0002. Same payload shape as Submit; only
+    // `kind` differs.
+    var data = collect();
+    freeze('Cancelling\\u2026');
+    if (await send('cancel', data)) {
+      freeze(doneMessage('Cancelled.'));
+      document.title = '\\u2716 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      submitBtn.click();
+    }
+  });
+
+  send('probe', {});
+  startHeartbeat();
+}());
+</script>
+__DECK_SCRIPT__
+__MERMAID__
+</body>
+</html>
+"""
+
+
+def _render_review_diff(path: str, diff: str) -> str:
+    """One page's diff as `.pp-review-row` rows, each wrapped with its comment box.
+
+    `parse_unified_diff` is what turns raw diff text into the (side, line) coordinate a
+    comment on that row addresses — see `diff.DiffLine.side`/`.line`. A "hunk" row (the
+    `@@ ...` header) is not addressable: there's no single line it could attach to.
+
+    The whole row is the click/keyboard target for opening its comment box (`role`,
+    `tabindex`; the actual open/close wiring is in `_REVIEW_TEMPLATE`'s script) — the
+    bubble glyph is a hover affordance only, not a click target itself.
+    """
+    escaped_path = html.escape(path, quote=True)
+    rows: list[DiffLine] = parse_unified_diff(diff)
+    parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
+    for row in rows:
+        text_html = html.escape(row.text) or "&nbsp;"
+        if row.kind == "hunk":
+            parts.append(f'<div class="pp-review-row hunk">{text_html}</div>')
+            continue
+        old = str(row.old_line) if row.old_line is not None else ""
+        new = str(row.new_line) if row.new_line is not None else ""
+        side = row.side or "new"
+        line = row.line if row.line is not None else 0
+        parts.append(
+            f'<div class="pp-review-row-wrap" data-path="{escaped_path}" '
+            f'data-side="{side}" data-line="{line}">'
+            f'<div class="pp-review-row {row.kind}" role="button" tabindex="0" '
+            'aria-label="Comment on this line">'
+            f'<span class="pp-review-gutter">{old}</span>'
+            f'<span class="pp-review-gutter">{new}</span>'
+            f'<span class="pp-review-text">{text_html}</span>'
+            '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span>'
+            "</div>"
+            '<div class="pp-review-comment-box">'
+            f'<textarea data-path="{escaped_path}" data-side="{side}" data-line="{line}" '
+            'placeholder="Comment on this line"></textarea>'
+            "</div>"
+            "</div>"
+        )
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | None) -> str:
+    """The deck of `.deck-slide`s for a `review` call — one per page, in order.
+
+    Same free-navigation deck mechanics as `_render_deck` (`show`'s slides), reused here
+    via base.css's `.deck-slide`/`.deck-nav` — but each slide is an addressable diff
+    (`_render_review_diff`) rather than arbitrary Markdown, and the progress label reads
+    "Page", not "Slide" — see `_review_deck_script`.
+    """
+    total = len(pages)
+    # A single page has nothing to paginate between — the progress bar and Prev/Next
+    # nav would just be inert chrome around the one diff, so both are skipped rather
+    # than rendered and left doing nothing (caught by Operator on a one-page review).
+    multi = total > 1
+    initial_progress = round(100 / total) if total else 0
+    progress_html = (
+        (
+            '<div class="pp-progress">'
+            f'<span class="pp-progress-label" id="pp-deck-progress-label">Page 1 of {total}</span>'
+            '<span class="pp-progress-track">'
+            f'<span class="pp-progress-fill" id="pp-deck-progress-fill" '
+            f'style="width: {initial_progress}%"></span>'
+            "</span>"
+            "</div>"
+        )
+        if multi
+        else ""
+    )
+    slide_parts = []
+    for index, page in enumerate(pages):
+        active = " is-active" if index == 0 else ""
+        path = str(page["path"])
+        blurb = page.get("blurb")
+        blurb_html = (
+            render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
+        )
+        diff_html = _render_review_diff(path, str(page["diff"]))
+        slide_parts.append(
+            f'<section class="deck-slide card{active}">'
+            f'<div class="pp-review-path">{html.escape(path)}</div>'
+            f"{blurb_html}"
+            f"{diff_html}"
+            "</section>"
+        )
+    nav_html = (
+        (
+            '<div class="deck-nav">'
+            '<button type="button" data-deck-prev aria-label="Previous page">&larr;</button>'
+            '<button type="button" data-deck-next aria-label="Next page">&rarr;</button>'
+            "</div>"
+        )
+        if multi
+        else ""
+    )
+    return progress_html + "\n".join(slide_parts) + nav_html
+
+
+def _review_deck_script(needed: bool) -> str:
+    """`_deck_script`'s nav mechanics, with a "Page N of M" label instead of "Slide".
+
+    Loaded only when `_render_review_pages` rendered more than one page — with exactly
+    one, there is nothing to paginate between, so the progress bar/Prev/Next markup this
+    acts on doesn't exist either (see its `multi` check).
+    """
+    if not needed:
+        return ""
+    return """<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
+  var progressLabel = document.getElementById('pp-deck-progress-label');
+  var progressFill = document.getElementById('pp-deck-progress-fill');
+  var index = 0;
+  function show(next) {
+    slides[index].classList.remove('is-active');
+    index = (next + slides.length) % slides.length;
+    slides[index].classList.add('is-active');
+    if (progressLabel) progressLabel.textContent = 'Page ' + (index + 1) + ' of ' + slides.length;
+    if (progressFill) {
+      progressFill.style.width = Math.round((index + 1) / slides.length * 100) + '%';
+    }
+  }
+  var prevBtn = document.querySelector('[data-deck-prev]');
+  var nextBtn = document.querySelector('[data-deck-next]');
+  if (prevBtn) prevBtn.addEventListener('click', function () { show(index - 1); });
+  if (nextBtn) nextBtn.addEventListener('click', function () { show(index + 1); });
+  document.addEventListener('keydown', function (event) {
+    if (event.target.matches('input, textarea, [contenteditable]')) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+    if (event.key === 'ArrowRight') show(index + 1);
+    if (event.key === 'ArrowLeft') show(index - 1);
+  });
+}());
+</script>"""
+
+
+def build_review_page(
+    *,
+    pages: list[dict[str, object]],
+    submit_url: str,
+    timeout_seconds: float,
+    header: str | None = None,
+    title: str = "Claude Code",
+    accent: str | None = None,
+    theme: str | None = None,
+    status_url: str | None = None,
+    generation: int = 0,
+) -> str:
+    """Return the complete HTML document for one `review` call.
+
+    `pages` is one dict per `review.Page` (`path`, `diff` — raw unified diff text —,
+    optional `blurb` Markdown), rendered as a deck of freely-navigable pages, same nav
+    mechanics as `show`'s slides (`_render_deck`) but each page is an addressable diff:
+    every line gets a gutter comment toggle, resolved server-side (`diff.
+    parse_unified_diff`) to the old/new-file line number a comment on it addresses — see
+    CONTEXT.md's "Review" section. `header` is one Markdown block shown above every page.
+
+    Submit always succeeds — there is nothing to validate, since an empty review (no
+    comments, no overall note) is itself a valid answer. Cancel sends the same payload
+    shape as Submit, comments and overall note included, rather than discarding them —
+    see `review.run_review`'s docstring and ADR 0002.
+
+    `submit_url`/`timeout_seconds`/`status_url`/`generation` mirror `build_page`'s — see
+    there.
+    """
+    css = _load_base_css() + _REVIEW_ADDENDUM
+    if accent is not None:
+        css += _accent_css(accent)
+
+    asset_base_url = _asset_base_url(status_url)
+    header_html = (
+        f'<div class="pp-content">{render_markdown(header, asset_base_url=asset_base_url)}</div>'
+        if header
+        else ""
+    )
+    content_html = _render_review_pages(pages, asset_base_url)
+
+    return (
+        _REVIEW_TEMPLATE.replace("__CSS__", css)
+        .replace("__THEME_ATTR__", _theme_attr(theme))
+        .replace("__TITLE__", html.escape(title, quote=True))
+        .replace("__HEADER_BLOCK__", header_html)
+        .replace("__CONTENT__", content_html)
+        .replace("__DECK_SCRIPT__", _review_deck_script(len(pages) > 1))
+        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html, header_html)))
+        .replace("__SUBMIT_URL__", _js_string(submit_url))
+        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
+        .replace("__STATUS_URL__", _js_string(status_url))
+        .replace("__GENERATION__", _js_string(generation))
     )
 
 
