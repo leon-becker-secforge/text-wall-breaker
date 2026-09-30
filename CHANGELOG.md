@@ -3,6 +3,18 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0] - 2026-09-30
+
+### Added
+
+- macOS, Windows, and WSL support: pages open with `open`, `os.startfile`, and the
+  Windows browser (`wslview`, or `explorer.exe` with a `wslpath -w` translated file path)
+  respectively, instead of the server refusing to start for lack of `xdg-open`. WSL no
+  longer needs WSLg's display variables.
+- `PRETTY_PROMPT_OPENER`: a command line to open pages with instead of the platform's
+  default, with the target appended as its last argument. Validated at launch, like
+  `PRETTY_PROMPT_ACCENT`.
+
 ## [0.9.0] - 2026-09-30
 
 ### Added
