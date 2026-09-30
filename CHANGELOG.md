@@ -3,6 +3,31 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0] - 2026-09-30
+
+### Added
+
+- `review`: a new tool that has the user comment on specific lines of a diff instead of
+  answering a discrete question — a separate tool from `ask` rather than a mode of it,
+  since the two interaction shapes don't compose (see `docs/adr/0001`). Paginates one
+  file's diff per page (skipped entirely for a single page), whole-row click to comment,
+  and an "Overall note" free-text box for the whole call. Cancel returns whatever
+  comments/note already exist instead of discarding them (`docs/adr/0002`); each comment
+  carries `context` (the diff line's own text) alongside the operator's remark.
+- `ask`/`show` now widen to the existing gallery layout (920px) when their content
+  includes a ```diff/code fence or a table — the same content shapes that hit their own
+  horizontal scrollbar early, the same bug `review`'s width fix addressed.
+
+### Fixed
+
+- The MCP client silently hard-truncates a tool description past 2048 chars, mid-
+  sentence, with no signal that anything was cut. `ask`'s description (4268 chars) was
+  losing everything from partway through `expanded` onward — `allow_defer`, `questions`,
+  streamed ask, and `changed_from`/`visits` were all invisible. `ask`, `show`, and
+  `review`'s descriptions are now all well under the limit, with a regression test.
+- The same `\n`-escape example in `ask`'s and `show`'s descriptions compiled to an actual
+  newline character instead of the literal two characters it was meant to show.
+
 ## [0.8.0] - 2026-09-28
 
 ### Added
