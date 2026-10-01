@@ -232,9 +232,11 @@ async def ask(
     header: Annotated[
         str,
         Field(
-            description="Prototype, questions only: Markdown shown above every question "
-            "of the page, typically what earlier rounds already settled, so the user "
-            "answers with it in view. A long one collapses behind a Context toggle."
+            description="Prototype. Requires questions: with a single question, "
+            "header is rejected, so put the context in question. Markdown shown above "
+            "every question of the page, typically what earlier rounds already settled, "
+            "so the user answers with it in view. A long one collapses behind a "
+            "Context toggle."
         ),
     ] = "",
     more_coming: Annotated[

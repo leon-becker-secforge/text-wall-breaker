@@ -205,6 +205,24 @@ launched. While the tab is visible the page sends a heartbeat, so however long t
 reads, the call stays alive; the timeout only runs while the tab is hidden or closed, and
 a long multi-question page needs no larger value than a single question.
 
+### Long waits and background tasks
+
+Claude Code moves an MCP call still running after 120 s to a background task. The
+answer then arrives as a task notification marked "NOT USER INPUT", which an agent must
+not treat as the user's answer or approval, so it asks the user to repeat it in chat.
+The limit belongs to Claude Code, not to `timeout_seconds`. Per the
+[Claude Code MCP docs](https://code.claude.com/docs/en/mcp.md):
+
+- `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` sets the threshold (default `120000`) for all
+  servers; `0` disables backgrounding. Set it in the environment of `claude`, or under
+  `env` in `settings.json`.
+- Calls from subagents, in non-interactive mode, and while an MCP elicitation dialog is
+  open are never backgrounded.
+- `MCP_TOOL_TIMEOUT` (wall clock) and the `.mcp.json` `timeout` field (per server) are
+  separate. `CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT` defaults to 30 minutes for stdio servers.
+- Not documented: the notification's exact wording, and elicitation in print mode or
+  the Agent SDK.
+
 `not_delivered` means the page never loaded in a browser, so the user never saw the
 question. It comes back within about 30 seconds of opening the tab, not after the whole
 timeout, so the agent can fall back to asking in the terminal. A page that loaded and was
