@@ -135,6 +135,14 @@ ALLOW_DEFER_DESCRIPTION = (
 class Question(BaseModel):
     """One question on a page — the single-question shape, reused for `questions`."""
 
+    id: Annotated[
+        str | None,
+        Field(
+            description="Optional stable identifier, echoed as `id` on this question's "
+            "entry in `answers` so a result is matched by id, not position. Unique "
+            "within the ask. Never shown to the user."
+        ),
+    ] = None
     question: str
     options: list[Option] = []
     multi_select: bool = False
@@ -143,6 +151,8 @@ class Question(BaseModel):
 
     def validated(self, *, label: str) -> Question:
         """Return self, or raise `InvalidAsk` naming `label` if unanswerable."""
+        if self.id is not None and not self.id.strip():
+            raise InvalidAsk(f"{label}: id is empty; omit it or give a non-empty one")
         if not self.question.strip():
             raise InvalidAsk(f"{label}: question is empty")
         if not self.options and not self.allow_free_text:
@@ -222,6 +232,7 @@ class AskRequest(BaseModel):
                 raise InvalidAsk("questions is empty")
             for index, question in enumerate(self.questions):
                 question.validated(label=f"questions[{index}]")
+            _check_question_ids(self.questions)
             return self
         self._as_single_question().validated(label="question")
         return self
@@ -239,6 +250,7 @@ class AskRequest(BaseModel):
             )
         for index, question in enumerate(self.questions or []):
             question.validated(label=f"questions[{index}]")
+        _check_question_ids(self.questions or [])
         return self
 
     def _as_single_question(self) -> Question:
@@ -287,6 +299,17 @@ def _resolve_accent() -> str | None:
     return value
 
 
+def _check_question_ids(questions: list[Question], taken: set[str] | None = None) -> None:
+    """Raise `InvalidAsk` if a question id repeats within `questions` or in `taken`."""
+    seen = set(taken or ())
+    for index, question in enumerate(questions):
+        if question.id is None:
+            continue
+        if question.id in seen:
+            raise InvalidAsk(f"questions[{index}]: duplicate question id {question.id!r}")
+        seen.add(question.id)
+
+
 def _extract_answer(step: Question, raw: object, *, multi: bool = False) -> dict[str, Any]:
     """One `{selected, free_text, expanded}` from a page's answer for `step`.
 
@@ -304,6 +327,7 @@ def _extract_answer(step: Question, raw: object, *, multi: bool = False) -> dict
 
     free_text = raw.get("free_text") if isinstance(raw, dict) else None
     answer: dict[str, Any] = {
+        **({"id": step.id} if step.id is not None else {}),
         "selected": _known_ids("selected"),
         "free_text": free_text.strip() if isinstance(free_text, str) else "",
         "expanded": _known_ids("expanded"),
@@ -600,6 +624,7 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
         return {"cancelled": True}
 
     added = list(request.questions or [])
+    _check_question_ids(added, {step.id for step in stream.steps if step.id is not None})
     start = len(stream.steps)
     stream.steps.extend(added)
     stream.session.extend(
@@ -627,10 +652,11 @@ def run_ask(request: AskRequest) -> dict[str, Any]:
     `{"not_delivered": True}` if the page never loaded in a browser at all. Otherwise, for a
     single question (the `question` shorthand), `{"selected", "free_text", "expanded"}`;
     for `questions`, `{"answers": [{"selected", "free_text", "expanded"}, ...]}`, one
-    entry per question, in order. `expanded` is the option ids whose body drawer was
-    opened at any point before the answer was sent, whether or not it was closed again
-    afterwards. With SHARE_INTERACTION_SIGNALS on, every answer also has `changed_from`
-    and each entry of `answers` also has `visits`.
+    entry per question, in order, each with the question's `id` first if it set one.
+    `expanded` is the option ids whose body drawer was opened at any point before the
+    answer was sent, whether or not it was closed again afterwards. With
+    SHARE_INTERACTION_SIGNALS on, every answer also has `changed_from` and each entry of
+    `answers` also has `visits`.
 
     With `more_coming`, returns `{"ask_id", "answers_so_far"}` at once instead; see the
     module docstring for how the later calls of that streamed ask go.

@@ -800,3 +800,43 @@ def test_an_undelivered_stream_is_not_left_open(monkeypatch):
     assert result == {"not_delivered": True}
     assert session_module.get_shared_session().try_claim()
     session_module.get_shared_session().release()
+
+
+def test_a_question_id_is_echoed_on_its_answer_and_omitted_otherwise(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"answers": [{"selected": []}, {"selected": []}]},
+        }
+    )
+    result = run_ask(
+        AskRequest(questions=[Question(id="t180", question="a"), Question(question="b")])
+    )
+    first, second = result["answers"]
+    assert first["id"] == "t180"
+    assert "id" not in second
+
+
+@pytest.mark.parametrize(
+    ("ids", "match"),
+    [
+        (["a", "a"], r"questions\[1\]: duplicate question id 'a'"),
+        (["a", "  "], r"questions\[1\]: id is empty"),
+    ],
+)
+def test_bad_question_ids_are_rejected(ids, match):
+    request = AskRequest(questions=[Question(id=i, question="q") for i in ids])
+    with pytest.raises(InvalidAsk, match=match):
+        request.validated()
+
+
+def test_a_streamed_ask_rejects_an_id_already_used_by_an_earlier_call(opened):
+    first = run_ask(AskRequest(questions=[Question(id="a", question="one")], more_coming=True))
+    with pytest.raises(InvalidAsk, match="duplicate question id 'a'"):
+        run_ask(
+            AskRequest(
+                ask_id=first["ask_id"],
+                questions=[Question(id="a", question="two")],
+                more_coming=True,
+            )
+        )

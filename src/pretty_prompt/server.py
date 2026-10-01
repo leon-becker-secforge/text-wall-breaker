@@ -94,7 +94,8 @@ opened, even if closed again.
 
 `questions` (prototype): several questions on one page, instead of
 `question`/`options`/etc, never both. Returns `{"answers": [...]}`, one
-`{selected, free_text, expanded}` per question, in order.
+`{selected, free_text, expanded}` per question, in order; a question's optional `id`
+is echoed on its entry, so match by id.
 
 Streamed ask (prototype, `questions`+`more_coming`): send in chunks so the user
 starts answering while you write the rest. First call returns `{"ask_id",

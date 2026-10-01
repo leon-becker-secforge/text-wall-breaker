@@ -3,6 +3,14 @@
 All notable changes to `pretty-prompt` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- `ask`: an optional `id` on each of `questions`, echoed as `id` on that question's entry
+  in `answers`, so a result is matched by id instead of position. Must be unique within
+  the ask, across the calls of a streamed one. Without it, answers are unchanged.
+
 ## [0.10.0] - 2026-09-30
 
 ### Added
