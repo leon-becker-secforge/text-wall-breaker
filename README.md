@@ -30,7 +30,9 @@ claude mcp add pretty-prompt -- uv run --directory /path/to/python-libs --packag
 Or from the released wheel, with no checkout:
 
 ```bash
-claude mcp add pretty-prompt -- uvx --index https://index.example.com/simple/ --from pretty-prompt pretty-prompt-mcp
+claude mcp add pretty-prompt \
+  --env UV_INDEX_INTERNAL_USERNAME=<user> --env UV_INDEX_INTERNAL_PASSWORD=... \
+  -- uvx --index internal=https://index.example.com/simple/ --from pretty-prompt pretty-prompt-mcp
 ```
 
 The server refuses to start on a host it cannot show a page on, and exits with status 2
