@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from pretty_prompt.page import (
@@ -431,3 +433,25 @@ def test_a_long_header_that_is_one_list_counts_its_items():
     items = "\n".join(f"- decision number {i} " + "x " * 30 for i in range(7))
     body = _body(_multi_page(header=items))
     assert '<summary>Context <span class="pp-header-count">7 items</span></summary>' in body
+
+
+def test_a_selected_option_starts_checked_and_free_text_prefilled():
+    page = _page(
+        options=[{"id": "a", "label": "A", "selected": True}, {"id": "b", "label": "B"}],
+        free_text_prefill="</textarea><b>",
+    )
+    assert len(re.findall(r"<input[^>]* checked ", page)) == 1
+    assert "&lt;/textarea&gt;&lt;b&gt;</textarea>" in page
+
+
+def test_multi_page_prefills_per_step():
+    page = build_multi_page(
+        questions=[
+            {"question": "q", "options": [{"id": "a", "label": "A", "selected": True}]},
+            {"question": "q2", "options": [], "free_text": "hello"},
+        ],
+        submit_url="http://127.0.0.1:1/submit",
+        timeout_seconds=300.0,
+    )
+    assert len(re.findall(r"<input[^>]* checked ", page)) == 1
+    assert ">\nhello</textarea>" in page

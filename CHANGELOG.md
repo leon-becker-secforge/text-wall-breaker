@@ -7,6 +7,15 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `ask`: prefill. `selected: true` on an `Option` starts it checked (several need
+  `multi_select`), and `free_text` on a `Question` starts the free-text box with that
+  text. A prefilled option is not counted in `changed_from`.
+- `ask`: resuming. Every page now reports its answer as it changes (single-question and
+  one-shot pages too, not only streamed asks). A cancelled or timed-out ask with
+  something entered returns a `resume` id, and `ask(resume=id)` reopens the same
+  questions and header with those answers prefilled. A deferral is not carried over.
+  Drafts live in memory for an hour, at most 20, and resume once.
+
 - `ask`: an optional `id` on each of `questions`, echoed as `id` on that question's entry
   in `answers`, so a result is matched by id instead of position. Must be unique within
   the ask, across the calls of a streamed one. Without it, answers are unchanged.

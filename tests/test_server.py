@@ -101,9 +101,10 @@ def test_ask_schema_matches_the_agreed_shape():
         "header",
     }
     option = schema["$defs"]["Option"]["properties"]
-    assert set(option) == {"id", "label", "caveat", "body", "recommended"}
+    assert set(option) == {"id", "label", "caveat", "body", "selected", "recommended"}
     question = schema["$defs"]["Question"]["properties"]
     assert set(question) == {
+        "free_text",
         "id",
         "question",
         "options",

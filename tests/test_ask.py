@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 import urllib.request
@@ -128,7 +129,9 @@ class FakeBrowser:
         payload = self.respond(self.page)
         if payload is None:
             return
-        self.thread = threading.Thread(target=lambda: _post(url, payload))
+        # A list is posted in order: progress reports, then the submission or cancel.
+        payloads = payload if isinstance(payload, list) else [payload]
+        self.thread = threading.Thread(target=lambda: [_post(url, each) for each in payloads])
         self.thread.start()
 
 
@@ -840,3 +843,95 @@ def test_a_streamed_ask_rejects_an_id_already_used_by_an_earlier_call(opened):
                 more_coming=True,
             )
         )
+
+
+def _checked_inputs(page: str) -> list[str]:
+    return re.findall(r"<input[^>]* checked [^>]*>", page)
+
+
+def _a_b(**first: Any) -> list[Option]:
+    return [Option(id="a", label="A", **first), Option(id="b", label="B")]
+
+
+def test_several_selected_options_need_multi_select():
+    request = AskRequest(
+        question="q",
+        options=[
+            Option(id="a", label="A", selected=True),
+            Option(id="b", label="B", selected=True),
+        ],
+    )
+    with pytest.raises(InvalidAsk, match="2 options are selected but multi_select is false"):
+        request.validated()
+    request.multi_select = True
+    request.validated()
+
+
+def _cancel_after(*reports: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        *({"kind": "progress", "data": report} for report in reports),
+        {"kind": "cancel", "data": {}},
+    ]
+
+
+def test_a_cancelled_ask_with_answers_returns_a_resume_id_that_prefills_the_page(browser):
+    browser(
+        lambda page: _cancel_after({"selected": ["b"], "free_text": "a <note>", "expanded": []})
+    )
+    request = AskRequest(question="q", options=_a_b(), multi_select=True)
+    cancelled = run_ask(request)
+    assert cancelled["cancelled"] is True
+    assert set(cancelled) == {"cancelled", "resume"}
+
+    fake = browser(lambda page: {"kind": "submit", "data": {"selected": ["b"], "free_text": "x"}})
+    result = run_ask(AskRequest(resume=cancelled["resume"]))
+    assert result["selected"] == ["b"]
+    checked = _checked_inputs(fake.page)
+    assert len(checked) == 1
+    assert 'data-option-id="b"' in checked[0]
+    assert "a &lt;note&gt;</textarea>" in fake.page
+    assert "i.defaultChecked" in fake.page
+
+
+def test_a_draft_is_resumed_once(browser):
+    browser(lambda page: _cancel_after({"selected": ["a"], "free_text": ""}))
+    resume = run_ask(AskRequest(question="q", options=_a_b()))["resume"]
+    browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(resume=resume))
+    with pytest.raises(InvalidAsk, match="no draft with resume id"):
+        run_ask(AskRequest(resume=resume))
+
+
+def test_a_multi_question_draft_prefills_each_step_and_keeps_the_header(browser):
+    browser(
+        lambda page: _cancel_after(
+            {"answers": [{"selected": ["a"], "free_text": ""}, {"selected": [], "free_text": "hm"}]}
+        )
+    )
+    questions = [
+        Question(id="one", question="one?", options=_a_b()),
+        Question(question="two?", options=_a_b()),
+    ]
+    resume = run_ask(AskRequest(questions=questions, header="Settled: X"))["resume"]
+
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(resume=resume))
+    assert "Settled: X" in fake.page
+    assert len(_checked_inputs(fake.page)) == 1
+    assert "hm</textarea>" in fake.page
+
+
+def test_an_ask_with_nothing_entered_has_no_resume_id(browser):
+    browser(lambda page: _cancel_after({"selected": [], "free_text": ""}))
+    assert run_ask(AskRequest(question="q", options=_a_b())) == {"cancelled": True}
+
+
+def test_resume_takes_nothing_but_a_timeout():
+    with pytest.raises(InvalidAsk, match="only timeout_seconds applies"):
+        AskRequest(resume="x", question="q").validated()
+
+
+def test_a_prefilled_option_is_not_changed_from_when_kept(browser):
+    fake = browser(lambda page: {"kind": "submit", "data": {"selected": ["a"], "free_text": ""}})
+    run_ask(AskRequest(question="q", options=_a_b(selected=True)))
+    assert len(_checked_inputs(fake.page)) == 1

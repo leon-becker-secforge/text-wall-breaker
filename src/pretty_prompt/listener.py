@@ -196,7 +196,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
 
         listener.mark_seen()
-        _handle_submit_payload(raw, self._respond, listener.deliver)
+        _handle_submit_payload(raw, self._respond, listener.deliver, listener.set_progress)
 
 
 class LoopbackListener:
@@ -209,6 +209,7 @@ class LoopbackListener:
     def __init__(self, token: str) -> None:
         self._token = token
         self._submission: Submission | None = None
+        self._progress: dict[str, Any] | None = None
         self._last_activity = time.monotonic()
         self._seen = False
         # Port 0 lets the OS pick a free port, which removes the pick-then-race that
@@ -229,6 +230,13 @@ class LoopbackListener:
 
     def deliver(self, submission: Submission) -> None:
         self._submission = submission
+
+    def set_progress(self, data: dict[str, Any]) -> None:
+        self._progress = data
+
+    def progress(self) -> dict[str, Any] | None:
+        """The answer the page last reported before it ended, for resuming the ask."""
+        return self._progress
 
     def mark_seen(self) -> None:
         self._seen = True

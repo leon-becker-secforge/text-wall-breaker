@@ -22,6 +22,10 @@ id appends its questions to the open page, and the call that says nothing more i
 waits for the answers. It needs a listener that outlives a call, so it holds the shared
 session for the whole stream, or, if that is busy, gets a `SessionListener` of its own
 rather than a `LoopbackListener`.
+
+A cancelled or timed-out ask that had answers entered returns a `resume` id: the pages
+report every change as they go, the server keeps the last report as a draft, and a call
+with `resume` reopens the same questions with those answers prefilled.
 """
 
 from __future__ import annotations
@@ -113,6 +117,14 @@ class Option(BaseModel):
             "AskUserQuestion's description.",
         ),
     ] = None
+    selected: Annotated[
+        bool,
+        Field(
+            description="Prefill: the option starts checked, for the user to keep or "
+            "change. Several per question need multi_select. Not counted as picked in "
+            "`changed_from`.",
+        ),
+    ] = False
     recommended: Annotated[
         bool,
         Field(
@@ -148,6 +160,10 @@ class Question(BaseModel):
     multi_select: bool = False
     allow_free_text: bool = True
     allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False
+    free_text: Annotated[
+        str | None,
+        Field(description="Prefill: text the free-text box starts with, for the user to edit."),
+    ] = None
 
     def validated(self, *, label: str) -> Question:
         """Return self, or raise `InvalidAsk` naming `label` if unanswerable."""
@@ -165,6 +181,12 @@ class Question(BaseModel):
             raise InvalidAsk(
                 f"{label}: {recommended} options are recommended but multi_select is "
                 "false; recommend at most one"
+            )
+        prefilled = sum(1 for option in self.options if option.selected)
+        if prefilled > 1 and not self.multi_select:
+            raise InvalidAsk(
+                f"{label}: {prefilled} options are selected but multi_select is false; "
+                "prefill at most one"
             )
         seen: set[str] = set()
         for option in self.options:
@@ -209,11 +231,24 @@ class AskRequest(BaseModel):
     timeout_seconds: float = 300.0
     more_coming: bool = False
     ask_id: str | None = None
+    resume: str | None = None
+    free_text: str | None = None  # prefill of the single-question shorthand; set by resume only
 
     def validated(self) -> AskRequest:
         """Return self, or raise `InvalidAsk` if the page would be unanswerable."""
         if self.timeout_seconds <= 0:
             raise InvalidAsk("timeout_seconds must be positive")
+        if self.resume is not None:
+            if (
+                self.question.strip()
+                or self.options
+                or self.questions is not None
+                or self.header.strip()
+                or self.more_coming
+                or self.ask_id is not None
+            ):
+                raise InvalidAsk("resume reopens an earlier ask; only timeout_seconds applies")
+            return self
         if self.ask_id is not None:
             return self._validated_continuation()
         if self.more_coming and self.questions is None:
@@ -260,6 +295,7 @@ class AskRequest(BaseModel):
             multi_select=self.multi_select,
             allow_free_text=self.allow_free_text,
             allow_defer=self.allow_defer,
+            free_text=self.free_text,
         )
 
     @property
@@ -375,6 +411,7 @@ def _build_html(
             multi_select=step.multi_select,
             allow_free_text=step.allow_free_text,
             allow_defer=step.allow_defer,
+            free_text_prefill=step.free_text or "",
             submit_url=submit_url,
             timeout_seconds=request.timeout_seconds,
             accent=_resolve_accent(),
@@ -390,6 +427,7 @@ def _build_html(
                 "multi_select": step.multi_select,
                 "allow_free_text": step.allow_free_text,
                 "allow_defer": step.allow_defer,
+                "free_text": step.free_text,
             }
             for step in steps
         ],
@@ -417,13 +455,119 @@ def _extract_answers(steps: list[Question], raw_answers: object) -> list[dict[st
     ]
 
 
+# An ask that ended unanswered keeps what the user had entered, so `resume` can reopen it.
+# In memory only, and few and short-lived: a draft is for picking an ask back up
+# straight away, not an archive.
+_DRAFT_TTL_SECONDS = 3600.0
+_DRAFT_LIMIT = 20
+
+
+@dataclass
+class _Draft:
+    steps: list[Question]
+    header: str
+    multi: bool
+    answers: list[Any]
+    saved: float
+
+
+_drafts: dict[str, _Draft] = {}
+_drafts_lock = threading.Lock()
+
+
+def _save_draft(
+    steps: list[Question], header: str, *, multi: bool, progress: dict[str, Any] | None
+) -> str | None:
+    """Keep the answer a page last reported, returning its `resume` id.
+
+    None when there is nothing worth resuming: no report, or nothing selected or typed.
+    """
+    raw = (progress or {}).get("answers") if multi else [progress]
+    if not isinstance(raw, list) or not any(
+        isinstance(entry, dict) and (entry.get("selected") or entry.get("free_text"))
+        for entry in raw
+    ):
+        return None
+    now = time.monotonic()
+    draft_id = secrets.token_hex(8)
+    with _drafts_lock:
+        for key in [k for k, d in _drafts.items() if now - d.saved > _DRAFT_TTL_SECONDS]:
+            del _drafts[key]
+        while len(_drafts) >= _DRAFT_LIMIT:
+            del _drafts[next(iter(_drafts))]
+        _drafts[draft_id] = _Draft(list(steps), header, multi, raw, now)
+    return draft_id
+
+
+def _resumed_request(request: AskRequest) -> AskRequest:
+    """The ask `request.resume` names, reopened with the user's earlier answers prefilled.
+
+    A deferral is not carried over (its reason stays in the free-text box).
+    """
+    with _drafts_lock:
+        draft = _drafts.pop(request.resume or "", None)
+    if draft is None or time.monotonic() - draft.saved > _DRAFT_TTL_SECONDS:
+        raise InvalidAsk(
+            f"no draft with resume id {request.resume!r}: it was already resumed, expired "
+            f"after {_DRAFT_TTL_SECONDS / 60:.0f} minutes, or never existed"
+        )
+    steps = []
+    for index, step in enumerate(draft.steps):
+        raw = draft.answers[index] if index < len(draft.answers) else None
+        answer = _extract_answer(step, raw)
+        picked = set(answer["selected"])
+        steps.append(
+            step.model_copy(
+                update={
+                    "options": [
+                        option.model_copy(update={"selected": option.id in picked})
+                        for option in step.options
+                    ],
+                    "free_text": answer["free_text"] or None,
+                }
+            )
+        )
+    if draft.multi:
+        return AskRequest(
+            questions=steps, header=draft.header, timeout_seconds=request.timeout_seconds
+        )
+    only = steps[0]
+    return AskRequest(
+        question=only.question,
+        options=only.options,
+        multi_select=only.multi_select,
+        allow_free_text=only.allow_free_text,
+        allow_defer=only.allow_defer,
+        free_text=only.free_text,
+        timeout_seconds=request.timeout_seconds,
+    )
+
+
+def _unanswered(
+    result: dict[str, Any],
+    steps: list[Question],
+    header: str,
+    *,
+    multi: bool,
+    progress: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """`result` (cancelled or timed out), plus a `resume` id if there is a draft to resume."""
+    draft_id = _save_draft(steps, header, multi=multi, progress=progress)
+    return {**result, "resume": draft_id} if draft_id else result
+
+
 def _answer_from_submission(
-    steps: list[Question], submission: Submission | None, *, multi: bool
+    steps: list[Question],
+    submission: Submission | None,
+    *,
+    multi: bool,
+    header: str = "",
+    progress: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if submission is None:
-        return {"timed_out": True}
+        return _unanswered({"timed_out": True}, steps, header, multi=multi, progress=progress)
     if submission.kind == "cancel":
-        return {"cancelled": True}
+        return _unanswered({"cancelled": True}, steps, header, multi=multi, progress=progress)
     if not multi:
         return _extract_answer(steps[0], submission.data)
     return {"answers": _extract_answers(steps, submission.data.get("answers"))}
@@ -447,7 +591,13 @@ def _run_ask_reusing_tab(
         return NOT_DELIVERED
 
     submission = session.wait_for_answer(request.timeout_seconds)
-    return _answer_from_submission(steps, submission, multi=request.questions is not None)
+    return _answer_from_submission(
+        steps,
+        submission,
+        multi=request.questions is not None,
+        header=request.header,
+        progress=session.progress(),
+    )
 
 
 def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[str, Any]:
@@ -472,8 +622,15 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
             return NOT_DELIVERED
+        progress = listener.progress()
 
-    return _answer_from_submission(steps, submission, multi=request.questions is not None)
+    return _answer_from_submission(
+        steps,
+        submission,
+        multi=request.questions is not None,
+        header=request.header,
+        progress=progress,
+    )
 
 
 # A streamed ask holds its tab between calls. One the agent never finishes is given up
@@ -530,6 +687,7 @@ def _step_specs(steps: list[Question]) -> list[dict[str, object]]:
             "multi_select": step.multi_select,
             "allow_free_text": step.allow_free_text,
             "allow_defer": step.allow_defer,
+            "free_text": step.free_text,
         }
         for step in steps
     ]
@@ -620,8 +778,11 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
 
     submission = stream.session.submission()
     if submission is not None and submission.kind == "cancel":
+        progress = stream.session.progress()
         _end_stream(ask_id)
-        return {"cancelled": True}
+        return _answer_from_submission(
+            stream.steps, submission, multi=True, header=stream.header, progress=progress
+        )
 
     added = list(request.questions or [])
     _check_question_ids(added, {step.id for step in stream.steps if step.id is not None})
@@ -640,7 +801,13 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
     stream.waiting = True
     try:
         submission = stream.session.wait_for_answer(request.timeout_seconds)
-        return _answer_from_submission(stream.steps, submission, multi=True)
+        return _answer_from_submission(
+            stream.steps,
+            submission,
+            multi=True,
+            header=stream.header,
+            progress=stream.session.progress(),
+        )
     finally:
         _end_stream(ask_id)
 
@@ -667,6 +834,8 @@ def run_ask(request: AskRequest) -> dict[str, Any]:
     """
     request = request.validated()
     _expire_idle_streams()
+    if request.resume is not None:
+        request = _resumed_request(request).validated()
     if request.ask_id is not None:
         return _continue_stream(request)
     if request.more_coming:

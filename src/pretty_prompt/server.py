@@ -84,7 +84,8 @@ Returns one of:
   {"cancelled": true} / {"timed_out": true} / {"not_delivered": true}
 
 `not_delivered` (~30s): user never saw it, ask again rather than retry longer.
-`timed_out`: seen, unanswered.
+`timed_out`: seen, unanswered. Either also carries `resume` if answers were entered:
+pass it back as `resume` to reopen the ask prefilled.
 
 `selected`/`free_text` are additive. `expanded`: option ids whose body was ever
 opened, even if closed again.
@@ -249,6 +250,14 @@ async def ask(
             "rest. See the streamed ask section of this tool's description."
         ),
     ] = False,
+    resume: Annotated[
+        str | None,
+        Field(
+            description="The `resume` id a cancelled or timed-out ask returned: reopens "
+            "that ask with the user's earlier answers prefilled. Only timeout_seconds "
+            "applies. Used once."
+        ),
+    ] = None,
     ask_id: Annotated[
         str | None,
         Field(
@@ -269,6 +278,7 @@ async def ask(
         header=header,
         more_coming=more_coming,
         ask_id=ask_id,
+        resume=resume,
     )
     try:
         request.validated()

@@ -510,9 +510,10 @@ __FREE_TEXT__
   // that, and some (Firefox in particular) restore form field values across a plain
   // reload keyed by field identity/position. Since the new question's fields can occupy
   // the same identity as the old ones, that restore has to be undone before anything
-  // else reads these fields, or the new question can silently start pre-answered.
-  inputs.forEach(function (i) { i.checked = false; });
-  if (freeText) freeText.value = '';
+  // else reads these fields, or the new question can silently start pre-answered. Undone
+  // to the markup's own state (`defaultChecked`), which is a prefill when the agent set one.
+  inputs.forEach(function (i) { i.checked = i.defaultChecked; });
+  if (freeText) freeText.value = freeText.defaultValue;
 
   // Theme: the root attribute overrides the OS preference, absent follows it. The server
   // already set it from its own saved state (see page.py's __THEME_ATTR__) whenever it
@@ -594,6 +595,15 @@ __FREE_TEXT__
     var d = collect();
     submitBtn.disabled = !d.deferred && d.selected.length === 0 && d.free_text === '';
     status.hidden = !submitBtn.disabled;
+    reportProgress();
+  }
+
+  // The answer so far, kept by the server so an ask that times out or is closed can be
+  // resumed with it. Debounced: refresh() runs on every keystroke in the free-text box.
+  var progressTimer = null;
+  function reportProgress() {
+    clearTimeout(progressTimer);
+    progressTimer = setTimeout(function () { send('progress', collect()); }, 400);
   }
 
   inputs.forEach(function (i) { i.addEventListener('change', refresh); });
@@ -915,8 +925,12 @@ __STEPS__
   // a plain reload keyed by field identity/position. Since the new questions' fields can
   // occupy the same identity as the old ones, that restore has to be undone before
   // anything else reads these fields, or a new question can silently start pre-answered.
-  document.querySelectorAll('input[data-option-id]').forEach(function (i) { i.checked = false; });
-  document.querySelectorAll('textarea[data-step]').forEach(function (t) { t.value = ''; });
+  document.querySelectorAll('input[data-option-id]').forEach(function (i) {
+    i.checked = i.defaultChecked;
+  });
+  document.querySelectorAll('textarea[data-step]').forEach(function (t) {
+    t.value = t.defaultValue;
+  });
   document.querySelectorAll('.pp-step').forEach(wireStep);
 
   // The server already set the theme attribute from its own saved state whenever it has
@@ -1034,11 +1048,11 @@ __STEPS__
   }
 
   // A streamed ask returns the answers so far to each of the agent's later calls, so
-  // it can shape the questions it hasn't written yet. Debounced: refresh() runs on
+  // it can shape the questions it hasn't written yet; any ask keeps them so it can be
+  // resumed if it times out or is closed. Debounced: refresh() runs on
   // every keystroke in a free-text box.
   var progressTimer = null;
   function reportProgress() {
-    if (!STEPS_URL) return;
     clearTimeout(progressTimer);
     progressTimer = setTimeout(function () {
       send('progress', { answers: collect().answers.slice(0, furthest + 1) });
@@ -2481,9 +2495,10 @@ def _render_options(
         # below wraps this input in <summary> rather than <label> — <summary> confers no
         # implicit accessible name the way <label> does, so the input would otherwise
         # announce with none at all.
+        checked_attr = " checked" if option.get("selected") else ""
         select_html = (
-            f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr} '
-            f'aria-label="{label}">'
+            f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr}'
+            f'{checked_attr} aria-label="{label}">'
             f'<span class="pp-option-label">{label}</span>'
             + (
                 '<span class="pp-option-recommended">Recommended</span>'
@@ -2653,6 +2668,7 @@ def build_page(
     options: list[dict[str, object]],
     multi_select: bool,
     allow_free_text: bool,
+    free_text_prefill: str = "",
     submit_url: str,
     timeout_seconds: float,
     allow_defer: bool = False,
@@ -2692,7 +2708,8 @@ def build_page(
         free_text = (
             '  <label class="pp-free-text">Anything else'
             '<textarea id="pp-free-text" rows="4" '
-            'placeholder="Optional — type a free-text answer"></textarea></label>'
+            'placeholder="Optional — type a free-text answer">\n'
+            f"{html.escape(free_text_prefill)}</textarea></label>"
         )
 
     if options and allow_free_text:
@@ -2767,7 +2784,8 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
         free_text_html = (
             f'    <label class="pp-free-text">Anything else'
             f'<textarea id="pp-free-text-{index}" data-step="{index}" rows="3" '
-            'placeholder="Optional — type a free-text answer"></textarea></label>'
+            'placeholder="Optional — type a free-text answer">\n'
+            f"{html.escape(str(spec.get('free_text') or ''))}</textarea></label>"
         )
     # The wizard's JS toggles `pp-step-active` on navigation; the first step starts with
     # it already set so the page shows question one even before the script has run.
