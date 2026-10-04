@@ -63,9 +63,9 @@ def test_accent_config_is_refused_when_not_a_hex_colour(monkeypatch):
     assert "blue" in problem
 
 
-def test_ask_show_and_review_are_the_only_registered_tools():
+def test_ask_show_show_status_and_review_are_the_only_registered_tools():
     tools = anyio.run(server.list_tools)
-    assert [tool.name for tool in tools] == ["ask", "show", "review"]
+    assert [tool.name for tool in tools] == ["ask", "show", "show_status", "review"]
 
 
 def test_no_tool_description_risks_truncation():
@@ -129,3 +129,8 @@ def test_an_unanswerable_call_fails_before_a_page_is_opened(arguments, match):
     # would try to open a page instead of erroring.
     with pytest.raises(ToolError, match=match):
         anyio.run(lambda: server.call_tool("ask", arguments))
+
+
+def test_show_status_is_registered_and_takes_no_arguments():
+    tool = next(t for t in anyio.run(server.list_tools) if t.name == "show_status")
+    assert tool.input_schema.get("properties", {}) == {}

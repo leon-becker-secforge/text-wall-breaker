@@ -391,6 +391,12 @@ class SessionListener:
         self._more_coming = False
         self._progress: dict[str, Any] | None = None
         self.tab_opened = False
+        # The last `show` published here without waiting on it, as {"title", "state"}
+        # ("unacknowledged" until the Acknowledge click arrives). None once anything else
+        # is published. `_last_poll` is when the tab last asked GET /status, which is how
+        # `holds_unread_report` tells a report still on screen from one whose tab closed.
+        self._report: dict[str, str] | None = None
+        self._last_poll = 0.0
         # Port 0 lets the OS pick a free port, same reasoning as LoopbackListener.
         self._httpd = _SessionServer(("127.0.0.1", 0), _SessionHandler)
         self._httpd.session = self
@@ -415,9 +421,44 @@ class SessionListener:
         with self._state_lock:
             self._last_activity = time.monotonic()
 
-    def try_claim(self) -> bool:
-        """Claim exclusive use of this session for one `ask` call. Never blocks."""
-        return self._busy_lock.acquire(blocking=False)
+    def try_claim(self, *, replaces_report: bool = False) -> bool:
+        """Claim exclusive use of this session for one call. Never blocks.
+
+        Refuses, like a busy session, while an unread `show` report is on screen, unless
+        `replaces_report` (a newer `show`) says replacing it is the point. The caller then
+        falls back to its own one-off tab, so a question never wipes a report the user is
+        still reading.
+        """
+        if not self._busy_lock.acquire(blocking=False):
+            return False
+        if not replaces_report and self.holds_unread_report():
+            self._busy_lock.release()
+            return False
+        return True
+
+    def holds_unread_report(self) -> bool:
+        """Whether an unacknowledged `show` is still open in a live tab of this session."""
+        with self._state_lock:
+            if self._report is None or self._report["state"] != "unacknowledged":
+                return False
+            return time.monotonic() - self._last_poll <= REUSE_GRACE_SECONDS
+
+    def mark_report(self, title: str) -> None:
+        """Record that the page just published is a `show` report awaiting Acknowledge."""
+        with self._state_lock:
+            self._report = {"title": title, "state": "unacknowledged"}
+            self._last_poll = time.monotonic()
+
+    def report_status(self) -> dict[str, Any]:
+        """The last report's state, for the `show_status` tool.
+
+        `state` is "none" (no report was shown here, or something else replaced it),
+        "unacknowledged" or "acknowledged".
+        """
+        with self._state_lock:
+            if self._report is None:
+                return {"state": "none"}
+            return {"state": self._report["state"], "title": self._report["title"]}
 
     def release(self) -> None:
         self._busy_lock.release()
@@ -521,6 +562,7 @@ class SessionListener:
             self._steps = list(steps or [])
             self._more_coming = more_coming
             self._progress = None
+            self._report = None
             generation = self._generation
         self._answered.clear()
         self.note_activity()
@@ -543,6 +585,7 @@ class SessionListener:
 
     def status(self) -> dict[str, Any]:
         with self._state_lock:
+            self._last_poll = time.monotonic()
             return {
                 "generation": self._generation,
                 "step_count": len(self._steps),
@@ -570,6 +613,8 @@ class SessionListener:
     def deliver(self, submission: Submission) -> None:
         with self._state_lock:
             self._submission = submission
+            if submission.kind == "acknowledge" and self._report is not None:
+                self._report["state"] = "acknowledged"
         self._answered.set()
 
     def wait_for_answer(self, timeout_seconds: float) -> Submission | None:

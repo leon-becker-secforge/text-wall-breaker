@@ -14,10 +14,11 @@ options, plain-text previews, no images. `pretty-prompt` opens a real page on th
 instead, so a question can carry any number of options, a Markdown body per option, and
 images.
 
-The server exposes three tools: `ask`, which waits for an answer; `show` (prototype),
+The server exposes four tools: `ask`, which waits for an answer; `show` (prototype),
 which doesn't — it opens a page for a result the user only needs to read, like a report
 or a comparison, and returns as soon as the browser has it; and `review`, which waits for
-line-anchored comments on a diff instead of a discrete answer.
+line-anchored comments on a diff instead of a discrete answer; and `show_status`, which
+reports without blocking whether the last `show` was acknowledged.
 
 ## Installing
 
@@ -273,9 +274,25 @@ The page carries two buttons, on by default, either can be turned off:
 - **Save report** — downloads the content, as the original Markdown or as a static
   snapshot of the rendered page (no buttons, no scripts). Purely client-side; never
   reported back here.
-- **Acknowledge** — marks the report seen. By default that's a local-only mark: the
-  click never reaches the agent, because nothing is waiting for it. Set
-  `wait_for_acknowledge` to actually block on it, the way `ask` blocks on an answer.
+- **Acknowledge** — marks the report seen. Set `wait_for_acknowledge` to block on it,
+  the way `ask` blocks on an answer. Otherwise the click is remembered and readable
+  through `show_status` (below).
+
+### An unread report is not replaced
+
+`show` shares its tab with `ask` and `review`. While a report is unacknowledged and its
+tab is still open, an `ask` or `review` opens a second tab instead of taking the first
+over, so the report stays on screen. Once it is acknowledged, or its tab is closed, the
+next call reuses the tab again and the report is gone. A newer `show` still replaces an
+older one. When a question about the report follows, set `wait_for_acknowledge`, or
+check `show_status` first.
+
+### `show_status`
+
+Takes no arguments; returns at once with `{"state": "unacknowledged" | "acknowledged" |
+"none", "title": "..."}`. `none` means no report was shown in the shared tab, or
+something else replaced it. A report that fell back to its own one-off tab (the shared
+one was busy) has no listener, so it is not tracked and reads `none`.
 
 ### Result
 

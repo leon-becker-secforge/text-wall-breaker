@@ -8,7 +8,7 @@ import urllib.request
 import pytest
 
 from pretty_prompt import listener as listener_module
-from pretty_prompt.listener import LoopbackListener
+from pretty_prompt.listener import LoopbackListener, SessionListener, Submission
 
 
 def post(port: int, query: str, payload: object, content_type: str = "text/plain"):
@@ -170,3 +170,52 @@ def test_response_carries_the_cors_header():
         response = post(listener.port, "?t=tok", {"kind": "submit", "data": {}})
         assert response.headers["Access-Control-Allow-Origin"] == "*"
         thread.join(timeout=5)
+
+
+@pytest.fixture
+def session():
+    listener = SessionListener("tok")
+    yield listener
+    listener.close()
+
+
+def _published_report(session: SessionListener, title: str = "Report") -> None:
+    session.publish(lambda generation: "<html>")
+    session.mark_report(title)
+
+
+def test_a_question_cannot_claim_the_session_while_a_report_is_unread(session):
+    _published_report(session)
+    assert not session.try_claim()
+    # The refused claim must not leave the session locked.
+    assert session.try_claim(replaces_report=True)
+    session.release()
+
+
+def test_acknowledging_the_report_frees_the_session_for_questions(session):
+    _published_report(session)
+    session.deliver(Submission(kind="acknowledge", data={}))
+    assert session.report_status() == {"state": "acknowledged", "title": "Report"}
+    assert session.try_claim()
+    session.release()
+
+
+def test_a_report_whose_tab_stopped_polling_no_longer_blocks_questions(session, monkeypatch):
+    _published_report(session)
+    monkeypatch.setattr(listener_module, "REUSE_GRACE_SECONDS", -1.0)
+    assert session.try_claim()
+    session.release()
+
+
+def test_status_polls_keep_an_unread_report_held(session):
+    _published_report(session)
+    session.status()
+    assert session.holds_unread_report()
+
+
+def test_publishing_anything_else_clears_the_report_status(session):
+    assert session.report_status() == {"state": "none"}
+    _published_report(session)
+    assert session.report_status() == {"state": "unacknowledged", "title": "Report"}
+    session.publish(lambda generation: "<html>")
+    assert session.report_status() == {"state": "none"}

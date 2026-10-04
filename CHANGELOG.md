@@ -7,6 +7,18 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `show_status`: a new tool that reports, without blocking, whether the last `show` in
+  the shared tab was acknowledged (`unacknowledged`, `acknowledged` or `none`), so a
+  caller can check a report was read before asking about it.
+
+### Changed
+
+- An `ask` or `review` no longer replaces an unacknowledged `show` in the shared tab:
+  while the report's tab is open it gets a tab of its own. An acknowledged report, or a
+  closed tab, is replaced as before. `show`'s description now says so and suggests
+  `wait_for_acknowledge` when a question about the report follows.
+
+
 - `ask`: prefill. `selected: true` on an `Option` starts it checked (several need
   `multi_select`), and `free_text` on a `Question` starts the free-text box with that
   text. A prefilled option is not counted in `changed_from`.

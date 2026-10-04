@@ -32,7 +32,7 @@ from .ask import (
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .review import InvalidReview, Page, ReviewRequest, run_review
-from .show import InvalidShow, ShowRequest, run_show
+from .show import InvalidShow, ShowRequest, run_show, show_status
 
 __all__ = [
     "MAX_TOOL_DESCRIPTION_CHARS",
@@ -121,14 +121,17 @@ anything that would be a wall of text — same Markdown subset as `ask` (heading
 lists, tables, code, images, blockquotes), and a paragraph break is a real newline,
 not the two-character `\\n` escape.
 
-Reuses the same tab `ask` uses, so the two don't pile up separate tabs.
+Shares a tab with `ask`. An unacknowledged report is never replaced by an `ask` or
+`review`: that opens a second tab instead. Once acknowledged, or its tab is closed, the
+next `ask` reuses the tab and the report is gone. Poll `show_status`, or set
+`wait_for_acknowledge` when a question about the report follows.
 
 Two buttons, on by default:
   - Save report — downloads the content as Markdown or the rendered HTML. Client-side
     only, never reported back.
   - Acknowledge — marks it seen. `wait_for_acknowledge` blocks on it (like `ask`),
     returning `{"acknowledged": true}` or `{"timed_out": true}`. Left false (default),
-    a click is local-only.
+    the click is only visible through `show_status`.
 Turn either off with `save_button`/`acknowledge_button` when it doesn't apply.
 
 Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path only
@@ -323,8 +326,8 @@ async def show(
         bool,
         Field(
             description="Block until Acknowledge is clicked, like ask. Requires "
-            "acknowledge_button. Default false: show returns immediately and a click "
-            "is a local-only mark, never reported back."
+            "acknowledge_button. Default false: show returns immediately; check the "
+            "click later with show_status."
         ),
     ] = False,
     timeout_seconds: Annotated[
@@ -354,6 +357,20 @@ async def show(
         return await anyio.to_thread.run_sync(run_show, request)
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the page: {exc}") from exc
+
+
+_SHOW_STATUS_DESCRIPTION = """Check, without blocking, whether the last `show` was acknowledged.
+
+Returns `{"state": "unacknowledged" | "acknowledged" | "none", "title": "..."}`.
+`none`: no report was shown in the shared tab, or an `ask`/`review` has since replaced
+it. Use it to find out if a report was read before asking about it, when
+`wait_for_acknowledge` was left false. A report that fell back to its own one-off tab
+(shared tab busy) is not tracked and reads `none`."""
+
+
+@server.tool(name="show_status", description=_SHOW_STATUS_DESCRIPTION)
+async def show_status_tool() -> dict[str, Any]:
+    return show_status()
 
 
 @server.tool(name="review", description=_REVIEW_DESCRIPTION)

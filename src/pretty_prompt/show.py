@@ -36,7 +36,7 @@ from .page import (
 )
 from .session import get_shared_session
 
-__all__ = ["BrowserUnavailable", "InvalidShow", "ShowRequest", "run_show"]
+__all__ = ["BrowserUnavailable", "InvalidShow", "ShowRequest", "run_show", "show_status"]
 
 
 class InvalidShow(ValueError):
@@ -139,6 +139,10 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
             request, submit_url=submit_url, status_url=status_url, generation=generation
         )
     )
+    if request.acknowledge_button:
+        # After publish, which clears any earlier report. The page isn't served until
+        # show_in_tab opens or reloads the tab, so no click can race this.
+        session.mark_report(request.title)
     if not session.show_in_tab(generation, open_in_browser):
         return {"not_delivered": True}
     if not request.wait_for_acknowledge:
@@ -192,9 +196,19 @@ def run_show(request: ShowRequest) -> dict[str, Any]:
     request = request.validated()
 
     session = get_shared_session()
-    if session.try_claim():
+    if session.try_claim(replaces_report=True):
         try:
             return _run_show_reusing_tab(request, session)
         finally:
             session.release()
     return _run_show_with_new_tab(request)
+
+
+def show_status() -> dict[str, Any]:
+    """Whether the last `show` in the shared tab has been acknowledged, without waiting.
+
+    `{"state": "none" | "unacknowledged" | "acknowledged"[, "title": ...]}`. Only a
+    report in the shared tab is tracked: a one-off tab (used when the shared one was
+    busy) has no listener, so its Acknowledge click is local and reads as "none" here.
+    """
+    return get_shared_session().report_status()
