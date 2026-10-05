@@ -943,5 +943,7 @@ def test_long_first_paragraph_gets_a_hint():
     long = Question(question="x" * (LONG_QUESTION_CHARS + 1), options=[Option(id="a", label="A")])
     short = Question(question="Short?\n\n" + "y" * 500, options=[Option(id="a", label="A")])
     assert _long_question_hint([short]) is None
-    assert "The question has" in _long_question_hint([long])
-    assert "Question 2 has" in _long_question_hint([short, long])
+    single = _long_question_hint([long])
+    second = _long_question_hint([short, long])
+    assert single is not None and "The question has" in single
+    assert second is not None and "Question 2 has" in second

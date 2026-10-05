@@ -275,7 +275,9 @@ def test_bold_lead_bolds_first_sentence_of_a_long_question():
     from pretty_prompt.markdown import bold_lead
 
     question = "Minor `a.py:82`: the rename leaves old names. " + "More detail. " * 25
-    assert bold_lead(question).startswith("**Minor `a.py:82`: the rename leaves old names.** More")
+    bolded = bold_lead(question)
+    assert bolded is not None
+    assert bolded.startswith("**Minor `a.py:82`: the rename leaves old names.** More")
 
 
 def test_bold_lead_leaves_short_or_leadless_questions_alone():
