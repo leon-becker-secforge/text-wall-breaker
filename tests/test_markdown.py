@@ -269,3 +269,18 @@ def test_nested_list_mixed_markers():
 def test_multiple_nesting_levels():
     out = render_markdown("- a\n  - b\n    - c")
     assert out == "<ul><li>a<ul><li>b<ul><li>c</li></ul></li></ul></li></ul>"
+
+
+def test_bold_lead_bolds_first_sentence_of_a_long_question():
+    from pretty_prompt.markdown import bold_lead
+
+    question = "Minor `a.py:82`: the rename leaves old names. " + "More detail. " * 25
+    assert bold_lead(question).startswith("**Minor `a.py:82`: the rename leaves old names.** More")
+
+
+def test_bold_lead_leaves_short_or_leadless_questions_alone():
+    from pretty_prompt.markdown import bold_lead
+
+    assert bold_lead("Short question?") is None
+    assert bold_lead("x" * 300) is None
+    assert bold_lead("y" * 250 + ". tail") is None

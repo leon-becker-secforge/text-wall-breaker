@@ -10,6 +10,9 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - `show_status`: a new tool that reports, without blocking, whether the last `show` in
   the shared tab was acknowledged (`unacknowledged`, `acknowledged` or `none`), so a
   caller can check a report was read before asking about it.
+- `ask`: a question whose first paragraph is over 240 chars renders at regular weight with
+  only its first sentence bold, instead of one bold wall. The result also carries a `hint`
+  telling the agent to keep the question a short heading. The tool description says the same.
 
 ### Changed
 

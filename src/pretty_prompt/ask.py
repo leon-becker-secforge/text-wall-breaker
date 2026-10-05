@@ -44,6 +44,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from .listener import LoopbackListener, SessionListener, Submission
+from .markdown import LONG_QUESTION_CHARS, first_paragraph
 from .opener import BrowserUnavailable, find_opener
 from .page import (
     ACCENT_ENV_VAR,
@@ -812,7 +813,7 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
         _end_stream(ask_id)
 
 
-def run_ask(request: AskRequest) -> dict[str, Any]:
+def _run_ask(request: AskRequest) -> dict[str, Any]:
     """Open the page for `request` and block until it is answered, cancelled or idle.
 
     Returns `{"cancelled": True}` or `{"timed_out": True}` either way, or
@@ -849,3 +850,31 @@ def run_ask(request: AskRequest) -> dict[str, Any]:
         finally:
             session.release()
     return _run_ask_with_new_tab(request, steps)
+
+
+_LONG_QUESTION_HINT = (
+    "{where} {chars} chars in its first paragraph. Keep the question a short "
+    "heading; put detail in lists, blockquotes or option `body`."
+)
+
+
+def _long_question_hint(steps: list[Question]) -> str | None:
+    for index, step in enumerate(steps):
+        first = first_paragraph(step.question)
+        if len(first) > LONG_QUESTION_CHARS:
+            where = f"Question {index + 1} has" if len(steps) > 1 else "The question has"
+            return _LONG_QUESTION_HINT.format(where=where, chars=len(first))
+    return None
+
+
+def run_ask(request: AskRequest) -> dict[str, Any]:
+    """`_run_ask`, plus a `hint` on the result if a question's first paragraph is long."""
+    result = _run_ask(request)
+    # A resume or a stream continuation carries no questions of its own to judge.
+    if (
+        request.resume is None
+        and request.ask_id is None
+        and (hint := _long_question_hint(request.steps))
+    ):
+        result["hint"] = hint
+    return result

@@ -72,31 +72,32 @@ cancelled, or timed out. Use over AskUserQuestion for >4 options, a Markdown opt
 body, or an image.
 
 `question`/`body` are Markdown, not HTML. Images: `![alt](file:///abs/path)`.
-Paragraph breaks are real newlines, not the two-character `\\n` escape (recovered
-either way, but write a real one).
+Paragraph breaks: real newlines, not the `\\n` escape.
+
+Keep `question` a short heading (<=2 lines). Detail goes in lists, blockquotes or
+option `body`; a long first paragraph is a wall of text. A `hint`
+key in the result is formatting advice for your next ask.
 
 A long `body` sits behind a click users often skip. Anything that could flip the
 choice goes in `caveat` instead — always visible, used sparingly.
 
 Returns one of:
   {"selected":[...], "free_text":"...", "expanded":[...]}   answered
-  {"answers":[{selected, free_text, expanded}, ...]}         answered `questions`
   {"cancelled": true} / {"timed_out": true} / {"not_delivered": true}
 
-`not_delivered` (~30s): user never saw it, ask again rather than retry longer.
+`not_delivered` (~30s): user never saw it; ask again.
 `timed_out`: seen, unanswered. Either also carries `resume` if answers were entered:
 pass it back as `resume` to reopen the ask prefilled.
 
 `selected`/`free_text` are additive. `expanded`: option ids whose body was ever
-opened, even if closed again.
+opened.
 
 `allow_defer`: user may answer "not yet" → `{"deferred": true, "selected": [],
 "free_text": <reason>}`.
 
 `questions` (prototype): several questions on one page, instead of
-`question`/`options`/etc, never both. Returns `{"answers": [...]}`, one
-`{selected, free_text, expanded}` per question, in order; a question's optional `id`
-is echoed on its entry, so match by id.
+`question`/`options`/etc, never both. Returns `{"answers": [...]}`, one entry
+per question, in order; a question's optional `id` is echoed on it, so match by id.
 
 Streamed ask (prototype, `questions`+`more_coming`): send in chunks so the user
 starts answering while you write the rest. First call returns `{"ask_id",

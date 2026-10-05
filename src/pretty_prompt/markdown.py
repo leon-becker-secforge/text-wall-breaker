@@ -301,6 +301,44 @@ def _expand_literal_newlines(lines: list[str]) -> list[str]:
     return out
 
 
+# A question's first paragraph renders bold, so past this length it reads as a wall.
+LONG_QUESTION_CHARS = 240
+_MAX_LEAD_CHARS = 200
+
+
+def first_paragraph(question: str) -> str:
+    return question.strip().split("\n\n", 1)[0]
+
+
+def _lead_end(paragraph: str, terminator: str) -> int:
+    """Index just past the first `terminator` outside a code span, or -1."""
+    in_code = False
+    for index, char in enumerate(paragraph):
+        if char == "`":
+            in_code = not in_code
+        elif not in_code and char == terminator and paragraph[index + 1 : index + 2] in (" ", "\n"):
+            return index + 1
+    return -1
+
+
+def bold_lead(question: str) -> str | None:
+    """`question` with its first sentence in bold, or None unless its first paragraph is long.
+
+    The first sentence ends at the first `. `, else the first `: `, outside code spans.
+    One longer than `_MAX_LEAD_CHARS` is not bolded: it would be the same wall again.
+    """
+    paragraph = first_paragraph(question)
+    if len(paragraph) <= LONG_QUESTION_CHARS:
+        return None
+    for terminator in (".", ":"):
+        end = _lead_end(paragraph, terminator)
+        if 0 < end <= _MAX_LEAD_CHARS:
+            start = question.index(paragraph)
+            lead = paragraph[:end]
+            return f"{question[:start]}**{lead}**{question[start + end :]}"
+    return None
+
+
 def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
     """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input.
 

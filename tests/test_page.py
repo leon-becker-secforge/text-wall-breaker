@@ -455,3 +455,16 @@ def test_multi_page_prefills_per_step():
     )
     assert len(re.findall(r"<input[^>]* checked ", page)) == 1
     assert ">\nhello</textarea>" in page
+
+
+def test_long_question_marks_its_block_and_bolds_only_the_lead():
+    html = build_page(
+        question="Lead sentence. " + "Detail follows here. " * 20,
+        options=[{"id": "a", "label": "A"}],
+        multi_select=False,
+        allow_free_text=False,
+        submit_url="http://127.0.0.1:1/s",
+        timeout_seconds=300,
+    )
+    assert 'class="pp-question pp-long"' in html
+    assert "<strong>Lead sentence.</strong>" in html

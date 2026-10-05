@@ -935,3 +935,13 @@ def test_a_prefilled_option_is_not_changed_from_when_kept(browser):
     fake = browser(lambda page: {"kind": "submit", "data": {"selected": ["a"], "free_text": ""}})
     run_ask(AskRequest(question="q", options=_a_b(selected=True)))
     assert len(_checked_inputs(fake.page)) == 1
+
+
+def test_long_first_paragraph_gets_a_hint():
+    from pretty_prompt.ask import LONG_QUESTION_CHARS, _long_question_hint
+
+    long = Question(question="x" * (LONG_QUESTION_CHARS + 1), options=[Option(id="a", label="A")])
+    short = Question(question="Short?\n\n" + "y" * 500, options=[Option(id="a", label="A")])
+    assert _long_question_hint([short]) is None
+    assert "The question has" in _long_question_hint([long])
+    assert "Question 2 has" in _long_question_hint([short, long])

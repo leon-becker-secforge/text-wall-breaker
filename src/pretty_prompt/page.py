@@ -29,7 +29,13 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .diff import DiffLine, parse_unified_diff
-from .markdown import render_inline, render_markdown
+from .markdown import (
+    LONG_QUESTION_CHARS,
+    bold_lead,
+    first_paragraph,
+    render_inline,
+    render_markdown,
+)
 
 __all__ = [
     "ACCENT_ENV_VAR",
@@ -254,6 +260,7 @@ main img { cursor: zoom-in; }
 
 .pp-question { margin: 0 40px 14px 0; padding: 0; }
 .pp-question > :first-child { margin-block-start: 0; font-weight: 600; font-size: 1.05em; }
+.pp-question.pp-long > :first-child { font-weight: 400; font-size: 1em; }
 .pp-question > :last-child { margin-block-end: 0; }
 .pp-question > :not(:first-child) { color: var(--ntw-fg-muted); font-size: 0.9em; }
 .pp-question img { max-width: 100%; height: auto; border-radius: 6px; }
@@ -2721,7 +2728,7 @@ def build_page(
 
     gallery = _is_gallery(options)
     asset_base_url = _asset_base_url(status_url)
-    question_html = render_markdown(question, asset_base_url=asset_base_url)
+    question_html, question_class = _question_html(question, asset_base_url)
     options_html = _render_options(
         options, multi_select, gallery=gallery, asset_base_url=asset_base_url
     )
@@ -2735,7 +2742,8 @@ def build_page(
         .replace(
             "__QUESTION_BLOCK__",
             _with_defer(
-                f'  <section class="pp-question">\n{question_html}\n  </section>', allow_defer
+                f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>',
+                allow_defer,
             ),
         )
         .replace("__OPTIONS__", options_html)
@@ -2759,6 +2767,14 @@ _DEFER_BANNER = (
 )
 
 
+def _question_html(question: str, asset_base_url: str | None) -> tuple[str, str]:
+    """The question's HTML and the class marking a long one, so only its lead stays bold."""
+    if len(first_paragraph(question)) <= LONG_QUESTION_CHARS:
+        return render_markdown(question, asset_base_url=asset_base_url), ""
+    leading = bold_lead(question) or question
+    return render_markdown(leading, asset_base_url=asset_base_url), " pp-long"
+
+
 def _with_defer(question_block: str, allow_defer: bool) -> str:
     """`question_block` with the defer pill beside it and its banner after, if allowed."""
     if not allow_defer:
@@ -2767,7 +2783,7 @@ def _with_defer(question_block: str, allow_defer: bool) -> str:
 
 
 def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None = None) -> str:
-    question_html = render_markdown(str(spec.get("question", "")), asset_base_url=asset_base_url)
+    question_html, question_class = _question_html(str(spec.get("question", "")), asset_base_url)
     raw_options = spec.get("options")
     options = list(raw_options) if isinstance(raw_options, list) else []
     multi_select = bool(spec.get("multi_select"))
@@ -2791,7 +2807,8 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
     # it already set so the page shows question one even before the script has run.
     active = " pp-step-active" if index == 0 else ""
     question_block = _with_defer(
-        f'    <div class="pp-question">{question_html}</div>', bool(spec.get("allow_defer"))
+        f'    <div class="pp-question{question_class}">{question_html}</div>',
+        bool(spec.get("allow_defer")),
     )
     return (
         f'  <section class="pp-step{active}" data-step-index="{index}">\n'
