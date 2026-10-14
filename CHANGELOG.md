@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-10-14
+
 ### Added
 
 - `review`: `repo` (+ optional `git_range`, `paths`, `context_lines`) as a source instead of
