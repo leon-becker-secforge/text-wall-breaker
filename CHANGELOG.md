@@ -7,6 +7,9 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review`: `repo` (+ optional `git_range`, `paths`, `context_lines`) as a source instead of
+  `pages`. The server runs `git diff` and makes one page per changed text file, so the diff
+  no longer passes through the agent's context twice. `git_range` defaults to `HEAD`.
 - `show_status`: a new tool that reports, without blocking, whether the last `show` in
   the shared tab was acknowledged (`unacknowledged`, `acknowledged` or `none`), so a
   caller can check a report was read before asking about it.
@@ -16,6 +19,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Changed
 
+- `ask`: `timeout_seconds` now defaults to 1800 for `questions`, `resume` and `ask_id`
+  calls (300 for a single question), since a multi-question round outlasted 300 s.
 - An `ask` or `review` no longer replaces an unacknowledged `show` in the shared tab:
   while the report's tab is open it gets a tab of its own. An acknowledged report, or a
   closed tab, is replaced as before. `show`'s description now says so and suggests

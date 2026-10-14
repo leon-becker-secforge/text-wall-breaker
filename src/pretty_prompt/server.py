@@ -29,6 +29,7 @@ from .ask import (
     Question,
     run_ask,
 )
+from .gitdiff import GitDiffError, pages_from_git
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .review import InvalidReview, Page, ReviewRequest, run_review
@@ -152,6 +153,11 @@ Opens one file's diff per navigable page (Prev/Next and arrow keys, same as
 reduce to a discrete choice — e.g. reviewing code changes. For a question with
 options, use `ask`.
 
+Give either `repo` (a git repository path, with optional `git_range`, `paths`,
+`context_lines`) and the server runs `git diff` and makes one page per changed
+file itself, or `pages` for a diff you already hold. Prefer `repo` for anything in
+git: pasting a diff back as arguments costs a second copy of it in your context.
+
 Each `pages` entry is one file: `path`, `diff` (raw unified diff text, e.g. `git
 diff` output — a `@@ -a,b +c,d @@` hunk header is required; a diff with none is
 refused with an error before any page opens), and an optional `blurb` (Markdown,
@@ -200,6 +206,18 @@ def accent_config_problem() -> str | None:
     return None
 
 
+_QUESTIONS_TIMEOUT_SECONDS = 1800.0
+
+
+def _ask_timeout(
+    given: float | None, questions: list[Question] | None, resume: str | None, ask_id: str | None
+) -> float:
+    if given is not None:
+        return given
+    long_page = questions is not None or resume is not None or ask_id is not None
+    return _QUESTIONS_TIMEOUT_SECONDS if long_page else 300.0
+
+
 @server.tool(name="ask", description=_ASK_DESCRIPTION)
 async def ask(
     question: Annotated[
@@ -218,14 +236,15 @@ async def ask(
     ] = True,
     allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False,
     timeout_seconds: Annotated[
-        float,
+        float | None,
         Field(
             description="Give up after this many seconds without hearing from the page. "
             "The page keeps the call alive while it is visible, however long the user "
-            "reads, so this only runs while the tab is hidden or closed. The default "
-            "suits long multi-question pages too; there is no need to raise it for them."
+            "reads, so this only runs while the tab is hidden or closed. Default 300; "
+            "1800 for questions, resume and ask_id calls, since those take longer to "
+            "answer."
         ),
-    ] = 300.0,
+    ] = None,
     questions: Annotated[
         list[Question] | None,
         Field(
@@ -277,7 +296,7 @@ async def ask(
         multi_select=multi_select,
         allow_free_text=allow_free_text,
         allow_defer=allow_defer,
-        timeout_seconds=timeout_seconds,
+        timeout_seconds=_ask_timeout(timeout_seconds, questions, resume, ask_id),
         questions=questions,
         header=header,
         more_coming=more_coming,
@@ -377,12 +396,35 @@ async def show_status_tool() -> dict[str, Any]:
 @server.tool(name="review", description=_REVIEW_DESCRIPTION)
 async def review(
     pages: Annotated[
-        list[Page],
+        list[Page] | None,
         Field(
             description="One entry per file: path, diff (raw unified diff text), "
-            "and an optional blurb (Markdown, shown at the top of that page only)."
+            "and an optional blurb (Markdown, shown at the top of that page only). "
+            "Set instead of repo."
         ),
-    ],
+    ] = None,
+    repo: Annotated[
+        str | None,
+        Field(
+            description="Path of a git repository: the server runs `git diff` itself "
+            "and makes one page per changed file, so the diff never passes through "
+            "you. Set instead of pages."
+        ),
+    ] = None,
+    git_range: Annotated[
+        str | None,
+        Field(
+            description="With repo: what to diff, as `git diff` takes it, e.g. "
+            "`main..HEAD`, `abc123^!`. Default `HEAD` (uncommitted changes to tracked files)."
+        ),
+    ] = None,
+    paths: Annotated[
+        list[str] | None,
+        Field(description="With repo: limit the diff to these paths."),
+    ] = None,
+    context_lines: Annotated[
+        int, Field(description="With repo: unchanged lines around each change (git -U).")
+    ] = 3,
     header: Annotated[str | None, Field(description="Markdown shown above every page.")] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
     timeout_seconds: Annotated[
@@ -394,8 +436,22 @@ async def review(
         ),
     ] = 300.0,
 ) -> dict[str, Any]:
+    if repo is None and (git_range is not None or paths):
+        raise ToolError("git_range and paths need repo")
+    if repo is not None:
+        if pages:
+            raise ToolError("set either pages or repo, not both")
+        try:
+            pages = [
+                Page(**entry)
+                for entry in await anyio.to_thread.run_sync(
+                    pages_from_git, repo, git_range, paths, context_lines
+                )
+            ]
+        except GitDiffError as exc:
+            raise ToolError(str(exc)) from exc
     request = ReviewRequest(
-        pages=pages,
+        pages=pages or [],
         header=header,
         title=title,
         timeout_seconds=timeout_seconds,

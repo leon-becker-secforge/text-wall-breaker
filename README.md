@@ -206,7 +206,8 @@ declined to give is distinguishable from one that never arrived. `timeout_second
 load — so the window starts when the page renders rather than when the browser was
 launched. While the tab is visible the page sends a heartbeat, so however long the user
 reads, the call stays alive; the timeout only runs while the tab is hidden or closed, and
-a long multi-question page needs no larger value than a single question.
+a long page needs no larger value than a short one. When `timeout_seconds` is not given
+it is 1800 for `questions`, `resume` and `ask_id` calls and 300 otherwise.
 
 ### Long waits and background tasks
 
@@ -332,6 +333,13 @@ output) — a `@@ -a,b +c,d @@` hunk header is required so a line's coordinate c
 resolved; a diff with none is rejected before anything opens. `blurb` is optional
 Markdown shown at the top of that page only, e.g. why that file changed. `header` is one
 more Markdown block, shown above every page.
+
+For a change in git, pass `repo` instead of `pages` (never both): the server runs
+`git diff` itself and makes one page per changed text file, so the diff is not read into
+the agent's context and pasted back. `git_range` is what `git diff` takes (`main..HEAD`,
+`abc123^!`; default `HEAD`, the uncommitted changes to tracked files), `paths` limits it,
+`context_lines` is `-U` (default 3). Binary files and pure mode changes have no line to
+comment on and are skipped; a rename shows as a delete plus an add.
 
 With more than one page, the user navigates freely between them (Prev/Next, arrow keys,
 a progress bar); with exactly one, that chrome is skipped entirely rather than shown
