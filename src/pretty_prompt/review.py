@@ -17,9 +17,9 @@ import secrets
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from .ask import BrowserUnavailable, open_in_browser
 from .diff import InvalidDiff, parse_unified_diff
@@ -44,11 +44,22 @@ class InvalidReview(ValueError):
 
 
 class Page(BaseModel):
-    """One file's diff — the unit `review` paginates by. See CONTEXT.md's "Page"."""
+    """One file's diff, shown as one page."""
 
-    path: str
-    diff: str
-    blurb: str | None = None
+    path: Annotated[
+        str, Field(description="The file's path, shown on the page and echoed on comments.")
+    ]
+    diff: Annotated[
+        str,
+        Field(
+            description="Raw unified diff text for this file, as `git diff` prints it, "
+            "with at least one `@@` hunk header."
+        ),
+    ]
+    blurb: Annotated[
+        str | None,
+        Field(description="Optional Markdown at the top of this page only, e.g. why it changed."),
+    ] = None
 
     def validated(self, *, label: str) -> Page:
         if not self.path.strip():
@@ -74,7 +85,7 @@ class ReviewRequest(BaseModel):
         if self.timeout_seconds <= 0:
             raise InvalidReview("timeout_seconds must be positive")
         if not self.pages:
-            raise InvalidReview("pages is empty")
+            raise InvalidReview("pages is empty; give pages, or repo to diff a git repository")
         for index, page in enumerate(self.pages):
             page.validated(label=f"pages[{index}]")
         return self

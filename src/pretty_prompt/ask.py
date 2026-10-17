@@ -97,17 +97,16 @@ class Option(BaseModel):
     ]
     label: Annotated[
         str,
-        Field(description="Short plain-text label. Not Markdown, not rendered."),
+        Field(description="Short plain text, shown as is (no Markdown)."),
     ]
     caveat: Annotated[
         str | None,
         Field(
             default=None,
             description="Optional one-line precondition or cost that could flip the "
-            "choice, always shown under the label even when body is collapsed. Put "
-            "anything that could flip the choice here, not in body. Use sparingly: it "
-            "is drawn as a highlighted strip, so a caveat on every option drowns out the "
-            f"one that matters. Inline Markdown only, at most {CAVEAT_MAX_CHARS} characters.",
+            "choice, visible even while the body is collapsed. Drawn as a highlighted "
+            "strip, so use it sparingly: one on every option drowns out the one that "
+            f"matters. Inline Markdown, at most {CAVEAT_MAX_CHARS} characters.",
         ),
     ] = None
     body: Annotated[
@@ -129,24 +128,22 @@ class Option(BaseModel):
     recommended: Annotated[
         bool,
         Field(
-            description="The option you lean towards: marked with a Recommended badge, "
-            "and its body pre-expanded if it is long enough to sit behind a click. Does "
-            "not pre-select it; the user still has to check it themselves. At most one "
-            "per question unless multi_select is set. Put the reason in caveat or body.",
+            description="The option you lean towards: it gets a Recommended badge and "
+            "its long body starts open, but stays unchecked for the user to pick. At "
+            "most one per question unless multi_select. Put the reason in caveat or body.",
         ),
     ] = False
 
 
 ALLOW_DEFER_DESCRIPTION = (
-    'Offer a "Not yet" control, for a question the user may not be ready to settle '
-    "because it depends on something still open. A deferred answer comes back with "
-    "deferred: true, no selection, and the reason (if any) in free_text. The result "
-    "only carries a deferred key when this is set."
+    'Offer a "Not yet" control, for a question that depends on something still open. '
+    "A deferred answer comes back with deferred: true, no selection, and the reason "
+    "(if any) in free_text. The deferred key only appears when this is set."
 )
 
 
 class Question(BaseModel):
-    """One question on a page — the single-question shape, reused for `questions`."""
+    """One question on a page: the single-question shape, reused for `questions`."""
 
     id: Annotated[
         str | None,
@@ -175,7 +172,7 @@ class Question(BaseModel):
         if not self.options and not self.allow_free_text:
             raise InvalidAsk(
                 f"{label}: options is empty and allow_free_text is false, so it would "
-                "have no way to answer — supply options, or set allow_free_text"
+                "have no way to answer; supply options, or set allow_free_text"
             )
         recommended = sum(1 for option in self.options if option.recommended)
         if recommended > 1 and not self.multi_select:

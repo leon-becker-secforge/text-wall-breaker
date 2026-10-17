@@ -93,9 +93,11 @@ def find_opener() -> Opener | str:
         return Opener(name="explorer.exe", argv=(explorer,), check_exit=False, windows_paths=True)
     xdg_open = _on_path("xdg-open")
     if xdg_open is None:
-        return "xdg-open is not on PATH — pretty-prompt needs it to open the question page"
+        return "xdg-open is not on PATH; pretty-prompt needs it to open the question page"
     if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
-        return "neither DISPLAY nor WAYLAND_DISPLAY is set — there is no desktop to open a page on"
+        return (
+            "neither DISPLAY nor WAYLAND_DISPLAY is set, so there is no desktop to open a page on"
+        )
     return xdg_open
 
 

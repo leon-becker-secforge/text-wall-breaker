@@ -21,6 +21,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   other option, instead of opening its body. The body opens from a "Details" pill on the
   right of the row, which replaces the chevron. Clicking an option no longer highlights
   its text.
+- Tool, parameter and schema text rewritten for agents: duplicates removed (`allow_defer`,
+  `caveat`, `slides`, `pages`), the "prototype" labels dropped, emdashes gone. Fixed: the
+  `ask` description now says `cancelled` and `timed_out` carry `resume` (it named
+  `not_delivered`), `questions` is rejected alongside `question` (it said "ignored"), and
+  `review`'s `Page` fields are described instead of pointing at CONTEXT.md.
 
 ## [0.10.1] - 2026-10-14
 

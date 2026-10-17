@@ -98,5 +98,5 @@ def parse_unified_diff(diff: str) -> list[DiffLine]:
             new_no += 1
 
     if not any(row.kind == "hunk" for row in rows):
-        raise InvalidDiff("no @@ hunk header found — is this a unified diff?")
+        raise InvalidDiff("no @@ hunk header found; is this a unified diff?")
     return rows

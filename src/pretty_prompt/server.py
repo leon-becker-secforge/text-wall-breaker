@@ -54,14 +54,11 @@ MAX_TOOL_DESCRIPTION_CHARS = 2048
 server = MCPServer(
     name="pretty-prompt",
     instructions=(
-        "Ask the user a question, show them a formatted result, or have them review an "
-        "artifact, in a browser page instead of the terminal. Use `ask` over "
-        "AskUserQuestion when the question has more than four options, when an option "
-        "needs more than a line of explanation, or when the answer is easier to give "
-        "while looking at an image. Use `show` when a result — a report, a comparison, "
-        "a long table — would otherwise be a wall of text in the terminal and doesn't "
-        "need an answer back. Use `review` when the user's reaction needs to attach to "
-        "specific lines of a diff, not just a discrete choice."
+        "Browser pages for the user instead of terminal text. `ask` instead of "
+        "AskUserQuestion: more than four options, an option that needs more than a line "
+        "of explanation, or an answer easier to give while looking at an image. `show`: a "
+        "result (report, comparison, long table) that would be a wall of text and needs "
+        "no answer. `review`: a reaction that attaches to specific lines of a diff."
     ),
 )
 
@@ -69,38 +66,31 @@ server = MCPServer(
 # split across tools/fields, since an agent only ever sees the one description for a
 # name it already knows to call.
 _ASK_DESCRIPTION = """Ask the user a question in a local browser page; blocks until answered,
-cancelled, or timed out. Use over AskUserQuestion for >4 options, a Markdown option
-body, or an image.
+cancelled, or timed out.
 
-`question`/`body` are Markdown, not HTML. Images: `![alt](file:///abs/path)`.
-Paragraph breaks: real newlines, not the `\\n` escape.
+`question` and option `body` are Markdown. Images: `![alt](file:///abs/path)`.
+Paragraph breaks are real newlines, not the `\\n` escape.
 
-Keep `question` a short heading (<=2 lines). Detail goes in lists, blockquotes or
-option `body`; a long first paragraph is a wall of text. A `hint`
-key in the result is formatting advice for your next ask.
+Keep `question` a short heading (at most 2 lines); detail goes in lists, blockquotes
+or option `body`. A `hint` in the result is formatting advice for your next ask.
 
-A long `body` sits behind a click users often skip. Anything that could flip the
-choice goes in `caveat` instead — always visible, used sparingly.
+A long `body` sits behind a Details pill users often skip: put what could flip the
+choice in `caveat`.
 
 Returns one of:
   {"selected":[...], "free_text":"...", "expanded":[...]}   answered
   {"cancelled": true} / {"timed_out": true} / {"not_delivered": true}
 
-`not_delivered` (~30s): user never saw it; ask again.
-`timed_out`: seen, unanswered. Either also carries `resume` if answers were entered:
-pass it back as `resume` to reopen the ask prefilled.
+`selected` and `free_text` are additive. `expanded`: option ids whose body was ever
+opened. `not_delivered` (~30s): the user never saw it; ask again. `cancelled` and
+`timed_out` carry `resume` when answers were entered: pass it back as `resume` to
+reopen the ask prefilled.
 
-`selected`/`free_text` are additive. `expanded`: option ids whose body was ever
-opened.
+`questions`: several questions on one page, set instead of
+`question`/`options`/etc. Returns `{"answers": [...]}`, one entry per question in
+order, carrying the question's `id` when it set one; match by id.
 
-`allow_defer`: user may answer "not yet" → `{"deferred": true, "selected": [],
-"free_text": <reason>}`.
-
-`questions` (prototype): several questions on one page, instead of
-`question`/`options`/etc, never both. Returns `{"answers": [...]}`, one entry
-per question, in order; a question's optional `id` is echoed on it, so match by id.
-
-Streamed ask (prototype, `questions`+`more_coming`): send in chunks so the user
+Streamed ask (`questions`+`more_coming`): send in chunks so the user
 starts answering while you write the rest. First call returns `{"ask_id",
 "answers_so_far": []}`; later calls add `questions` under that id; the final call
 (no `more_coming`) waits and returns `{"answers": [...]}` or `{"cancelled": true}`.
@@ -111,71 +101,49 @@ if SHARE_INTERACTION_SIGNALS:
     _ASK_DESCRIPTION += """
 
 Every answer also has `changed_from` (option ids picked then abandoned) and each
-`answers` entry has `visits` (times shown). Weak signals for what to ask next —
-never quote them back to the user."""
+`answers` entry has `visits` (times shown): private, weak signals for shaping what you
+ask next."""
 
-# Compressed to fit under MAX_TOOL_DESCRIPTION_CHARS with margin — see its own comment.
-_SHOW_DESCRIPTION = """Show the user a formatted result in a local browser page (prototype).
+# Compressed to fit under MAX_TOOL_DESCRIPTION_CHARS with margin; see its own comment.
+_SHOW_DESCRIPTION = """Show the user a formatted result in a local browser page, for
+anything that would be a wall of text in the terminal. Returns at once.
 
-Opens a page with `content` as Markdown; returns immediately, no answer to wait
-for. Use instead of a long terminal reply for a report, comparison, table, or
-anything that would be a wall of text — same Markdown subset as `ask` (headings,
-lists, tables, code, images, blockquotes), and a paragraph break is a real newline,
-not the two-character `\\n` escape.
+`content` is Markdown, the same subset as `ask` (headings, lists, tables, code,
+images, blockquotes). Paragraph breaks are real newlines, not the `\\n` escape.
 
-Shares a tab with `ask`. An unacknowledged report is never replaced by an `ask` or
-`review`: that opens a second tab instead. Once acknowledged, or its tab is closed, the
-next `ask` reuses the tab and the report is gone. Poll `show_status`, or set
-`wait_for_acknowledge` when a question about the report follows.
+While the report is unacknowledged, an `ask` or `review` opens in a second tab, so the
+report stays up. Before asking about the report, check `show_status` or set
+`wait_for_acknowledge`.
 
-Two buttons, on by default:
-  - Save report — downloads the content as Markdown or the rendered HTML. Client-side
-    only, never reported back.
-  - Acknowledge — marks it seen. `wait_for_acknowledge` blocks on it (like `ask`),
-    returning `{"acknowledged": true}` or `{"timed_out": true}`. Left false (default),
-    the click is only visible through `show_status`.
-Turn either off with `save_button`/`acknowledge_button` when it doesn't apply.
+Two buttons, both on by default (`save_button`, `acknowledge_button`):
+  - Save report: downloads Markdown or HTML, client-side only.
+  - Acknowledge: marks it seen. `wait_for_acknowledge` blocks on it like `ask`,
+    returning `{"acknowledged": true}` or `{"timed_out": true}`.
 
-Without `wait_for_acknowledge`, returns `{"opened": true, "path": "..."}` (path only
-for a one-off tab) once the browser has it. `{"not_delivered": true}` can come back
-instead whether or not `wait_for_acknowledge` is set — it means the page never loaded.
+Otherwise returns `{"opened": true, "path": "..."}` (`path` only for a one-off tab).
+`{"not_delivered": true}`: the page never loaded.
 
-`slides` makes a deck instead — independent Markdown documents, one at a time, with
-Prev/Next and arrow-key nav. Set instead of `content`, never alongside it.
-`header`/`footer` are one more Markdown block each, shown above/below every slide —
-only meaningful with `slides`."""
+`slides` shows a deck instead of `content`; see its parameter."""
 
-_REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page and wait for comments.
+_REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page, one file per page;
+blocks until submit, cancel, or timeout. For a reaction that reduces to a choice, use
+`ask`.
 
-Opens one file's diff per navigable page (Prev/Next and arrow keys, same as
-`show`'s deck mode), then blocks until submit, cancel, or timeout. Use this over
-`ask` when the reaction needs to attach to specific lines of a diff rather than
-reduce to a discrete choice — e.g. reviewing code changes. For a question with
-options, use `ask`.
+Source, one of:
+  - `repo` (+ optional `git_range`, `paths`, `context_lines`): the server runs
+    `git diff` itself. Prefer it for anything in git: passing the diff as arguments
+    puts a second copy of it in your context.
+  - `pages`: a diff you already hold, one entry per file.
 
-Give either `repo` (a git repository path, with optional `git_range`, `paths`,
-`context_lines`) and the server runs `git diff` and makes one page per changed
-file itself, or `pages` for a diff you already hold. Prefer `repo` for anything in
-git: pasting a diff back as arguments costs a second copy of it in your context.
+The user comments on single lines (no ranges) and can leave one overall note.
 
-Each `pages` entry is one file: `path`, `diff` (raw unified diff text, e.g. `git
-diff` output — a `@@ -a,b +c,d @@` hunk header is required; a diff with none is
-refused with an error before any page opens), and an optional `blurb` (Markdown,
-shown atop that page only, e.g. why it changed). `header` is one more Markdown
-block, shown above every page.
-
-Clicking a diff line opens a text box anchored to it (a bubble icon marks a line as
-commentable on hover). Comments are single-line only, no range selection. An
-"Overall note" box below the pages holds one free-text remark for the whole call.
-
-Returns `{"comments": [...], "overall_note": "..." | null}` on Submit — one
-`{"path", "side", "line", "text", "context"}` per comment, `side` "old"/"new",
-`line` that side's 1-based number in `path` (resolved from the diff, not its
-position in the text), `context` that line's own text. Cancel returns the same
-shape plus `"cancelled": true` — comments/note already left are kept, not
-discarded, since a cancel may be deliberate after a partial pass. `{"timed_out":
-true}`: nothing arrived in time. `{"not_delivered": true}`: the page never loaded,
-same ~30s window as `ask`."""
+Returns `{"comments": [...], "overall_note": "..." | null}` on Submit. Each comment
+is `{"path", "side", "line", "text", "context"}`: `side` "old" or "new", `line` that
+side's 1-based line number in the file (not its position in the diff text),
+`context` that line's text. Cancel returns the same shape plus `"cancelled": true`,
+keeping what was entered, since a cancel may be deliberate after a partial pass.
+`{"timed_out": true}`: nothing arrived in time. `{"not_delivered": true}`: the page
+never loaded."""
 
 
 def environment_problem() -> str | None:
@@ -239,38 +207,34 @@ async def ask(
         float | None,
         Field(
             description="Give up after this many seconds without hearing from the page. "
-            "The page keeps the call alive while it is visible, however long the user "
-            "reads, so this only runs while the tab is hidden or closed. Default 300; "
-            "1800 for questions, resume and ask_id calls, since those take longer to "
-            "answer."
+            "The visible page keeps the call alive however long the user reads, so this "
+            "only runs down while the tab is hidden or closed. Default 300; 1800 with "
+            "questions, resume or ask_id."
         ),
     ] = None,
     questions: Annotated[
         list[Question] | None,
         Field(
-            description="Prototype: ask several questions on one page instead of one. "
-            "When set, question/options/multi_select/allow_free_text/allow_defer are "
-            "ignored, and "
-            'the result is {"answers": [...]} instead of {"selected", "free_text"}.'
+            description="Several questions on one page. Set instead of "
+            "question/options/multi_select/allow_free_text/allow_defer; the result is "
+            '{"answers": [...]}.'
         ),
     ] = None,
     header: Annotated[
         str,
         Field(
-            description="Prototype. Requires questions: with a single question, "
-            "header is rejected, so put the context in question. Markdown shown above "
-            "every question of the page, typically what earlier rounds already settled, "
-            "so the user answers with it in view. A long one collapses behind a "
-            "Context toggle."
+            description="Questions only: Markdown above every question, "
+            "typically what earlier rounds settled, so the user answers with it in view. "
+            "A long one collapses behind a Context toggle. A single question carries its "
+            "context in question itself."
         ),
     ] = "",
     more_coming: Annotated[
         bool,
         Field(
-            description="Prototype, questions only: more questions follow in later "
-            "calls. The page opens with these and the call returns {ask_id, "
-            "answers_so_far} at once, so the user starts answering while you write the "
-            "rest. See the streamed ask section of this tool's description."
+            description="Questions only: more questions follow in later "
+            "calls. Returns {ask_id, answers_so_far} at once; see the streamed ask in "
+            "this tool's description."
         ),
     ] = False,
     resume: Annotated[
@@ -284,7 +248,7 @@ async def ask(
     ask_id: Annotated[
         str | None,
         Field(
-            description="Prototype: the ask_id a more_coming call returned. Appends "
+            description="The ask_id a more_coming call returned. Appends "
             "questions to that open page instead of opening a new one; only questions, "
             "more_coming and timeout_seconds apply."
         ),
@@ -322,18 +286,17 @@ async def show(
     slides: Annotated[
         list[str] | None,
         Field(
-            description="Prototype: show a deck instead of one document — several "
-            "independent Markdown documents, one shown at a time with Prev/Next and "
-            "arrow-key navigation. Set instead of content, never alongside it."
+            description="A deck of independent Markdown documents, one "
+            "shown at a time with Prev/Next and arrow keys. Set instead of content."
         ),
     ] = None,
     header: Annotated[
         str | None,
-        Field(description="Markdown shown above the slide on every slide. Requires slides."),
+        Field(description="Markdown above every slide. Requires slides."),
     ] = None,
     footer: Annotated[
         str | None,
-        Field(description="Markdown shown below the slide on every slide. Requires slides."),
+        Field(description="Markdown below every slide. Requires slides."),
     ] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
     save_button: Annotated[
@@ -346,8 +309,7 @@ async def show(
         bool,
         Field(
             description="Block until Acknowledge is clicked, like ask. Requires "
-            "acknowledge_button. Default false: show returns immediately; check the "
-            "click later with show_status."
+            "acknowledge_button. Left false, check the click later with show_status."
         ),
     ] = False,
     timeout_seconds: Annotated[
@@ -379,13 +341,13 @@ async def show(
         raise ToolError(f"could not open the page: {exc}") from exc
 
 
-_SHOW_STATUS_DESCRIPTION = """Check, without blocking, whether the last `show` was acknowledged.
+_SHOW_STATUS_DESCRIPTION = """Whether the last `show` was acknowledged, without blocking: check it
+before asking about a report shown without `wait_for_acknowledge`.
 
 Returns `{"state": "unacknowledged" | "acknowledged" | "none", "title": "..."}`.
-`none`: no report was shown in the shared tab, or an `ask`/`review` has since replaced
-it. Use it to find out if a report was read before asking about it, when
-`wait_for_acknowledge` was left false. A report that fell back to its own one-off tab
-(shared tab busy) is not tracked and reads `none`."""
+`none`: no report in the shared tab, or an `ask`/`review` has replaced it since. A
+report that opened in its own one-off tab (shared tab busy) is not tracked and reads
+`none` too."""
 
 
 @server.tool(name="show_status", description=_SHOW_STATUS_DESCRIPTION)
@@ -397,18 +359,13 @@ async def show_status_tool() -> dict[str, Any]:
 async def review(
     pages: Annotated[
         list[Page] | None,
-        Field(
-            description="One entry per file: path, diff (raw unified diff text), "
-            "and an optional blurb (Markdown, shown at the top of that page only). "
-            "Set instead of repo."
-        ),
+        Field(description="One entry per file. Set instead of repo."),
     ] = None,
     repo: Annotated[
         str | None,
         Field(
-            description="Path of a git repository: the server runs `git diff` itself "
-            "and makes one page per changed file, so the diff never passes through "
-            "you. Set instead of pages."
+            description="Path of a git repository; the server runs `git diff` in it "
+            "and makes one page per changed text file. Set instead of pages."
         ),
     ] = None,
     git_range: Annotated[
@@ -431,8 +388,8 @@ async def review(
         float,
         Field(
             description="Give up after this many seconds without hearing from the "
-            "page. The page keeps the call alive while it is visible, however long the "
-            "user takes to review, so this only runs while the tab is hidden or closed."
+            "page. The visible page keeps the call alive however long the review takes, "
+            "so this only runs down while the tab is hidden or closed."
         ),
     ] = 300.0,
 ) -> dict[str, Any]:
