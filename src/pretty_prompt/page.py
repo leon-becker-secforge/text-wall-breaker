@@ -293,14 +293,14 @@ main img { cursor: zoom-in; }
 .pp-option:has(input:checked) { border-color: var(--ntw-accent);
   background: var(--ntw-verdict-bg); }
 /* An option with a body is a <details class="pp-option-drawer"> whose <summary> is the
-   whole row — clicking the label or the chevron opens it, clicking the checkbox/radio
-   (which stops its own click from bubbling, see the script below) selects it instead.
-   Nesting the disclosure inside the row this way, rather than as a sibling with its own
-   "Details" control, was the point: one row, one obvious click target for each action,
-   no second label to word. An option with no body is just the <label> below, un-nested. */
+   whole row. A click on the row selects, the same as on an option without a body (see
+   the script below); only the Details pill opens the drawer. An option with no body is
+   just the <label> below, un-nested. The row's text is not selectable: a quick second
+   click (selecting, then clearing) otherwise highlights a word of the label. */
 .pp-option-drawer > summary { list-style: none; cursor: pointer; }
 .pp-option-drawer > summary::-webkit-details-marker { display: none; }
-.pp-option-select { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0; }
+.pp-option-select { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0;
+  user-select: none; }
 .pp-option-select input { margin: 0; accent-color: var(--ntw-accent); }
 /* Grows into the row and wraps its own text: the row wraps (for the caveat below), so a
    label left at its natural width would drop onto a line of its own under the input. */
@@ -328,16 +328,17 @@ main img { cursor: zoom-in; }
 .pp-options-gallery .pp-option-caveat { margin: 8px -10px -10px; border-radius: 0 0 5px 5px; }
 /* Picked over the solid show-style pill (loudest thing in the row, read as "already
    chosen") and a tab on the top border (cost vertical space) in a three-way visual
-   A/B/C: small outlined accent caps pushed to the right edge, just before the chevron. */
+   A/B/C: small outlined accent caps pushed to the right edge, just before the Details
+   pill. */
 .pp-option-recommended { margin-inline-start: auto; font-family: var(--pp-font-mono);
   font-size: 0.68em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
   padding: 1px 6px; flex: none; white-space: nowrap; }
-.pp-option-recommended + .pp-option-chevron { margin-inline-start: 6px; }
+.pp-option-recommended + .pp-option-details { margin-inline-start: 6px; }
 /* A radio cleared by clicking it again (see the script) has no look of its own to hint at
    that, so the picked row says it. Picked in a three-way visual A/B/C over an x on hover
    (invisible on touch) and a separate Clear button (a second control for one action).
-   Ordered before the badge, chevron and caveat, so it takes its room from the label and
+   Ordered before the badge, Details pill and caveat, so it takes its room from the label and
    the badge stays where it was. Gone once the page freezes, when nothing can change, and
    in a row too narrow for it (a small gallery card), where it would wrap the badge onto
    a line of its own. */
@@ -348,12 +349,16 @@ main img { cursor: zoom-in; }
 @container (max-width: 380px) {
   .pp-option-select::after { display: none; }
 }
-.pp-option-recommended, .pp-option-chevron { order: 1; }
+.pp-option-recommended, .pp-option-details { order: 1; }
 .pp-option-caveat { order: 2; }
-.pp-option-chevron { margin-inline-start: auto; flex: none; color: var(--ntw-fg-muted);
-  transition: transform .15s; }
-.pp-option-chevron::before { content: "\\203A"; }
-.pp-option-drawer[open] .pp-option-chevron { transform: rotate(90deg); }
+.pp-option-details { margin-inline-start: auto; flex: none; display: inline-flex;
+  align-items: center; gap: 2px; padding: 1px 6px 1px 8px; border-radius: 999px;
+  border: 1px solid var(--ntw-border); color: var(--ntw-fg-muted);
+  font-family: var(--pp-font-mono); font-size: 0.68em; text-transform: uppercase;
+  letter-spacing: 0.04em; }
+.pp-option-details:hover { border-color: var(--ntw-accent); color: var(--ntw-accent); }
+.pp-option-details svg { width: 13px; height: 13px; transition: transform .15s; }
+.pp-option-drawer[open] .pp-option-details svg { transform: rotate(180deg); }
 .pp-option-body { color: var(--ntw-fg-muted); font-size: 0.88em; margin: 8px 0 0 26px; }
 .pp-option-body > :first-child { margin-block-start: 0; }
 .pp-option-body > :last-child { margin-block-end: 0; }
@@ -651,6 +656,18 @@ __FREE_TEXT__
   inputs.forEach(function (i) {
     i.addEventListener('click', function (e) { e.stopPropagation(); });
   });
+  // The rest of a drawer's row selects too, like an option without a body. Only the
+  // Details pill opens the drawer, and the keyboard: Enter on the focused row arrives as
+  // a click with detail 0.
+  function wireSummary(s) {
+    var input = s.querySelector('input');
+    s.addEventListener('click', function (e) {
+      if (e.detail === 0 || e.target.closest('.pp-option-details')) return;
+      e.preventDefault();
+      if (!input.disabled) input.click();
+    });
+  }
+  document.querySelectorAll('.pp-option-drawer > summary').forEach(wireSummary);
   if (freeText) freeText.addEventListener('input', refresh);
 
   function freeze(message) {
@@ -949,6 +966,18 @@ __STEPS__
   var furthest = 0;
   var frozen = false;
 
+  // The rest of a drawer's row selects too, like an option without a body. Only the
+  // Details pill opens the drawer, and the keyboard: Enter on the focused row arrives as
+  // a click with detail 0.
+  function wireSummary(s) {
+    var input = s.querySelector('input');
+    s.addEventListener('click', function (e) {
+      if (e.detail === 0 || e.target.closest('.pp-option-details')) return;
+      e.preventDefault();
+      if (!input.disabled) input.click();
+    });
+  }
+
   // Everything one step needs, for the steps on the page at load and for each step a
   // streamed ask appends later alike.
   function wireStep(el) {
@@ -982,6 +1011,7 @@ __STEPS__
       d._wasExpanded = d.open;
       d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
     });
+    el.querySelectorAll('.pp-option-drawer > summary').forEach(wireSummary);
     el.querySelectorAll('textarea[data-step]').forEach(function (t) {
       freeTexts.push(t);
       t.addEventListener('input', refresh);
@@ -2566,6 +2596,13 @@ def _is_gallery(options: list[dict[str, object]]) -> bool:
     return sum(1 for option in options if _has_image_body(option)) >= 2
 
 
+_CHEVRON_SVG = (
+    '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" '
+    'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+    'stroke-linejoin="round"/></svg>'
+)
+
+
 def _render_options(
     options: list[dict[str, object]],
     multi_select: bool,
@@ -2626,16 +2663,14 @@ def _render_options(
             )
             continue
 
-        # The drawer is the whole row, not a separate control beside it: the row's own
-        # <summary> is what opens it, and the checkbox/radio stops its own click from
-        # bubbling there (see the script below) so selecting and opening stay
-        # independent actions instead of one triggering the other.
+        # The row is the drawer's <summary>, but only the Details pill opens it; the
+        # page's script turns any other click on the row into selecting the option.
         open_attr = " open" if option.get("recommended") else ""
-        chevron = '<span class="pp-option-chevron" aria-hidden="true"></span>'
+        details = f'<span class="pp-option-details" aria-hidden="true">Details{_CHEVRON_SVG}</span>'
         rows.append(
             f'    <li class="pp-option"><details class="pp-option-drawer" '
             f'data-option-id="{option_id}"{open_attr}>'
-            f'<summary class="pp-option-select">{select_html}{chevron}{caveat_html}</summary>'
+            f'<summary class="pp-option-select">{select_html}{details}{caveat_html}</summary>'
             f"{body_div}</details></li>"
         )
     ul_class = "pp-options pp-options-gallery" if gallery else "pp-options"

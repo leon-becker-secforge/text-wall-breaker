@@ -15,6 +15,13 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   answers so far are kept for a resume, and marks the tab ⌛. `GET /status` now reports
   `open` so a reused tab can tell.
 
+### Changed
+
+- `ask`: a click anywhere on an option with a long body now selects it, the same as on any
+  other option, instead of opening its body. The body opens from a "Details" pill on the
+  right of the row, which replaces the chevron. Clicking an option no longer highlights
+  its text.
+
 ## [0.10.1] - 2026-10-14
 
 ### Added

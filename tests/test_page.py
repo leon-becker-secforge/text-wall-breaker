@@ -87,14 +87,14 @@ def test_short_body_is_shown_inline_without_a_drawer():
     assert '<div class="pp-option-body">' in body
     assert _DRAWER_CLOSED_TAG not in body
     assert _DRAWER_OPEN_TAG not in body
-    assert "pp-option-chevron" not in body
+    assert 'class="pp-option-details"' not in body
 
 
 def test_long_body_collapses_behind_a_drawer():
     body = _body(_page(options=[_option(body="x " * 250)]))  # well past _LONG_BODY_CHARS
     assert _DRAWER_CLOSED_TAG in body
     assert '<summary class="pp-option-select">' in body
-    assert "pp-option-chevron" in body
+    assert 'class="pp-option-details"' in body
 
 
 def test_an_image_collapses_a_body_regardless_of_length():
