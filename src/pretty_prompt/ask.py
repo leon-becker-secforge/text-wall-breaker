@@ -591,7 +591,10 @@ def _run_ask_reusing_tab(
     if not session.show_in_tab(generation, open_in_browser):
         return NOT_DELIVERED
 
-    submission = session.wait_for_answer(request.timeout_seconds)
+    try:
+        submission = session.wait_for_answer(request.timeout_seconds)
+    finally:
+        session.end_question()
     return _answer_from_submission(
         steps,
         submission,
@@ -662,6 +665,7 @@ def _end_stream(ask_id: str) -> None:
         stream = _streams.pop(ask_id, None)
     if stream is None:
         return
+    stream.session.end_question()
     if stream.shared:
         stream.session.release()
     else:

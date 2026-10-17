@@ -334,6 +334,22 @@ main img { cursor: zoom-in; }
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
   padding: 1px 6px; flex: none; white-space: nowrap; }
 .pp-option-recommended + .pp-option-chevron { margin-inline-start: 6px; }
+/* A radio cleared by clicking it again (see the script) has no look of its own to hint at
+   that, so the picked row says it. Picked in a three-way visual A/B/C over an x on hover
+   (invisible on touch) and a separate Clear button (a second control for one action).
+   Ordered before the badge, chevron and caveat, so it takes its room from the label and
+   the badge stays where it was. Gone once the page freezes, when nothing can change, and
+   in a row too narrow for it (a small gallery card), where it would wrap the badge onto
+   a line of its own. */
+.pp-option { container-type: inline-size; }
+.pp-option:has(input[type="radio"]:checked:not(:disabled)) .pp-option-select::after {
+  content: "click again to clear"; order: 0; flex: none; color: var(--ntw-fg-muted);
+  font-family: var(--pp-font-mono); font-size: 0.72em; white-space: nowrap; }
+@container (max-width: 380px) {
+  .pp-option-select::after { display: none; }
+}
+.pp-option-recommended, .pp-option-chevron { order: 1; }
+.pp-option-caveat { order: 2; }
 .pp-option-chevron { margin-inline-start: auto; flex: none; color: var(--ntw-fg-muted);
   transition: transform .15s; }
 .pp-option-chevron::before { content: "\\203A"; }
@@ -511,6 +527,7 @@ __FREE_TEXT__
       if (i.checked && picked.indexOf(i) === -1) picked.push(i);
     });
   });
+  var frozen = false;
 
   // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
   // genuinely new question, never the one just answered — but the browser doesn't know
@@ -599,6 +616,7 @@ __FREE_TEXT__
   // or typed, "Pick an option, write an answer, or both." has done its job and stays
   // out of the way rather than sitting there as clutter for the rest of the call.
   function refresh() {
+    inputs.forEach(function (i) { i._wasChecked = i.checked; });
     var d = collect();
     submitBtn.disabled = !d.deferred && d.selected.length === 0 && d.free_text === '';
     status.hidden = !submitBtn.disabled;
@@ -614,6 +632,18 @@ __FREE_TEXT__
   }
 
   inputs.forEach(function (i) { i.addEventListener('change', refresh); });
+  // A radio has no native way back to nothing picked, so a click on the one already
+  // checked clears it. The browser checks a radio before its click event fires, so
+  // `_wasChecked` holds the state from before the click; refresh() resyncs it after
+  // every change, including the ones code makes (prefill, deferral).
+  inputs.forEach(function (i) {
+    if (i.type !== 'radio') return;
+    i.addEventListener('click', function () {
+      if (!i._wasChecked) return;
+      i.checked = false;
+      i.dispatchEvent(new Event('change'));
+    });
+  });
   // An option with a long body is a <details> whose <summary> is the whole row (see
   // page.py's _render_options), so a click on the checkbox/radio would otherwise also
   // reach <summary> and toggle the drawer open. Stopping it here is what keeps
@@ -624,6 +654,7 @@ __FREE_TEXT__
   if (freeText) freeText.addEventListener('input', refresh);
 
   function freeze(message) {
+    frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
     document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     if (freeText) freeText.readOnly = true;
@@ -645,8 +676,19 @@ __FREE_TEXT__
   // let an abandoned call time out rather than being kept alive forever unattended.
   var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
   var heartbeatTimer = null;
-  function heartbeat() {
-    if (document.visibilityState === 'visible') send('probe', {});
+  // On a reused tab GET /status keeps the call alive the same way a probe does, and
+  // also says whether a call still waits on this page. A one-shot page learns that its
+  // call ended from the probe failing, since its listener closes with the call.
+  async function heartbeat() {
+    if (document.visibilityState !== 'visible') return;
+    if (!STATUS_URL) { send('probe', {}); return; }
+    try {
+      var res = await fetch(STATUS_URL);
+      if (!res.ok) return;
+      var body = await res.json();
+      if (body.generation !== GENERATION) expire(false);
+      else if (!body.open) expire(true);
+    } catch (e) { expire(false); }
   }
   function startHeartbeat() {
     stopHeartbeat();
@@ -663,6 +705,17 @@ __FREE_TEXT__
     // next tick, in case the deadline is close by the time the tab is looked at again.
     if (document.visibilityState === 'visible') heartbeat();
   });
+
+  // The call this page answers ended without an answer: it timed out while the tab was
+  // hidden, or the server is gone. Freezing beats taking an answer nobody will read. On a
+  // reused tab still showing its own generation, the next question can still land here.
+  function expire(reusable) {
+    if (frozen) return;
+    freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
+      'so Claude can reopen it.');
+    document.title = '\\u231b ' + BASE_TITLE;
+    if (reusable) startReusePolling();
+  }
 
   function fallback(payload, reason) {
     // No navigator.clipboard.writeText() here — writing to the clipboard without the
@@ -710,16 +763,18 @@ __FREE_TEXT__
       if (!res.ok) {
         // Branch on the status, not on whether fetch threw: a 403 from a stale token
         // resolves successfully and would otherwise be reported as sent.
-        if (kind !== 'probe') {
+        if (kind === 'submit' || kind === 'cancel') {
           fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
         }
         return false;
       }
       return true;
     } catch (err) {
-      if (kind !== 'probe') {
+      // An answer is worth copying out by hand; the background traffic only tells that
+      // nobody is listening any more.
+      if (kind === 'submit' || kind === 'cancel') {
         fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
-      }
+      } else expire(false);
       return false;
     }
   }
@@ -905,6 +960,14 @@ __STEPS__
         if (i.checked && picked.indexOf(i) === -1) picked.push(i);
         refresh();
       });
+      // See the single-question page: a click on the checked radio clears it.
+      if (i.type === 'radio') {
+        i.addEventListener('click', function () {
+          if (!i._wasChecked) return;
+          i.checked = false;
+          i.dispatchEvent(new Event('change'));
+        });
+      }
       // See page.py's _render_options: a long body wraps the input in <summary>, so a
       // click on the checkbox/radio would otherwise also toggle the drawer open.
       i.addEventListener('click', function (e) { e.stopPropagation(); });
@@ -1040,6 +1103,7 @@ __STEPS__
   // their own way past, and later ones haven't been seen yet. On the last step of a
   // streamed ask there is nothing to go Next to yet, so it waits instead.
   function refresh() {
+    inputs.forEach(function (i) { i._wasChecked = i.checked; });
     // After Send or Cancel: a step arriving late must not re-enable anything.
     if (frozen) return;
     var last = current === STEP_COUNT - 1;
@@ -1145,8 +1209,19 @@ __STEPS__
 
   var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
   var heartbeatTimer = null;
-  function heartbeat() {
-    if (document.visibilityState === 'visible') send('probe', {});
+  // On a reused tab GET /status keeps the call alive the same way a probe does, and
+  // also says whether a call still waits on this page. A one-shot page learns that its
+  // call ended from the probe failing, since its listener closes with the call.
+  async function heartbeat() {
+    if (document.visibilityState !== 'visible') return;
+    if (!STATUS_URL) { send('probe', {}); return; }
+    try {
+      var res = await fetch(STATUS_URL);
+      if (!res.ok) return;
+      var body = await res.json();
+      if (body.generation !== GENERATION) expire(false);
+      else if (!body.open) expire(true);
+    } catch (e) { expire(false); }
   }
   function startHeartbeat() {
     stopHeartbeat();
@@ -1161,6 +1236,17 @@ __STEPS__
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') heartbeat();
   });
+
+  // The call this page answers ended without an answer: it timed out while the tab was
+  // hidden, or the server is gone. Freezing beats taking an answer nobody will read. On a
+  // reused tab still showing its own generation, the next question can still land here.
+  function expire(reusable) {
+    if (frozen) return;
+    freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
+      'so Claude can reopen it.');
+    document.title = '\\u231b ' + BASE_TITLE;
+    if (reusable) startReusePolling();
+  }
 
   function fallback(payload, reason) {
     var box = document.getElementById('pp-fallback');
@@ -1201,16 +1287,16 @@ __STEPS__
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        if (kind !== 'probe' && kind !== 'progress') {
+        if (kind === 'submit' || kind === 'cancel') {
           fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
         }
         return false;
       }
       return true;
     } catch (err) {
-      if (kind !== 'probe' && kind !== 'progress') {
+      if (kind === 'submit' || kind === 'cancel') {
         fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
-      }
+      } else expire(false);
       return false;
     }
   }

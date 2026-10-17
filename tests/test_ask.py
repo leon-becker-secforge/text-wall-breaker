@@ -484,6 +484,16 @@ def test_run_ask_reuses_the_tab_for_a_second_call(monkeypatch):
     assert len(opened) == 1
 
 
+def test_a_timed_out_ask_tells_its_tab_nobody_waits_any_more(monkeypatch):
+    session = session_module.get_shared_session()
+    monkeypatch.setattr(ask_module, "open_in_browser", _loading_opener([]))
+
+    result = run_ask(AskRequest(question="q", timeout_seconds=0.3))
+    assert result == {"timed_out": True}
+    status = _get_json(_session_url(session, "/status"))
+    assert (status["generation"], status["open"]) == (1, False)
+
+
 def test_run_ask_falls_back_to_a_new_tab_when_the_shared_session_is_busy():
     session = session_module.get_shared_session()
     assert session.try_claim()  # simulate another `ask` call already using the shared tab
@@ -744,9 +754,12 @@ def test_an_abandoned_stream_frees_the_shared_tab(opened, monkeypatch):
     ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
     assert not session.try_claim()
 
+    assert _get_json(_session_url(session, "/status"))["open"] is True
+
     monkeypatch.setattr(ask_module, "_STREAM_IDLE_SECONDS", 0.0)
     with pytest.raises(InvalidAsk, match="expired"):
         run_ask(AskRequest(ask_id=ask_id))
+    assert _get_json(_session_url(session, "/status"))["open"] is False
     assert session.try_claim()
     session.release()
 

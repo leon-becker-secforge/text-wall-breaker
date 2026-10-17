@@ -385,6 +385,10 @@ class SessionListener:
         self._served_generation = 0
         self._submission: Submission | None = None
         self._answered = threading.Event()
+        # Whether a call still waits on the current page. Reported by GET /status, so a
+        # tab left open after its call timed out can say so instead of taking answers
+        # nobody will read.
+        self._open = False
         # A streamed ask's step fragments (every step, from 0), whether more are coming,
         # and the latest answers-so-far the page reported. Reset by publish().
         self._steps: list[str] = []
@@ -559,6 +563,7 @@ class SessionListener:
             self._generation += 1
             self._page = build_html(self._generation).encode("utf-8")
             self._submission = None
+            self._open = True
             self._steps = list(steps or [])
             self._more_coming = more_coming
             self._progress = None
@@ -583,6 +588,11 @@ class SessionListener:
             self._more_coming = more_coming
         self.note_activity()
 
+    def end_question(self) -> None:
+        """Record that no call waits on the current page any more."""
+        with self._state_lock:
+            self._open = False
+
     def status(self) -> dict[str, Any]:
         with self._state_lock:
             self._last_poll = time.monotonic()
@@ -590,6 +600,7 @@ class SessionListener:
                 "generation": self._generation,
                 "step_count": len(self._steps),
                 "more_coming": self._more_coming,
+                "open": self._open,
             }
 
     def steps_from(self, start: int) -> dict[str, Any]:

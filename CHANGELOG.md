@@ -5,6 +5,16 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `ask`: clicking the selected option of a single-choice question clears it again, so
+  you can get back to having nothing picked. The picked row says "click again to clear",
+  left of a Recommended badge so the badge doesn't move.
+- `ask`: once the call has ended without an answer (timed out, or the server is gone),
+  the page says so as soon as you look at it again. It freezes, explains that the
+  answers so far are kept for a resume, and marks the tab ⌛. `GET /status` now reports
+  `open` so a reused tab can tell.
+
 ## [0.10.1] - 2026-10-14
 
 ### Added
