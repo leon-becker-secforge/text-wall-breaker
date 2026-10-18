@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `ask`: a picked single-choice option no longer says "click again to clear", which
+  squeezed a long label into a narrow column. Hovering its row now empties the radio and
+  slashes it instead, previewing the cleared state.
+
 ## [0.11.0] - 2026-10-17
 
 ### Added

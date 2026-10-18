@@ -470,10 +470,10 @@ def test_long_question_marks_its_block_and_bolds_only_the_lead():
     assert "<strong>Lead sentence.</strong>" in html
 
 
-def test_a_picked_radio_says_it_can_be_cleared_on_both_pages():
+def test_a_picked_radio_shows_it_can_be_cleared_on_hover_on_both_pages():
     # Keyed on :checked and :not(:disabled), so it never shows on a checkbox, an empty
     # question, or a page frozen after Send.
-    selector = '.pp-option:has(input[type="radio"]:checked:not(:disabled))'
+    selector = '.pp-option:hover input[type="radio"]:checked:not(:disabled)'
     for html in (_page(), _multi_page()):
         assert selector in html
-        assert 'content: "click again to clear"' in html
+        assert 'content: "click again to clear"' not in html

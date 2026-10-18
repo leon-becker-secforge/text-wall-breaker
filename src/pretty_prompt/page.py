@@ -335,22 +335,24 @@ main img { cursor: zoom-in; }
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
   padding: 1px 6px; flex: none; white-space: nowrap; }
 .pp-option-recommended + .pp-option-details { margin-inline-start: 6px; }
-/* A radio cleared by clicking it again (see the script) has no look of its own to hint at
-   that, so the picked row says it. Picked in a three-way visual A/B/C over an x on hover
-   (invisible on touch) and a separate Clear button (a second control for one action).
-   Ordered before the badge, Details pill and caveat, so it takes its room from the label and
-   the badge stays where it was. Gone once the page freezes, when nothing can change, and
-   in a row too narrow for it (a small gallery card), where it would wrap the badge onto
-   a line of its own. */
-.pp-option { container-type: inline-size; }
-.pp-option:has(input[type="radio"]:checked:not(:disabled)) .pp-option-select::after {
-  content: "click again to clear"; order: 0; flex: none; color: var(--ntw-fg-muted);
-  font-family: var(--pp-font-mono); font-size: 0.72em; white-space: nowrap; }
-@container (max-width: 380px) {
-  .pp-option-select::after { display: none; }
-}
-.pp-option-recommended, .pp-option-details { order: 1; }
-.pp-option-caveat { order: 2; }
+/* A radio cleared by clicking it again (see the script) shows that only while its row is
+   hovered: the radio empties and takes a slash, previewing the cleared state. Not a
+   "click again to clear" line in the row: any placement of it either squeezed a long
+   label into a narrow column or sat away from the radio. Drawn by hand because a native
+   radio takes no background or pseudo-element in Firefox. :not(:disabled) keeps the
+   slash off a page frozen after Send. */
+.pp-option-select input[type="radio"] { appearance: none; width: 16px; height: 16px;
+  flex: none; border: 2px solid var(--ntw-fg-muted); border-radius: 50%; cursor: pointer;
+  background: transparent; transition: background .12s, border-color .12s; }
+.pp-option-select input[type="radio"]:checked { border-color: var(--ntw-accent);
+  background: radial-gradient(circle, var(--ntw-accent) 0 3.5px, transparent 4px); }
+.pp-option-select input[type="radio"]:disabled { opacity: 0.5; cursor: default; }
+.pp-option-select input[type="radio"]:focus-visible { outline: 2px solid var(--ntw-accent);
+  outline-offset: 2px; }
+.pp-option:hover input[type="radio"]:checked:not(:disabled) {
+  border-color: var(--ntw-fg-muted);
+  background: linear-gradient(-45deg, transparent calc(50% - 1px), var(--ntw-fg-muted)
+    calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)); }
 .pp-option-details { margin-inline-start: auto; flex: none; display: inline-flex;
   align-items: center; gap: 2px; padding: 1px 6px 1px 8px; border-radius: 999px;
   border: 1px solid var(--ntw-border); color: var(--ntw-fg-muted);
