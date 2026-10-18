@@ -385,6 +385,20 @@ main img { cursor: zoom-in; }
   color: var(--ntw-fg); }
 .pp-actions button:disabled { opacity: 0.5; cursor: default; }
 #pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
+/* Interruption ("Stop here"): picked in a three-way visual A/B/C over a link by the
+   question opening its own panel, and a checkbox under the text box. Quieter than Cancel
+   until hovered; once pressed, the text box turns required and the warning-coloured
+   "Stop and send" takes the primary button's place. */
+#pp-stop { border: 1px solid var(--ntw-border); background: transparent;
+  color: var(--ntw-fg-muted); }
+#pp-stop:hover:not(:disabled) { border-color: var(--ntw-warning); color: var(--ntw-warning); }
+#pp-stop-send { border: 1px solid var(--ntw-warning); background: var(--ntw-warning);
+  color: var(--ntw-bg); }
+.pp-actions #pp-stop-undo { border: none; background: none; padding: 0;
+  color: var(--ntw-fg-muted); text-decoration: underline dotted; }
+.pp-actions button[hidden] { display: none; }
+.pp-free-text.pp-required textarea { border-color: var(--ntw-warning);
+  box-shadow: 0 0 0 1px var(--ntw-warning); }
 
 /* Danger, not neutral: this only ever appears when the answer failed to reach Claude
    Code, so it should read as a problem at a glance, not as just another content block.
@@ -453,6 +467,9 @@ __OPTIONS__
 __FREE_TEXT__
     <div class="pp-actions">
       <button type="submit" id="pp-submit" disabled>Send answer</button>
+      <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
+      <button type="button" id="pp-stop-undo" hidden>never mind</button>
+      <button type="button" id="pp-stop">Stop here</button>
       <button type="button" id="pp-cancel">Cancel</button>
       <span id="pp-status">__HINT__</span>
     </div>
@@ -672,11 +689,96 @@ __FREE_TEXT__
   document.querySelectorAll('.pp-option-drawer > summary').forEach(wireSummary);
   if (freeText) freeText.addEventListener('input', refresh);
 
+  // The page's side of the shared Interruption script below.
+  function stopTarget() {
+    return { root: form, before: form.querySelector('.pp-actions'), id: 'pp-free-text' };
+  }
+  function stopMode(on) {
+    submitBtn.hidden = on;
+    if (on) status.hidden = true;
+    else refresh();
+  }
+  function stopPayload(stop) {
+    var data = collect();
+    data.free_text = stop.box.value.trim();
+    data.interrupted = true;
+    return data;
+  }
+  // Interruption ("Stop here", see CONTEXT.md): ends the ask at once with the answers so
+  // far and the current question marked, so the agent reads it before anything else. It
+  // needs the user's own words there: the question's text box turns required, and one is
+  // added where the question has none (allow_free_text off). stopTarget, stopMode and
+  // stopPayload above are each page's side of it.
+  var stopBtn = document.getElementById('pp-stop');
+  var stopSend = document.getElementById('pp-stop-send');
+  var stopUndo = document.getElementById('pp-stop-undo');
+  var stopping = null;
+  function syncStop() {
+    stopSend.disabled = frozen || !stopping || stopping.box.value.trim() === '';
+  }
+  stopBtn.addEventListener('click', function () {
+    var target = stopTarget();
+    var box = document.getElementById(target.id);
+    var made = !box;
+    if (made) {
+      var holder = document.createElement('label');
+      holder.className = 'pp-free-text';
+      holder.appendChild(document.createTextNode(''));
+      box = document.createElement('textarea');
+      box.id = target.id;
+      box.rows = 3;
+      holder.appendChild(box);
+      target.root.insertBefore(holder, target.before);
+    }
+    var label = box.parentNode;
+    stopping = { box: box, made: made, index: target.index, label: label.firstChild.nodeValue };
+    label.firstChild.nodeValue = 'Why stop here? Claude reads this first.';
+    label.classList.add('pp-required');
+    box.addEventListener('input', syncStop);
+    stopBtn.hidden = true;
+    stopSend.hidden = false;
+    stopUndo.hidden = false;
+    stopMode(true);
+    syncStop();
+    box.focus();
+  });
+  stopUndo.addEventListener('click', function () {
+    var label = stopping.box.parentNode;
+    stopping.box.removeEventListener('input', syncStop);
+    if (stopping.made) label.remove();
+    else {
+      label.classList.remove('pp-required');
+      label.firstChild.nodeValue = stopping.label;
+    }
+    stopping = null;
+    stopBtn.hidden = false;
+    stopSend.hidden = true;
+    stopUndo.hidden = true;
+    stopMode(false);
+  });
+  stopSend.addEventListener('click', async function () {
+    if (stopSend.disabled) return;
+    var data = stopPayload(stopping);
+    freeze('Sending\\u2026');
+    if (await send('interrupt', data)) {
+      freeze(doneMessage('Stopped here. Claude reads your note first.'));
+      document.title = '\\u270b ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+  function freezeStop() {
+    if (stopping) stopping.box.readOnly = true;
+    stopBtn.disabled = true;
+    stopSend.disabled = true;
+    stopUndo.hidden = true;
+  }
+
   function freeze(message) {
     frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
     document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     if (freeText) freeText.readOnly = true;
+    freezeStop();
     submitBtn.disabled = true;
     cancelBtn.disabled = true;
     // Unlike refresh()'s hint, this message (sending/sent/cancelled) is never hidden —
@@ -782,7 +884,7 @@ __FREE_TEXT__
       if (!res.ok) {
         // Branch on the status, not on whether fetch threw: a 403 from a stale token
         // resolves successfully and would otherwise be reported as sent.
-        if (kind === 'submit' || kind === 'cancel') {
+        if (kind === 'submit' || kind === 'cancel' || kind === 'interrupt') {
           fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
         }
         return false;
@@ -791,7 +893,7 @@ __FREE_TEXT__
     } catch (err) {
       // An answer is worth copying out by hand; the background traffic only tells that
       // nobody is listening any more.
-      if (kind === 'submit' || kind === 'cancel') {
+      if (kind === 'submit' || kind === 'cancel' || kind === 'interrupt') {
         fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
       } else expire(false);
       return false;
@@ -808,6 +910,7 @@ __FREE_TEXT__
 
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
+    if (stopping) { stopSend.click(); return; }
     if (submitBtn.disabled) return;
     var data = collect();
     freeze('Sending\\u2026');
@@ -884,6 +987,9 @@ __STEPS__
     <div class="pp-actions">
       <button type="button" id="pp-back" disabled>Back</button>
       <button type="button" id="pp-next" disabled>__INITIAL_NEXT_LABEL__</button>
+      <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
+      <button type="button" id="pp-stop-undo" hidden>never mind</button>
+      <button type="button" id="pp-stop">Stop here</button>
       <button type="button" id="pp-cancel">Cancel</button>
       <span id="pp-status"></span>
     </div>
@@ -1226,11 +1332,94 @@ __STEPS__
     }, 1000);
   }
 
+  // The page's side of the shared Interruption script below.
+  function stopTarget() {
+    return { root: steps[current], before: null, id: 'pp-free-text-' + current, index: current };
+  }
+  function stopMode(on) {
+    nextBtn.hidden = on;
+    backBtn.disabled = on || current === 0;
+  }
+  function stopPayload(stop) {
+    var data = collect();
+    data.interrupted = stop.index;
+    return data;
+  }
+  // Interruption ("Stop here", see CONTEXT.md): ends the ask at once with the answers so
+  // far and the current question marked, so the agent reads it before anything else. It
+  // needs the user's own words there: the question's text box turns required, and one is
+  // added where the question has none (allow_free_text off). stopTarget, stopMode and
+  // stopPayload above are each page's side of it.
+  var stopBtn = document.getElementById('pp-stop');
+  var stopSend = document.getElementById('pp-stop-send');
+  var stopUndo = document.getElementById('pp-stop-undo');
+  var stopping = null;
+  function syncStop() {
+    stopSend.disabled = frozen || !stopping || stopping.box.value.trim() === '';
+  }
+  stopBtn.addEventListener('click', function () {
+    var target = stopTarget();
+    var box = document.getElementById(target.id);
+    var made = !box;
+    if (made) {
+      var holder = document.createElement('label');
+      holder.className = 'pp-free-text';
+      holder.appendChild(document.createTextNode(''));
+      box = document.createElement('textarea');
+      box.id = target.id;
+      box.rows = 3;
+      holder.appendChild(box);
+      target.root.insertBefore(holder, target.before);
+    }
+    var label = box.parentNode;
+    stopping = { box: box, made: made, index: target.index, label: label.firstChild.nodeValue };
+    label.firstChild.nodeValue = 'Why stop here? Claude reads this first.';
+    label.classList.add('pp-required');
+    box.addEventListener('input', syncStop);
+    stopBtn.hidden = true;
+    stopSend.hidden = false;
+    stopUndo.hidden = false;
+    stopMode(true);
+    syncStop();
+    box.focus();
+  });
+  stopUndo.addEventListener('click', function () {
+    var label = stopping.box.parentNode;
+    stopping.box.removeEventListener('input', syncStop);
+    if (stopping.made) label.remove();
+    else {
+      label.classList.remove('pp-required');
+      label.firstChild.nodeValue = stopping.label;
+    }
+    stopping = null;
+    stopBtn.hidden = false;
+    stopSend.hidden = true;
+    stopUndo.hidden = true;
+    stopMode(false);
+  });
+  stopSend.addEventListener('click', async function () {
+    if (stopSend.disabled) return;
+    var data = stopPayload(stopping);
+    freeze('Sending\\u2026');
+    if (await send('interrupt', data)) {
+      freeze(doneMessage('Stopped here. Claude reads your note first.'));
+      document.title = '\\u270b ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+  function freezeStop() {
+    if (stopping) stopping.box.readOnly = true;
+    stopBtn.disabled = true;
+    stopSend.disabled = true;
+    stopUndo.hidden = true;
+  }
+
   function freeze(message) {
     frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
     document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     freeTexts.forEach(function (t) { t.readOnly = true; });
+    freezeStop();
     backBtn.disabled = true;
     nextBtn.disabled = true;
     cancelBtn.disabled = true;
@@ -1319,14 +1508,14 @@ __STEPS__
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        if (kind === 'submit' || kind === 'cancel') {
+        if (kind === 'submit' || kind === 'cancel' || kind === 'interrupt') {
           fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
         }
         return false;
       }
       return true;
     } catch (err) {
-      if (kind === 'submit' || kind === 'cancel') {
+      if (kind === 'submit' || kind === 'cancel' || kind === 'interrupt') {
         fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
       } else expire(false);
       return false;
@@ -1374,7 +1563,7 @@ __STEPS__
   document.addEventListener('keydown', function (event) {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      nextBtn.click();
+      (stopping ? stopSend : nextBtn).click();
     }
   });
 

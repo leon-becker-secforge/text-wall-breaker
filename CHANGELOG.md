@@ -5,6 +5,15 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `ask`: "Stop here" ends an ask at the current question, for when the agent should read
+  that answer now: the two of you are misaligned, or it can't wait. It asks for your note
+  there (adding a text box where the question has none), then "Stop and send" returns at
+  once with the answers so far, that one marked `interrupted: true`. With several
+  questions the result ends at the last one answered and carries `resume` for the whole
+  ask; a streamed ask returns it on the agent's next call.
+
 ### Changed
 
 - `ask`: a picked single-choice option no longer says "click again to clear", which

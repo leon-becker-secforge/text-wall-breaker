@@ -26,6 +26,11 @@ rather than a `LoopbackListener`.
 A cancelled or timed-out ask that had answers entered returns a `resume` id: the pages
 report every change as they go, the server keeps the last report as a draft, and a call
 with `resume` reopens the same questions with those answers prefilled.
+
+An interrupted ask (the user's "Stop here", see CONTEXT.md's Interruption) ends the call
+at once with the answers entered so far, the stopped-at one marked, so the agent reads it
+before anything else. On several questions it returns a `resume` id as well, keeping
+every answer, the stopped-at one included.
 """
 
 from __future__ import annotations
@@ -554,6 +559,36 @@ def _unanswered(
     return {**result, "resume": draft_id} if draft_id else result
 
 
+def _interrupted(
+    steps: list[Question], data: dict[str, Any], *, multi: bool, header: str
+) -> dict[str, Any]:
+    """The answer to an ask the user stopped at one question.
+
+    `answers` runs up to the stopped-at question or the last one answered after it,
+    whichever is later: the agent matches unnamed questions by position, so entries in
+    between stay, empty. The draft keeps all of it, so `resume` reopens the whole ask.
+    """
+    if not multi:
+        return {**_extract_answer(steps[0], data), "interrupted": True}
+    raw = data.get("answers")
+    answers = _extract_answers(steps, raw)
+    stop = data.get("interrupted")
+    if not isinstance(stop, int) or isinstance(stop, bool) or not 0 <= stop < len(steps):
+        stop = 0
+    entered = [
+        index
+        for index, answer in enumerate(answers)
+        if answer["selected"] or answer["free_text"] or answer.get("deferred")
+    ]
+    answers = answers[: max([stop, *entered]) + 1]
+    answers[stop]["interrupted"] = True
+    result: dict[str, Any] = {"answers": answers}
+    draft_id = _save_draft(steps, header, multi=True, progress=data)
+    if draft_id:
+        result["resume"] = draft_id
+    return result
+
+
 def _answer_from_submission(
     steps: list[Question],
     submission: Submission | None,
@@ -566,6 +601,8 @@ def _answer_from_submission(
         return _unanswered({"timed_out": True}, steps, header, multi=multi, progress=progress)
     if submission.kind == "cancel":
         return _unanswered({"cancelled": True}, steps, header, multi=multi, progress=progress)
+    if submission.kind == "interrupt":
+        return _interrupted(steps, submission.data, multi=multi, header=header)
     if not multi:
         return _extract_answer(steps[0], submission.data)
     return {"answers": _extract_answers(steps, submission.data.get("answers"))}
@@ -778,8 +815,10 @@ def _continue_stream(request: AskRequest) -> dict[str, Any]:
         )
     stream.last_call = time.monotonic()
 
+    # The user cancelled or stopped the ask while the agent was still writing: this call
+    # returns that instead of adding questions nobody will see.
     submission = stream.session.submission()
-    if submission is not None and submission.kind == "cancel":
+    if submission is not None and submission.kind in ("cancel", "interrupt"):
         progress = stream.session.progress()
         _end_stream(ask_id)
         return _answer_from_submission(
@@ -826,6 +865,10 @@ def _run_ask(request: AskRequest) -> dict[str, Any]:
     answer was sent, whether or not it was closed again afterwards. With
     SHARE_INTERACTION_SIGNALS on, every answer also has `changed_from` and each entry of
     `answers` also has `visits`.
+
+    An interrupted ask returns the answer or `answers` with `interrupted: True` on the
+    stopped-at question, and `resume` when several questions were asked; see
+    `_interrupted`.
 
     With `more_coming`, returns `{"ask_id", "answers_so_far"}` at once instead; see the
     module docstring for how the later calls of that streamed ask go.

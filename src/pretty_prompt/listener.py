@@ -125,11 +125,11 @@ def _handle_submit_payload(
             progress(data)
         respond(204, b"")
         return
-    # "submit"/"cancel" are ask's answer kinds; "acknowledge" is show's — see
-    # show.run_show. All three are "the one submission this listener exists to
-    # collect", handled identically from here on; only the caller distinguishes them
-    # by `Submission.kind`.
-    if kind not in ("submit", "cancel", "acknowledge"):
+    # "submit"/"cancel"/"interrupt" are ask's answer kinds; "acknowledge" is show's —
+    # see show.run_show. All are "the one submission this listener exists to collect",
+    # handled identically from here on; only the caller distinguishes them by
+    # `Submission.kind`.
+    if kind not in ("submit", "cancel", "interrupt", "acknowledge"):
         respond(400, b'{"error":"unknown kind"}')
         return
 

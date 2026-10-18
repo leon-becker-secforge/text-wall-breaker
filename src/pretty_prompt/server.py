@@ -82,9 +82,14 @@ Returns one of:
   {"cancelled": true} / {"timed_out": true} / {"not_delivered": true}
 
 `selected` and `free_text` are additive. `expanded`: option ids whose body was ever
-opened. `not_delivered` (~30s): the user never saw it; ask again. `cancelled` and
-`timed_out` carry `resume` when answers were entered: pass it back as `resume` to
+opened. `not_delivered` (~30s): the user never saw it; ask again. A cancelled or
+timed-out ask carries `resume` when answers were entered: pass it back as `resume` to
 reopen the ask prefilled.
+
+`interrupted: true` on an answer: the user stopped the ask there for you to read now.
+Its `free_text` may correct your plan or only constrain this answer: do what it says,
+no more; its pick counts. The call returns at once; with `questions`, `answers` ends
+at the last one given, plus `resume`: use it only if the rest still makes sense.
 
 `questions`: several questions on one page, set instead of
 `question`/`options`/etc. Returns `{"answers": [...]}`, one entry per question in
@@ -93,7 +98,7 @@ order, carrying the question's `id` when it set one; match by id.
 Streamed ask (`questions`+`more_coming`): send in chunks so the user
 starts answering while you write the rest. First call returns `{"ask_id",
 "answers_so_far": []}`; later calls add `questions` under that id; the final call
-(no `more_coming`) waits and returns `{"answers": [...]}` or `{"cancelled": true}`.
+(no `more_coming`) waits for the answers. A cancel or interruption returns on your next call.
 Skip this for a short ask."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
@@ -240,9 +245,9 @@ async def ask(
     resume: Annotated[
         str | None,
         Field(
-            description="The `resume` id a cancelled or timed-out ask returned: reopens "
-            "that ask with the user's earlier answers prefilled. Only timeout_seconds "
-            "applies. Used once."
+            description="The `resume` id a cancelled, timed-out or interrupted ask "
+            "returned: reopens that ask with the user's earlier answers prefilled. Only "
+            "timeout_seconds applies. Used once."
         ),
     ] = None,
     ask_id: Annotated[

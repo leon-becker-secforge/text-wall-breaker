@@ -23,7 +23,7 @@ The optional longer Markdown explaining an option. A long body sits behind a dra
 _Avoid_: description, details
 
 **Drawer**:
-The collapsed state of a long body, opened by a click on its option.
+The collapsed state of a long body, opened by its own control, never by picking the option.
 _Avoid_: accordion, expander, details
 
 **Caveat**:
@@ -40,6 +40,13 @@ _Avoid_: default, suggested, preselected
 A question the operator declines to settle yet because it depends on something still open.
 Distinct from cancelling, which ends the whole ask.
 _Avoid_: skipped, postponed, unanswered
+
+**Interruption**:
+The operator stopping an ask at one question because the agent should read that answer
+now: the two are misaligned, or the answer matters too much to wait. Ends the ask at once
+and always carries the operator's own words on that question. Distinct from cancelling,
+which ends the ask with nothing to say, and from deferring, which keeps the ask going.
+_Avoid_: escalation, flag, raise, urgent answer
 
 **Streamed ask**:
 An ask sent in chunks over several calls, each adding questions to the page the operator

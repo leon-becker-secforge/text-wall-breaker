@@ -477,3 +477,11 @@ def test_a_picked_radio_shows_it_can_be_cleared_on_hover_on_both_pages():
     for html in (_page(), _multi_page()):
         assert selector in html
         assert 'content: "click again to clear"' not in html
+
+
+def test_both_pages_offer_stop_here_and_send_it_as_an_interrupt():
+    for html in (_page(), _multi_page()):
+        assert 'id="pp-stop"' in html
+        assert 'id="pp-stop-send" hidden disabled' in html
+        assert "send('interrupt', data)" in html
+        assert "__STOP__" not in html

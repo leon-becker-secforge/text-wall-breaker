@@ -960,3 +960,90 @@ def test_long_first_paragraph_gets_a_hint():
     second = _long_question_hint([short, long])
     assert single is not None and "The question has" in single
     assert second is not None and "Question 2 has" in second
+
+
+def test_an_interrupted_single_question_is_marked_and_has_no_resume(browser):
+    browser(
+        lambda page: {
+            "kind": "interrupt",
+            "data": {"selected": ["a"], "free_text": " wrong plan ", "interrupted": True},
+        }
+    )
+    result = run_ask(AskRequest(question="q", options=_a_b()))
+    assert result == {
+        "selected": ["a"],
+        "free_text": "wrong plan",
+        "expanded": [],
+        "changed_from": [],
+        "interrupted": True,
+    }
+
+
+def _interrupt(stop: object, *answers: dict[str, Any]) -> dict[str, Any]:
+    return {"kind": "interrupt", "data": {"answers": list(answers), "interrupted": stop}}
+
+
+def test_an_interrupted_ask_ends_at_the_last_answer_given_and_marks_the_stop(browser):
+    # Stopped at the second of four; the fourth was answered before coming back, so the
+    # empty third stays as a placeholder and nothing follows the fourth.
+    browser(
+        lambda page: _interrupt(
+            1,
+            {"selected": ["a"]},
+            {"selected": [], "free_text": "not a cache"},
+            {},
+            {"selected": ["b"]},
+        )
+    )
+    questions = [Question(id=f"q{n}", question=f"{n}?", options=_a_b()) for n in range(5)]
+    result = run_ask(AskRequest(questions=questions))
+    assert [answer["id"] for answer in result["answers"]] == ["q0", "q1", "q2", "q3"]
+    assert [answer.get("interrupted") for answer in result["answers"]] == [
+        None,
+        True,
+        None,
+        None,
+    ]
+    assert result["answers"][1]["free_text"] == "not a cache"
+    assert set(result) == {"answers", "resume"}
+
+
+def test_an_interrupted_ask_reaches_at_least_the_stopped_at_question(browser):
+    browser(lambda page: _interrupt(2, {}, {}, {"free_text": "why"}))
+    result = run_ask(AskRequest(questions=[_q("one"), _q("two"), _q("three"), _q("four")]))
+    assert len(result["answers"]) == 3
+    assert result["answers"][2]["interrupted"] is True
+
+
+def test_resuming_an_interrupted_ask_reopens_every_question_prefilled(browser):
+    browser(lambda page: _interrupt(0, {"selected": [], "free_text": "stop note"}))
+    resume = run_ask(AskRequest(questions=[_q("one"), _q("two")]))["resume"]
+
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(resume=resume))
+    assert 'data-step-index="1"' in fake.page
+    assert "stop note</textarea>" in fake.page
+
+
+def test_a_bad_stop_index_marks_the_first_question(browser):
+    browser(lambda page: _interrupt("x", {"free_text": "note"}))
+    result = run_ask(AskRequest(questions=[_q("one"), _q("two")]))
+    assert result["answers"][0]["interrupted"] is True
+
+
+def test_interrupting_a_streamed_ask_returns_on_the_agents_next_call(opened):
+    session = session_module.get_shared_session()
+    ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
+    _post(
+        _session_url(session, "/submit"),
+        _interrupt(0, {"selected": [], "free_text": "wrong"}),
+    )
+
+    result = run_ask(AskRequest(ask_id=ask_id, questions=[_q("two")], more_coming=True))
+    assert result["answers"][0]["interrupted"] is True
+    assert result["answers"][0]["free_text"] == "wrong"
+    assert "resume" in result
+    with pytest.raises(InvalidAsk, match="no open ask"):
+        run_ask(AskRequest(ask_id=ask_id))
+    assert session.try_claim()
+    session.release()
