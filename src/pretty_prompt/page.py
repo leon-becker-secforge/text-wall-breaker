@@ -476,7 +476,7 @@ __FREE_TEXT__
   </form>
 
   <div id="pp-fallback" hidden>
-    <strong>Couldn't reach Claude Code</strong>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
     <p data-role="body" id="pp-fallback-reason"></p>
     <textarea readonly rows="6"></textarea>
   </div>
@@ -835,10 +835,13 @@ __FREE_TEXT__
     freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
       'so Claude can reopen it.');
     document.title = '\\u231b ' + BASE_TITLE;
+    // Reopening depends on Claude doing it; the copy box works even if it never does.
+    fallback({ kind: 'submit', data: collect() }, 'Claude Code stopped waiting for this answer',
+      'Claude Code stopped waiting');
     if (reusable) startReusePolling();
   }
 
-  function fallback(payload, reason) {
+  function fallback(payload, reason, title) {
     // No navigator.clipboard.writeText() here — writing to the clipboard without the
     // user asking for it is a surprise, not a convenience. The textarea is selected
     // instead, so copying is still one keypress away, but it's the user's keypress.
@@ -849,6 +852,8 @@ __FREE_TEXT__
     textarea.value = text;
     document.getElementById('pp-fallback-reason').textContent =
       reason + ' \\u2014 copy the text below and paste it to Claude Code.';
+    document.getElementById('pp-fallback-title').textContent =
+      title || "Couldn't reach Claude Code";
     textarea.select();
   }
 
@@ -996,7 +1001,7 @@ __STEPS__
   </form>
 
   <div id="pp-fallback" hidden>
-    <strong>Couldn't reach Claude Code</strong>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
     <p data-role="body" id="pp-fallback-reason"></p>
     <textarea readonly rows="6"></textarea>
   </div>
@@ -1466,10 +1471,13 @@ __STEPS__
     freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
       'so Claude can reopen it.');
     document.title = '\\u231b ' + BASE_TITLE;
+    // Reopening depends on Claude doing it; the copy box works even if it never does.
+    fallback({ kind: 'submit', data: collect() }, 'Claude Code stopped waiting for this answer',
+      'Claude Code stopped waiting');
     if (reusable) startReusePolling();
   }
 
-  function fallback(payload, reason) {
+  function fallback(payload, reason, title) {
     var box = document.getElementById('pp-fallback');
     var text = JSON.stringify(payload, null, 2);
     box.hidden = false;
@@ -1477,6 +1485,8 @@ __STEPS__
     textarea.value = text;
     document.getElementById('pp-fallback-reason').textContent =
       reason + ' \\u2014 copy the text below and paste it to Claude Code.';
+    document.getElementById('pp-fallback-title').textContent =
+      title || "Couldn't reach Claude Code";
     textarea.select();
   }
 
@@ -1746,7 +1756,7 @@ __ACK_BUTTON__
   </div>
 
   <div id="pp-fallback" hidden>
-    <strong>Couldn't reach Claude Code</strong>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
     <p data-role="body" id="pp-fallback-reason"></p>
   </div>
 </main>
@@ -2260,7 +2270,7 @@ __CONTENT__
   </div>
 
   <div id="pp-fallback" hidden>
-    <strong>Couldn't reach Claude Code</strong>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
     <p data-role="body" id="pp-fallback-reason"></p>
     <textarea readonly rows="6"></textarea>
   </div>
@@ -2381,7 +2391,7 @@ __CONTENT__
     if (document.visibilityState === 'visible') heartbeat();
   });
 
-  function fallback(payload, reason) {
+  function fallback(payload, reason, title) {
     var box = document.getElementById('pp-fallback');
     var text = JSON.stringify(payload, null, 2);
     box.hidden = false;
@@ -2389,6 +2399,8 @@ __CONTENT__
     textarea.value = text;
     document.getElementById('pp-fallback-reason').textContent =
       reason + ' \\u2014 copy the text below and paste it to Claude Code.';
+    document.getElementById('pp-fallback-title').textContent =
+      title || "Couldn't reach Claude Code";
     textarea.select();
   }
 

@@ -282,10 +282,10 @@ The page carries two buttons, on by default, either can be turned off:
 ### An unread report is not replaced
 
 `show` shares its tab with `ask` and `review`. While a report is unacknowledged and its
-tab is still open, an `ask` or `review` opens a second tab instead of taking the first
-over, so the report stays on screen. Once it is acknowledged, or its tab is closed, the
-next call reuses the tab again and the report is gone. A newer `show` still replaces an
-older one. When a question about the report follows, set `wait_for_acknowledge`, or
+tab is still open, any later call (`ask`, `review` or another `show`) opens a second
+tab instead of taking the first over, so the report stays on screen. Once it is
+acknowledged, or its tab is closed, the next call reuses the tab again and the report is
+gone. When a question about the report follows, set `wait_for_acknowledge`, or
 check `show_status` first.
 
 ### `show_status`
@@ -293,7 +293,9 @@ check `show_status` first.
 Takes no arguments; returns at once with `{"state": "unacknowledged" | "acknowledged" |
 "none", "title": "..."}`. `none` means no report was shown in the shared tab, or
 something else replaced it. A report that fell back to its own one-off tab (the shared
-one was busy) has no listener, so it is not tracked and reads `none`.
+one was busy, or held an unread report) has no listener, so it is not tracked: the
+result keeps describing the shared tab's report, or reads `none`. `title` tells them
+apart.
 
 ### Result
 
@@ -474,7 +476,9 @@ port and token. Nothing is serialised between them.
 
 If an `ask` or `review` page cannot reach the listener — a stale token, or a call that
 already timed out — it shows the answer (or the comments/overall note) in a selected,
-read-only textarea rather than losing it. It does not copy anything to the clipboard on
+read-only textarea rather than losing it. An `ask` page shows the same textarea, with
+the answers so far, as soon as it notices its call timed out, without waiting for a
+Send. It does not copy anything to the clipboard on
 its own; copying is left to the user. `show`'s own fallback only reports the failure,
 without a textarea — there is nothing to lose the way an unreachable answer would be,
 since the report itself is still on screen either way.

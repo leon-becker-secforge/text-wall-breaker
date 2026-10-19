@@ -116,8 +116,8 @@ anything that would be a wall of text in the terminal. Returns at once.
 `content` is Markdown, the same subset as `ask` (headings, lists, tables, code,
 images, blockquotes). Paragraph breaks are real newlines, not the `\\n` escape.
 
-While the report is unacknowledged, an `ask` or `review` opens in a second tab, so the
-report stays up. Before asking about the report, check `show_status` or set
+While the report is unacknowledged, any later call, `show` too, opens in a second tab,
+so the report stays up. Before asking about the report, check `show_status` or set
 `wait_for_acknowledge`.
 
 Two buttons, both on by default (`save_button`, `acknowledge_button`):
@@ -351,8 +351,9 @@ before asking about a report shown without `wait_for_acknowledge`.
 
 Returns `{"state": "unacknowledged" | "acknowledged" | "none", "title": "..."}`.
 `none`: no report in the shared tab, or an `ask`/`review` has replaced it since. A
-report that opened in its own one-off tab (shared tab busy) is not tracked and reads
-`none` too."""
+report that opened in its own one-off tab (shared tab busy, or holding an unread
+report) is not tracked: the result still describes the shared tab's report, or reads
+`none`. `title` tells you which report it is."""
 
 
 @server.tool(name="show_status", description=_SHOW_STATUS_DESCRIPTION)

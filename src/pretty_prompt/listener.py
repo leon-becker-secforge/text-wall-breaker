@@ -425,17 +425,16 @@ class SessionListener:
         with self._state_lock:
             self._last_activity = time.monotonic()
 
-    def try_claim(self, *, replaces_report: bool = False) -> bool:
+    def try_claim(self) -> bool:
         """Claim exclusive use of this session for one call. Never blocks.
 
-        Refuses, like a busy session, while an unread `show` report is on screen, unless
-        `replaces_report` (a newer `show`) says replacing it is the point. The caller then
-        falls back to its own one-off tab, so a question never wipes a report the user is
-        still reading.
+        Refuses, like a busy session, while an unread `show` report is on screen. The
+        caller then falls back to its own one-off tab, so no call, a newer `show`
+        included, wipes a report the user is still reading.
         """
         if not self._busy_lock.acquire(blocking=False):
             return False
-        if not replaces_report and self.holds_unread_report():
+        if self.holds_unread_report():
             self._busy_lock.release()
             return False
         return True

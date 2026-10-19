@@ -184,11 +184,12 @@ def _published_report(session: SessionListener, title: str = "Report") -> None:
     session.mark_report(title)
 
 
-def test_a_question_cannot_claim_the_session_while_a_report_is_unread(session):
+def test_no_call_can_claim_the_session_while_a_report_is_unread(session):
     _published_report(session)
     assert not session.try_claim()
     # The refused claim must not leave the session locked.
-    assert session.try_claim(replaces_report=True)
+    session.deliver(Submission(kind="acknowledge", data={}))
+    assert session.try_claim()
     session.release()
 
 

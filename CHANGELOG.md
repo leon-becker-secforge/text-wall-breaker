@@ -16,6 +16,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Changed
 
+- `show`: a newer `show` no longer replaces an unacknowledged report in the shared tab;
+  it opens a second tab, like `ask` and `review` already do.
+- `ask`: a page that notices its call timed out (or the server is gone) now also shows
+  the answers so far in the copy-and-paste box a failed Send shows, headed "Claude Code
+  stopped waiting".
 - `ask`: a picked single-choice option no longer says "click again to clear", which
   squeezed a long label into a narrow column. Hovering its row now empties the radio and
   slashes it instead, previewing the cleared state.

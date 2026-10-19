@@ -6,7 +6,7 @@ Two ways a call gets its tab, exactly mirroring `ask.run_ask`:
      if nothing else is using it right now. This is the same session `ask` claims, so an
      `ask` and a `show` in the same process land in one tab between them, not two.
   2. Fall back to a one-off tab if the shared one is already claimed by an overlapping
-     call.
+     call, or still holds an unacknowledged report (see `SessionListener.try_claim`).
 
 Unlike `ask`, most `show` calls don't wait for anything: `wait_for_acknowledge=False`
 (the default) publishes the page and returns immediately once the browser has it. Only a
@@ -190,13 +190,13 @@ def run_show(request: ShowRequest) -> dict[str, Any]:
     (`{"acknowledged": True}`).
 
     Tries the process's one shared browser tab first — the same one `ask` uses — falling
-    back to a fresh one-off tab if that shared tab is already showing or asking something
-    else. See the module docstring.
+    back to a fresh one-off tab if that shared tab is already asking something else or
+    still holds an unacknowledged report. See the module docstring.
     """
     request = request.validated()
 
     session = get_shared_session()
-    if session.try_claim(replaces_report=True):
+    if session.try_claim():
         try:
             return _run_show_reusing_tab(request, session)
         finally:
