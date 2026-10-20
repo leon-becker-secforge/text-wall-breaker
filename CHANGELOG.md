@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-20
+
 ### Added
 
 - `ask`: "Stop here" ends an ask at the current question, for when the agent should read
