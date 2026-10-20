@@ -40,14 +40,16 @@ from __future__ import annotations
 
 import html
 import re
+from pathlib import Path
 from urllib.parse import quote
 
 __all__ = ["render_inline", "render_markdown"]
 
 # Schemes a link or image may use. `file:` is here because the page is opened from disk
 # and images are referenced as file:// absolute paths (that is the only image mechanism
-# this server has). Everything else — `javascript:` above all — falls through to being
-# rendered as plain text, so an unexpected scheme is visible instead of active.
+# this server has; a bare absolute path is rewritten to one first, see `_image_url`).
+# Everything else — `javascript:` above all — falls through to being rendered as plain
+# text, so an unexpected scheme is visible instead of active.
 _SAFE_SCHEMES = ("http://", "https://", "file://", "mailto:", "data:image/")
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
@@ -108,6 +110,20 @@ def _safe_url(url: str) -> str | None:
     return None
 
 
+def _image_url(url: str) -> str:
+    """`url` with a bare absolute or `~` path turned into the `file://` URL it means.
+
+    Agents often write `![x](/tmp/shot.png)` instead of `![x](file:///tmp/shot.png)`.
+    An image can only ever be a local file or a remote URL, so a leading `/` or `~/` is
+    unambiguous here; a relative path stays rejected (see `_safe_url`).
+    """
+    if url.startswith("~/"):
+        url = str(Path(url).expanduser())
+    if url.startswith("/") and not url.startswith("//"):
+        return f"file://{url}"
+    return url
+
+
 def render_inline(text: str, *, asset_base_url: str | None = None) -> str:
     """Render the inline span constructs in `text`, escaping everything else.
 
@@ -155,7 +171,7 @@ def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
         return f'<span class="badge" data-axis="severity" data-value="{value}">{text}</span>'
 
     if match.group("img_url") is not None:
-        url = _safe_url(match.group("img_url"))
+        url = _safe_url(_image_url(match.group("img_url")))
         alt = _escape(match.group("img_alt"))
         if url is None:
             return _escape(match.group(0))

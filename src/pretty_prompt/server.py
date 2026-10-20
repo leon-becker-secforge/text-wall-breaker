@@ -68,7 +68,7 @@ server = MCPServer(
 _ASK_DESCRIPTION = """Ask the user a question in a local browser page; blocks until answered,
 cancelled, or timed out.
 
-`question` and option `body` are Markdown. Images: `![alt](file:///abs/path)`.
+`question` and option `body` are Markdown. Images: `![alt](/abs/path)` or `file:///abs/path`.
 Paragraph breaks are real newlines, not the `\\n` escape.
 
 Keep `question` a short heading (at most 2 lines); detail goes in lists, blockquotes

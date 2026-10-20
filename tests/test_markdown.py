@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from pretty_prompt.markdown import render_inline, render_markdown
@@ -96,6 +98,23 @@ def test_underscore_emphasis_at_word_boundaries():
 def test_link_and_image():
     assert render_inline("[t](https://e.test)") == '<a href="https://e.test">t</a>'
     assert render_inline("![a](file:///tmp/x.png)") == '<img src="file:///tmp/x.png" alt="a">'
+
+
+def test_image_bare_path_is_a_file_url():
+    assert render_inline("![a](/tmp/x.png)") == '<img src="file:///tmp/x.png" alt="a">'
+    home = Path.home()
+    assert render_inline("![a](~/x.png)") == f'<img src="file://{home}/x.png" alt="a">'
+
+
+def test_image_bare_path_goes_through_asset_route():
+    out = render_inline("![a](/tmp/x.png)", asset_base_url="http://h/asset?t=k")
+    assert out == '<img src="http://h/asset?t=k&amp;path=%2Ftmp%2Fx.png" alt="a">'
+
+
+def test_image_relative_and_link_paths_stay_text():
+    assert render_inline("![a](x.png)") == "![a](x.png)"
+    assert render_inline("![a](//evil.test/x.png)") == "![a](//evil.test/x.png)"
+    assert render_inline("[t](/tmp/x)") == "[t](/tmp/x)"
 
 
 # The page is opened from disk with file:// access, so a javascript: URL in a prompt

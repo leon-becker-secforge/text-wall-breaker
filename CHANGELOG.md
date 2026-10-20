@@ -25,6 +25,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   squeezed a long label into a narrow column. Hovering its row now empties the radio and
   slashes it instead, previewing the cleared state.
 
+### Fixed
+
+- Markdown images now accept a bare absolute path (`![x](/tmp/shot.png)`, `~/shot.png`) as
+  well as a `file://` URL; agents often wrote the bare path, which rendered as text.
+
 ## [0.11.0] - 2026-10-17
 
 ### Added

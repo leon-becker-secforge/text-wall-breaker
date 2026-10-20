@@ -398,11 +398,15 @@ added, so a `<script>` in a question appears as visible text. Rendering happens 
 rather than in the page's JavaScript for that reason — the page is never handed a string
 it has to trust.
 
-Images use standard Markdown image syntax with an absolute `file://` URL:
+Images use standard Markdown image syntax with an absolute path, as a `file://` URL or
+bare (`/...` or `~/...`):
 
 ```markdown
 ![the current layout](file:///home/you/shot.png)
+![the current layout](/home/you/shot.png)
 ```
+
+A relative path renders as text: the server cannot know which directory it is relative to.
 
 There is no separate images field and no base64 inlining. The page is opened from disk,
 so `file://` resolves directly. URLs are restricted to `http`, `https`, `file`, `mailto`
