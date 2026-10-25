@@ -11,8 +11,9 @@
      the person actually uses. `wslview` (from `wslu`) if it is installed, otherwise
      `explorer.exe` with a file target translated to its `\\\\wsl.localhost\\...` path.
      The loopback URLs work as-is, since WSL2 forwards `127.0.0.1` to Windows.
-  5. Any other POSIX desktop: `xdg-open`, and only with `DISPLAY` or `WAYLAND_DISPLAY`
-     set. A headless host gets a reason instead of an opener.
+  5. Any other POSIX desktop: `webbrowser.open`, then `xdg-open` if that finds no
+     browser. Only with `DISPLAY` or `WAYLAND_DISPLAY` set; a headless host gets a reason
+     instead of an opener.
 
 Resolved on every call rather than cached: it is a `which` and an environment lookup,
 and a cache would outlive a test's monkeypatching.
@@ -25,7 +26,8 @@ import shlex
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+import webbrowser
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 __all__ = ["OPENER_ENV_VAR", "BrowserUnavailable", "Opener", "find_opener", "is_wsl"]
@@ -54,6 +56,11 @@ class Opener:
     # Translate a file target with `wslpath -w` first: a Windows program can't open
     # `/tmp/...`, only the `\\wsl.localhost\...` path WSL exports it under.
     windows_paths: bool = False
+    # `xdg-open` runs a browser that is not yet running in the foreground, so a cold start
+    # never returns and hits the timeout with the page already on screen. `webbrowser`
+    # gives a Firefox or Chrome launcher at most 5 seconds and then counts it as started.
+    # It returns False, with no reason, when it finds no browser; `argv` is the fallback.
+    try_webbrowser: bool = False
 
     def open(self, target: Path | str) -> None:
         """Hand `target` to the browser, raising `BrowserUnavailable` if it refuses.
@@ -63,6 +70,8 @@ class Opener:
         """
         if not self.argv:
             _startfile(target, self.name)
+            return
+        if self.try_webbrowser and webbrowser.open(_as_url(target)):
             return
         arg = _windows_path(target) if self.windows_paths else str(target)
         result = _run([*self.argv, arg], self.name)
@@ -98,7 +107,7 @@ def find_opener() -> Opener | str:
         return (
             "neither DISPLAY nor WAYLAND_DISPLAY is set, so there is no desktop to open a page on"
         )
-    return xdg_open
+    return replace(xdg_open, try_webbrowser=True)
 
 
 def is_wsl() -> bool:
@@ -129,6 +138,10 @@ def _parse_override(value: str) -> Opener | str:
 def _on_path(program: str) -> Opener | None:
     executable = shutil.which(program)
     return None if executable is None else Opener(name=program, argv=(executable,))
+
+
+def _as_url(target: Path | str) -> str:
+    return target.as_uri() if isinstance(target, Path) else target
 
 
 def _startfile(target: Path | str, name: str) -> None:

@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- On a Linux desktop, a page is opened with Python's `webbrowser` first and `xdg-open`
+  only if that finds no browser. With Firefox not yet running, `xdg-open` never returned,
+  so a page that was on screen was reported as a failed start.
+
 ## [0.11.1] - 2026-10-20
 
 ### Added

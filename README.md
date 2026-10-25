@@ -43,7 +43,7 @@ so what it checks for at launch, depends on the platform:
 
 | Platform | Opener | Refuses to start when |
 | --- | --- | --- |
-| Linux desktop | `xdg-open` | `xdg-open` is missing, or neither `DISPLAY` nor `WAYLAND_DISPLAY` is set |
+| Linux desktop | `webbrowser`, then `xdg-open` | `xdg-open` is missing, or neither `DISPLAY` nor `WAYLAND_DISPLAY` is set |
 | WSL | `wslview` if installed, else `explorer.exe` | neither is on `PATH` (Windows interop off) |
 | macOS | `open` | `open` is missing |
 | Windows | `os.startfile` | never |

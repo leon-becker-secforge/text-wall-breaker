@@ -162,3 +162,27 @@ def test_wsl_is_detected_from_the_distro_variable(monkeypatch):
     monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
     assert opener_module.is_wsl()
+
+
+def test_linux_desktop_tries_webbrowser_before_xdg_open(monkeypatch):
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr("shutil.which", _which_only("xdg-open"))
+    monkeypatch.setenv("DISPLAY", ":0")
+    opener = find_opener()
+    assert isinstance(opener, Opener)
+    assert opener.try_webbrowser
+    opened: list[str] = []
+    monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
+    runs = _record_runs(monkeypatch)
+    opener.open(Path("/tmp/p.html"))
+    assert opened == ["file:///tmp/p.html"]
+    assert runs == []
+
+
+def test_xdg_open_is_the_fallback_when_webbrowser_finds_no_browser(monkeypatch):
+    monkeypatch.setattr("webbrowser.open", lambda url: False)
+    runs = _record_runs(monkeypatch)
+    Opener(name="xdg-open", argv=("/bin/xdg-open",), try_webbrowser=True).open(
+        "http://127.0.0.1:1/"
+    )
+    assert runs == [["/bin/xdg-open", "http://127.0.0.1:1/"]]
