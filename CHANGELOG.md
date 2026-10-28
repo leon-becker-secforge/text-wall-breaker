@@ -5,11 +5,27 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-10-28
+
 ### Fixed
 
 - On a Linux desktop, a page is opened with Python's `webbrowser` first and `xdg-open`
   only if that finds no browser. With Firefox not yet running, `xdg-open` never returned,
   so a page that was on screen was reported as a failed start.
+- `---`, `***`, `___` alone on a line now render as a horizontal rule instead of literal
+  text, and no longer get misread as a table separator when the line above happens to
+  contain a `|`.
+- A long question's auto-bolded lead no longer corrupts text that already contains its
+  own `**`/`__` markers, or splices `**` into the middle of a Markdown link whose text
+  crosses the lead's first sentence boundary.
+- Option labels now render inline Markdown (bold, code, links, etc.), matching captions
+  and bodies, instead of only being HTML-escaped.
+- A link or image URL containing a parenthesis no longer truncates the `href`/`src` and
+  leaks the rest of the URL as plain text.
+- A stray, unmatched run of backticks in prose no longer pairs into a bogus empty code
+  span.
+- A list item containing a `|`, immediately followed by a separator-shaped line, stays a
+  list instead of being swallowed into a bogus table.
 
 ## [0.11.1] - 2026-10-20
 
