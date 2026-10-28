@@ -68,6 +68,19 @@ def test_markers_inside_a_code_span_stay_literal():
     assert render_inline("`**x**`") == "<code>**x**</code>"
 
 
+def test_double_backtick_code_span_can_contain_a_single_backtick():
+    assert render_inline("``a ` b``") == "<code>a ` b</code>"
+
+
+def test_unmatched_triple_backtick_in_prose_stays_literal():
+    # The tick run used to backtrack to a shorter length when no closing run of the same
+    # length existed, pairing the first two backticks into a spurious empty <code></code>
+    # and leaking the third as text, instead of falling through to literal text like every
+    # other unmatched construct here does.
+    text = "``` not a real fence, just talking about backticks"
+    assert render_inline(text) == text
+
+
 def test_bold_wins_over_italic():
     assert render_inline("**x**") == "<strong>x</strong>"
     assert render_inline("*x*") == "<em>x</em>"
@@ -98,6 +111,18 @@ def test_underscore_emphasis_at_word_boundaries():
 def test_link_and_image():
     assert render_inline("[t](https://e.test)") == '<a href="https://e.test">t</a>'
     assert render_inline("![a](file:///tmp/x.png)") == '<img src="file:///tmp/x.png" alt="a">'
+
+
+def test_link_url_keeps_a_parenthesised_segment():
+    # `[^)\s]+` used to stop at the first `)`, truncating the href and leaking the rest
+    # of the URL (and the markdown's own closing paren) as plain sibling text.
+    out = render_inline("[text](http://example.com/a(b)c)")
+    assert out == '<a href="http://example.com/a(b)c">text</a>'
+
+
+def test_image_url_keeps_a_parenthesised_segment():
+    out = render_inline("![a](file:///tmp/x(1).png)")
+    assert out == '<img src="file:///tmp/x(1).png" alt="a">'
 
 
 def test_image_bare_path_is_a_file_url():
@@ -205,6 +230,15 @@ def test_table_ends_at_a_blank_line_or_non_table_line():
 
 def test_a_pipe_without_a_separator_row_is_not_a_table():
     assert render_markdown("a | b") == "<p>a | b</p>"
+
+
+def test_a_list_item_with_a_pipe_stays_a_list_even_before_a_separator_line():
+    # A bullet line always wins over table detection, even when it contains a `|` and is
+    # immediately followed by a line shaped like a separator row: it used to lose its
+    # `- ` marker into a bogus single-row table instead of staying a list.
+    out = render_markdown("- item | with pipe\n| --- |")
+    assert "<table" not in out
+    assert out.startswith("<ul><li>item | with pipe</li></ul>")
 
 
 def test_diff_block_classifies_added_and_removed_lines():
@@ -316,6 +350,23 @@ def test_bold_lead_does_not_nest_inside_an_already_bold_lead():
     # The question renders correctly when left alone, instead of corrupting the nesting.
     assert render_inline(question) == (
         "<strong>Important</strong>. " + "padding " * 30 + "more context past the threshold."
+    )
+
+
+def test_bold_lead_skips_a_terminator_inside_a_markdown_link():
+    from pretty_prompt.markdown import bold_lead
+
+    # The `. ` inside the link text used to end the lead there, splicing the closing
+    # `**` into the middle of `[...](...)` and breaking the link entirely.
+    pad = " padding word" * 30
+    question = f"See [the full write-up. ](https://example.com/a) for context.{pad}"
+    bolded = bold_lead(question)
+    assert bolded is not None
+    assert bolded.startswith(
+        "**See [the full write-up. ](https://example.com/a) for context.**"
+    )
+    assert render_inline(bolded).startswith(
+        '<strong>See <a href="https://example.com/a">the full write-up. </a> for context.</strong>'
     )
 
 

@@ -76,15 +76,28 @@ _TABLE_SEPARATOR_CELL = re.compile(r"^:?-+:?$")
 # colour follows severity only; anything else falls through to literal text below.
 _BADGE_VALUES = ("success", "warning", "danger", "info")
 
+# A link/image URL: runs of non-space-non-paren characters, or a single parenthesised
+# group of such characters — one level of nesting, enough for a URL like a Wikipedia
+# disambiguation link (`.../a_(b)`) to keep its own parens without closing the markdown
+# syntax early. `[^)\s]+` used to stop at the first `)`, truncating the href and leaking
+# the rest of the URL as sibling text.
+_URL_BODY = r"(?:[^\s()]+|\([^\s()]*\))+"
+
 # One alternation over the raw source: whatever does not match is escaped as literal
 # text. Order matters — code spans come first so that `**` inside backticks stays
 # literal, `!badge[...]` before the plain image pattern so `!` isn't consumed by it
 # first, and `**` precedes `*` so bold is not mis-read as two italics.
+#
+# The `(?!`)` lookaheads around the tick group stop the backtick alternative from
+# backtracking to a shorter run when no closing run of the same length exists: without
+# them, three stray backticks in running prose (no fence, no matching close) pair their
+# first two into a spurious empty `<code></code>` and leak the third as text, rather than
+# falling through to literal text like every other unmatched construct here does.
 _INLINE = re.compile(
-    r"(?P<tick>`+)(?P<code>.+?)(?P=tick)"
+    r"(?P<tick>`+)(?!`)(?P<code>.+?)(?P=tick)(?!`)"
     r"|!badge\[(?P<badge_text>[^\]]*)\]\((?P<badge_value>[A-Za-z]+)\)"
-    r"|!\[(?P<img_alt>[^\]]*)\]\((?P<img_url>[^)\s]+)\)"
-    r"|\[(?P<link_text>[^\]]*)\]\((?P<link_url>[^)\s]+)\)"
+    rf"|!\[(?P<img_alt>[^\]]*)\]\((?P<img_url>{_URL_BODY})\)"
+    rf"|\[(?P<link_text>[^\]]*)\]\((?P<link_url>{_URL_BODY})\)"
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
     # first: a non-greedy close would otherwise strand the trailing marker as text.
     r"|\*\*(?P<b_text>.+?)\*\*(?![*_])"
@@ -336,13 +349,33 @@ def first_paragraph(question: str) -> str:
 
 
 def _lead_end(paragraph: str, terminator: str) -> int:
-    """Index just past the first `terminator` outside a code span, or -1."""
+    """Index just past the first `terminator` outside a code span or a markdown link, or -1.
+
+    A `[link text](url)` is skipped as one unit, the same as a code span: a `. `/`: `
+    inside the link text would otherwise get a `**` spliced into the middle of the
+    `[...](...)` construct, which `_INLINE`'s link pattern then fails to match at all —
+    turning a working link into a dangling `]` plus a raw, unlinked `(url)`.
+    """
     in_code = False
-    for index, char in enumerate(paragraph):
+    index = 0
+    while index < len(paragraph):
+        char = paragraph[index]
         if char == "`":
             in_code = not in_code
-        elif not in_code and char == terminator and paragraph[index + 1 : index + 2] in (" ", "\n"):
+            index += 1
+            continue
+        if not in_code and char == "[":
+            close = paragraph.find("]", index)
+            if close != -1:
+                index = close + 1
+                if paragraph[index : index + 1] == "(":
+                    paren_close = paragraph.find(")", index)
+                    if paren_close != -1:
+                        index = paren_close + 1
+                continue
+        if not in_code and char == terminator and paragraph[index + 1 : index + 2] in (" ", "\n"):
             return index + 1
+        index += 1
     return -1
 
 
@@ -478,8 +511,18 @@ def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
 
         # A table is a header row immediately followed by a separator row — checking the
         # next line is what tells it apart from a paragraph that just happens to contain
-        # a `|`, since neither row is identifiable from itself alone.
-        if "|" in line and index + 1 < len(lines) and _is_table_separator(lines[index + 1]):
+        # a `|`, since neither row is identifiable from itself alone. A line that is
+        # itself a list item never qualifies as that header row, even with a `|` in its
+        # text and a `| --- |`-shaped line right after it: list detection wins, or a
+        # bullet like `- a | b` followed by a real separator would lose its `- ` marker
+        # into a bogus table cell instead of staying a list.
+        is_list_item = _BULLET.match(line) is not None or _ORDERED.match(line) is not None
+        if (
+            not is_list_item
+            and "|" in line
+            and index + 1 < len(lines)
+            and _is_table_separator(lines[index + 1])
+        ):
             flush_all()
             header = _split_row(line)
             aligns = [_table_alignment(cell) for cell in _split_row(lines[index + 1])]
