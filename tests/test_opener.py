@@ -174,7 +174,7 @@ def test_linux_desktop_tries_webbrowser_before_xdg_open(monkeypatch):
     opened: list[str] = []
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url) or True)
     runs = _record_runs(monkeypatch)
-    opener.open(Path("/tmp/p.html"))
+    opener.open(Path("/tmp/p.html"))  # noqa: S108 -- never touches the filesystem, webbrowser.open is mocked
     assert opened == ["file:///tmp/p.html"]
     assert runs == []
 
