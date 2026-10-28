@@ -2822,17 +2822,24 @@ def _render_options(
     rows: list[str] = []
     for option in options:
         option_id = html.escape(str(option["id"]), quote=True)
-        label = html.escape(str(option["label"]), quote=True)
+        raw_label = str(option["label"])
+        label = html.escape(raw_label, quote=True)
+        # Inline rendering only — same reasoning as the caveat below: block syntax (a
+        # leading `>`, a heading) has nowhere sensible to go in a one-line title, so it
+        # stays literal text instead of breaking the row. Bold/code/links/etc. do render,
+        # where previously they silently didn't, unlike everywhere else in the document.
+        label_html = render_inline(raw_label, asset_base_url=asset_base_url)
         body = option.get("body")
         # aria-label, not reliance on the wrapping element, because the long-body case
         # below wraps this input in <summary> rather than <label> — <summary> confers no
         # implicit accessible name the way <label> does, so the input would otherwise
-        # announce with none at all.
+        # announce with none at all. Plain-escaped, not label_html: an aria-label is read
+        # as text, not markup, so it must stay free of HTML tags.
         checked_attr = " checked" if option.get("selected") else ""
         select_html = (
             f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr}'
             f'{checked_attr} aria-label="{label}">'
-            f'<span class="pp-option-label">{label}</span>'
+            f'<span class="pp-option-label">{label_html}</span>'
             + (
                 '<span class="pp-option-recommended">Recommended</span>'
                 if option.get("recommended")

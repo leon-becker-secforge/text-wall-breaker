@@ -58,6 +58,11 @@ _BULLET = re.compile(r"^([ \t]*)[-*]\s+(.*)$")
 _ORDERED = re.compile(r"^([ \t]*)\d+[.)]\s+(.*)$")
 _QUOTE = re.compile(r"^>\s?(.*)$")
 
+# A thematic break on its own line: three or more of the same marker, nothing else. The
+# three markers are the ones an agent actually reaches for; CommonMark's spaced variant
+# (`- - -`) is not, so it is left out rather than guessed at.
+_THEMATIC_BREAK = re.compile(r"^(?:-{3,}|\*{3,}|_{3,})$")
+
 # The two-character escape a literal `\n` is authored as, distinct from the real newline
 # byte `split("\n")` below already breaks lines on.
 _LITERAL_NEWLINE = re.compile(r"\\n")
@@ -219,7 +224,11 @@ def _table_alignment(cell: str) -> str | None:
 
 
 def _is_table_separator(line: str) -> bool:
-    if "|" not in line and "-" not in line:
+    # A pipe is required, not just optional: a bare `---` is a thematic break (see
+    # `_THEMATIC_BREAK`), and GFM itself never writes a separator row without pipes —
+    # treating one as a single-cell table is what let a divider after a line that happens
+    # to contain `|` swallow both lines into a bogus table.
+    if "|" not in line:
         return False
     cells = _split_row(line)
     return bool(cells) and all(_TABLE_SEPARATOR_CELL.match(cell) for cell in cells)
@@ -349,8 +358,15 @@ def bold_lead(question: str) -> str | None:
     for terminator in (".", ":"):
         end = _lead_end(paragraph, terminator)
         if 0 < end <= _MAX_LEAD_CHARS:
-            start = question.index(paragraph)
             lead = paragraph[:end]
+            # A lead that already carries its own `**`/`__` must not be wrapped in
+            # another pair: the inline renderer pairs markers left to right, so nesting
+            # them this way strands one marker as literal text and mis-closes the rest
+            # (see markdown.py's test for the exact garbled output). Leaving the question
+            # unbolded is better than corrupting it.
+            if "**" in lead or "__" in lead:
+                continue
+            start = question.index(paragraph)
             return f"{question[:start]}**{lead}**{question[start + end :]}"
     return None
 
@@ -443,6 +459,12 @@ def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
             level = len(heading.group(1))
             heading_html = render_inline(heading.group(2), asset_base_url=asset_base_url)
             out.append(f"<h{level}>{heading_html}</h{level}>")
+            index += 1
+            continue
+
+        if _THEMATIC_BREAK.match(line.strip()):
+            flush_all()
+            out.append("<hr>")
             index += 1
             continue
 

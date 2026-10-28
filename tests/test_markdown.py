@@ -305,3 +305,35 @@ def test_bold_lead_leaves_short_or_leadless_questions_alone():
     assert bold_lead("Short question?") is None
     assert bold_lead("x" * 300) is None
     assert bold_lead("y" * 250 + ". tail") is None
+
+
+def test_bold_lead_does_not_nest_inside_an_already_bold_lead():
+    from pretty_prompt.markdown import bold_lead, render_inline
+
+    question = "**Important**. " + "padding " * 30 + "more context past the threshold."
+    bolded = bold_lead(question)
+    assert bolded is None
+    # The question renders correctly when left alone, instead of corrupting the nesting.
+    assert render_inline(question) == (
+        "<strong>Important</strong>. " + "padding " * 30 + "more context past the threshold."
+    )
+
+
+def test_thematic_break_renders_as_hr():
+    assert render_markdown("before\n\n---\n\nafter") == "<p>before</p><hr><p>after</p>"
+
+
+def test_thematic_break_variants():
+    for marker in ("---", "***", "___", "----", "******"):
+        assert render_markdown(marker) == "<hr>"
+
+
+def test_short_dash_runs_are_not_a_thematic_break():
+    assert render_markdown("--") == "<p>--</p>"
+
+
+def test_table_separator_without_a_pipe_is_a_thematic_break_not_a_table():
+    # A divider right after a line that happens to contain `|` must not be swallowed
+    # into a bogus single-cell table — see _is_table_separator's pipe requirement.
+    out = render_markdown("p99 | throughput both fine\n---\nafter")
+    assert out == "<p>p99 | throughput both fine</p><hr><p>after</p>"

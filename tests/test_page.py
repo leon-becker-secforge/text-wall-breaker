@@ -158,6 +158,26 @@ def test_caveat_on_an_option_without_a_body():
     assert f"{_CAVEAT_DIV}Needs Q3.</div>" in body
 
 
+def test_option_label_renders_inline_markdown():
+    body = _body(_page(options=[_option(label="plain **bold** and `code`")]))
+    assert '<span class="pp-option-label">plain <strong>bold</strong> and <code>code</code></span>' in body
+
+
+def test_option_label_aria_name_stays_plain_text():
+    # The accessible name is read as text, not markup, so it must not carry the <strong>
+    # tag the visible label now gets.
+    body = _body(_page(options=[_option(label="plain **bold** title")]))
+    assert 'aria-label="plain **bold** title"' in body
+
+
+def test_option_label_leading_quote_marker_stays_literal():
+    # Block syntax (a leading `>`) has nowhere to go in a one-line title, same reasoning
+    # as a caveat's inline-only rendering — it stays visible text, not a <blockquote>.
+    body = _body(_page(options=[_option(label="> quoted title")]))
+    assert "<blockquote>" not in body
+    assert '<span class="pp-option-label">&gt; quoted title</span>' in body
+
+
 def test_caveat_comes_before_a_short_inline_body():
     body = _body(_page(options=[_option(body="Short body.", caveat="Needs Q3.")]))
     assert body.index(_CAVEAT_DIV) < body.index('<div class="pp-option-body">')
