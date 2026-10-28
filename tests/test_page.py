@@ -160,7 +160,10 @@ def test_caveat_on_an_option_without_a_body():
 
 def test_option_label_renders_inline_markdown():
     body = _body(_page(options=[_option(label="plain **bold** and `code`")]))
-    assert '<span class="pp-option-label">plain <strong>bold</strong> and <code>code</code></span>' in body
+    assert (
+        '<span class="pp-option-label">plain <strong>bold</strong> and <code>code</code></span>'
+        in body
+    )
 
 
 def test_option_label_aria_name_stays_plain_text():

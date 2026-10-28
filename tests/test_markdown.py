@@ -362,9 +362,7 @@ def test_bold_lead_skips_a_terminator_inside_a_markdown_link():
     question = f"See [the full write-up. ](https://example.com/a) for context.{pad}"
     bolded = bold_lead(question)
     assert bolded is not None
-    assert bolded.startswith(
-        "**See [the full write-up. ](https://example.com/a) for context.**"
-    )
+    assert bolded.startswith("**See [the full write-up. ](https://example.com/a) for context.**")
     assert render_inline(bolded).startswith(
         '<strong>See <a href="https://example.com/a">the full write-up. </a> for context.</strong>'
     )
