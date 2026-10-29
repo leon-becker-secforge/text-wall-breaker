@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-29
+
 ### Removed
 
 - Streamed `ask` (`more_coming`/`ask_id`): no agent ever used it, and it tripled the
