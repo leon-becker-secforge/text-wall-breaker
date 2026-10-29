@@ -66,8 +66,7 @@ def test_empty_diff_and_missing_repo_are_refused(repo, tmp_path):
 
 
 def test_ask_timeout_defaults():
-    assert _ask_timeout(None, None, None, None) == 300.0
-    assert _ask_timeout(None, [], None, None) == 1800.0
-    assert _ask_timeout(None, None, "r", None) == 1800.0
-    assert _ask_timeout(None, None, None, "id") == 1800.0
-    assert _ask_timeout(42.0, [], None, None) == 42.0
+    assert _ask_timeout(None, None, None) == 300.0
+    assert _ask_timeout(None, [], None) == 1800.0
+    assert _ask_timeout(None, None, "r") == 1800.0
+    assert _ask_timeout(42.0, [], None) == 42.0

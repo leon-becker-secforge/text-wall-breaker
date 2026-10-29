@@ -1025,11 +1025,6 @@ __STEPS__
   // below is then a no-op.
   var STATUS_URL = __STATUS_URL__;
   var GENERATION = __GENERATION__;
-  // A streamed ask (`more_coming`, see ask.py): the agent is still writing questions.
-  // While true, the last step so far can't be sent, and pollForSteps() below appends
-  // new steps from STEPS_URL as they arrive, without a reload.
-  var MORE_COMING = __MORE_COMING__;
-  var STEPS_URL = __STEPS_URL__;
   var MERMAID_SRC = __MERMAID_SRC__;
 
   // Any image (a gallery thumbnail or one in an option/question body) expands full-size
@@ -1075,7 +1070,7 @@ __STEPS__
   var picked = [];
   var visits = [];
   var current = 0;
-  // The furthest step shown so far, for the answers-so-far a streamed ask reports.
+  // The furthest step shown so far, for the progress report a `resume` draft is built from.
   var furthest = 0;
   var frozen = false;
 
@@ -1091,8 +1086,7 @@ __STEPS__
     });
   }
 
-  // Everything one step needs, for the steps on the page at load and for each step a
-  // streamed ask appends later alike.
+  // Everything one step needs, wired once for each step on the page at load.
   function wireStep(el) {
     steps.push(el);
     visits.push(0);
@@ -1243,28 +1237,21 @@ __STEPS__
   }
 
   // Only the current step's answer gates Next — earlier steps were already checked on
-  // their own way past, and later ones haven't been seen yet. On the last step of a
-  // streamed ask there is nothing to go Next to yet, so it waits instead.
+  // their own way past, and later ones haven't been seen yet.
   function refresh() {
     inputs.forEach(function (i) { i._wasChecked = i.checked; });
     // After Send or Cancel: a step arriving late must not re-enable anything.
     if (frozen) return;
     var last = current === STEP_COUNT - 1;
-    var waiting = last && MORE_COMING;
-    progressLabel.textContent = 'Question ' + (current + 1) + ' of ' + STEP_COUNT +
-      (MORE_COMING ? ', more coming' : '');
+    progressLabel.textContent = 'Question ' + (current + 1) + ' of ' + STEP_COUNT;
     progressFill.style.width = ((current + 1) / STEP_COUNT * 100) + '%';
-    nextBtn.textContent = waiting
-      ? 'Waiting for the next question\\u2026'
-      : (last ? 'Send answers' : 'Next');
-    nextBtn.disabled = waiting || !stepAnswered(current);
+    nextBtn.textContent = last ? 'Send answers' : 'Next';
+    nextBtn.disabled = !stepAnswered(current);
     reportProgress();
   }
 
-  // A streamed ask returns the answers so far to each of the agent's later calls, so
-  // it can shape the questions it hasn't written yet; any ask keeps them so it can be
-  // resumed if it times out or is closed. Debounced: refresh() runs on
-  // every keystroke in a free-text box.
+  // Reported so an ask can be resumed with these answers prefilled if it times out or
+  // is closed. Debounced: refresh() runs on every keystroke in a free-text box.
   var progressTimer = null;
   function reportProgress() {
     clearTimeout(progressTimer);
@@ -1291,50 +1278,6 @@ __STEPS__
       run();
     };
     document.head.appendChild(script);
-  }
-
-  function appendSteps(fragments) {
-    fragments.forEach(function (fragment) {
-      var holder = document.createElement('div');
-      holder.innerHTML = fragment;
-      var el = holder.firstElementChild;
-      form.insertBefore(el, actions);
-      wireStep(el);
-      el.querySelectorAll('img').forEach(wireLightbox);
-      if (el.querySelector('.pp-options-gallery')) {
-        document.querySelector('main').classList.add('pp-wide');
-      }
-      renderMermaid(Array.prototype.slice.call(el.querySelectorAll('.mermaid')));
-    });
-    STEP_COUNT = steps.length;
-  }
-
-  // While the agent is still writing: check for new steps and append them. Stops once
-  // it says nothing more is coming, and hands over to a reload if a different ask has
-  // taken the tab (the generation moved).
-  function pollForSteps() {
-    if (!MORE_COMING || !STATUS_URL) return;
-    var timer = setInterval(async function () {
-      if (frozen) { clearInterval(timer); return; }
-      try {
-        var res = await fetch(STATUS_URL);
-        if (!res.ok) return;
-        var body = await res.json();
-        if (body.generation !== GENERATION) {
-          clearInterval(timer);
-          location.reload();
-          return;
-        }
-        if (body.step_count <= STEP_COUNT && body.more_coming) return;
-        var more = await fetch(STEPS_URL + '&from=' + STEP_COUNT);
-        if (!more.ok) return;
-        var data = await more.json();
-        appendSteps(data.steps);
-        MORE_COMING = data.more_coming;
-        if (!MORE_COMING) clearInterval(timer);
-        refresh();
-      } catch (e) { /* process gone, nothing more will come */ }
-    }, 1000);
   }
 
   // The page's side of the shared Interruption script below.
@@ -1551,7 +1494,6 @@ __STEPS__
       showStep(current);
       return;
     }
-    if (MORE_COMING) return;
     var data = collect();
     freeze('Sending\\u2026');
     if (await send('submit', data)) {
@@ -1584,7 +1526,6 @@ __STEPS__
   // the operator has spent any time answering. Never consumes the one submission.
   send('probe', {});
   startHeartbeat();
-  pollForSteps();
 }());
 </script>
 __MERMAID__
@@ -3151,19 +3092,13 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
 
 
 def build_step_fragments(
-    questions: list[dict[str, object]], start: int = 0, asset_base_url: str | None = None
+    questions: list[dict[str, object]], asset_base_url: str | None = None
 ) -> list[str]:
-    """One `<section class="pp-step">` per question, numbered from `start`.
+    """One `<section class="pp-step">` per question, what `build_multi_page` puts in the page.
 
-    What `build_multi_page` puts in the page, and what a streamed ask's open tab appends
-    later: a step's index is baked into its input names and ids, so a step added after
-    the first `start` has to be numbered as the page will hold it.
-
-    `asset_base_url` is `listener.SessionListener.asset_base_url` for a streamed ask
-    (always session-backed — see `ask._stream_page`/`_start_stream`/`_continue_stream`),
-    or the value `build_multi_page` derived from its own `status_url`.
+    `asset_base_url` is the value `build_multi_page` derived from its own `status_url`.
     """
-    return [_render_step(start + i, spec, asset_base_url) for i, spec in enumerate(questions)]
+    return [_render_step(i, spec, asset_base_url) for i, spec in enumerate(questions)]
 
 
 def _render_header(header: str, asset_base_url: str | None = None) -> str:
@@ -3202,8 +3137,6 @@ def build_multi_page(
     theme: str | None = None,
     status_url: str | None = None,
     generation: int = 0,
-    steps_url: str | None = None,
-    more_coming: bool = False,
 ) -> str:
     """Return the complete HTML document for an `ask` call carrying several questions.
 
@@ -3223,11 +3156,6 @@ def build_multi_page(
     `_render_header`.
 
     `theme`, `status_url` and `generation` are as `build_page` takes them.
-
-    `steps_url`/`more_coming` are for a streamed ask (see `ask.py`): while
-    `more_coming`, the last step waits instead of offering Send, and the page appends
-    each further step it finds at `steps_url` (fragments from `build_step_fragments`).
-    `steps_url` also turns on the answers-so-far reports the stream returns to the agent.
     """
     css = _load_base_css() + _ADDENDUM + _MULTI_ADDENDUM
     if accent is not None:
@@ -3238,11 +3166,8 @@ def build_multi_page(
     steps_html = "\n".join(build_step_fragments(questions, asset_base_url=asset_base_url))
     header_html = _render_header(header, asset_base_url=asset_base_url)
     initial_progress = round(100 / total) if total else 0
-    initial_label = f"Question 1 of {total}" + (", more coming" if more_coming else "")
-    if total > 1:
-        initial_next = "Next"
-    else:
-        initial_next = "Waiting for the next question\u2026" if more_coming else "Send answers"
+    initial_label = f"Question 1 of {total}"
+    initial_next = "Next" if total > 1 else "Send answers"
     any_gallery = any(
         _is_gallery(options) if isinstance(options := spec.get("options"), list) else False
         for spec in questions
@@ -3264,8 +3189,6 @@ def build_multi_page(
         .replace("__STEP_COUNT__", str(total))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
-        .replace("__MORE_COMING__", _js_string(more_coming))
-        .replace("__STEPS_URL__", _js_string(steps_url))
         .replace("__MERMAID_SRC__", _js_string(_MERMAID_SRC))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(header_html, steps_html)))
     )

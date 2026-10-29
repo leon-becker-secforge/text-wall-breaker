@@ -160,33 +160,6 @@ Each entry takes the same keys `question`/`options`/`multi_select`/`allow_free_t
 takes for one question. The result carries one answer per question, in order, under
 `answers` instead of at the top level; see Result below.
 
-### Streamed ask
-
-With several questions, or long bodies, the user would otherwise wait while the agent
-writes all of them. A streamed ask (prototype) sends them in chunks instead: the page
-opens with the first chunk, and each later call adds its questions to that same page
-without a reload, so nothing already answered is lost.
-
-```json
-{"questions": [{"question": "Which backend?", "options": [...]}], "more_coming": true}
-{"ask_id": "3f2c9a1b7d4e8f60", "questions": [{"question": "Which region?"}], "more_coming": true}
-{"ask_id": "3f2c9a1b7d4e8f60", "questions": [{"question": "Which plan?"}]}
-```
-
-A call with `more_coming: true` returns at once with
-`{"ask_id": "...", "answers_so_far": [...]}`: one answer (the same shape as in
-`answers`) per question the user has reached, so later questions can build on earlier
-ones. The one the user is on may still be blank or change. The call that leaves
-`more_coming` unset is the only one that waits, and it returns the usual `{"answers":
-[...]}` for every question sent; its `questions` may be empty. Only the first call takes
-`header`.
-
-While more are coming, the progress bar says so, and the last question so far shows a
-disabled "Waiting for the next question…" in place of Send. A cancel returns
-`{"cancelled": true}` to the agent's next call and ends the stream. A stream holds its tab
-between calls (its own tab if the shared one is busy); one the agent never finishes is
-given up after 15 minutes without a call, freeing the tab.
-
 ### Result
 
 Exactly one of:
@@ -207,7 +180,7 @@ load — so the window starts when the page renders rather than when the browser
 launched. While the tab is visible the page sends a heartbeat, so however long the user
 reads, the call stays alive; the timeout only runs while the tab is hidden or closed, and
 a long page needs no larger value than a short one. When `timeout_seconds` is not given
-it is 1800 for `questions`, `resume` and `ask_id` calls and 300 otherwise.
+it is 1800 for `questions` and `resume` calls and 300 otherwise.
 
 ### Long waits and background tasks
 
@@ -456,11 +429,8 @@ Every call then waits for some tab to load its page; if none does within 30 seco
 returns `not_delivered`. A tab the browser throttles hard in the background can miss the
 4 seconds and end up with a second tab beside it, which is the cheaper mistake.
 
-A streamed ask keeps its tab across calls instead: the page polls `/status` for new
-steps, fetches them from `/steps` and appends them, and reports the answers so far back
-with a `progress` message that never counts as the answer. If the shared tab is busy it
-gets a session listener of its own, not a one-off one, since a one-off listener can't
-outlive the call that opened it.
+The page reports the answers entered so far back with a `progress` message that never
+counts as the answer, so a cancelled or timed-out ask can be resumed with them prefilled.
 
 The tab title gets a checkmark or cross prefix once its question is answered or
 cancelled, so an answered tab left open (or waiting its turn, with tab reuse) is

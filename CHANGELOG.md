@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- Streamed `ask` (`more_coming`/`ask_id`): no agent ever used it, and it tripled the
+  surface of `ask`'s code, docs and tests for a case plain multi-question `ask` already
+  covers. `questions` on its own, sent in one call, is unaffected.
+
 ## [0.11.2] - 2026-10-28
 
 ### Fixed

@@ -649,10 +649,6 @@ def test_interaction_signals_can_be_switched_off(browser, monkeypatch):
     assert result == {"answers": [{"selected": ["a"], "free_text": "", "expanded": []}]}
 
 
-# A streamed ask: no page runs here, so each test plays the tab itself, fetching steps
-# and posting progress/answers to the session the way the wizard's script does.
-
-
 def _q(question: str, option_id: str = "a") -> Question:
     return Question(question=question, options=[Option(id=option_id, label="A")])
 
@@ -674,109 +670,6 @@ def _loading_opener(targets: list[object]):
         urllib.request.urlopen(str(target), timeout=5).read()  # noqa: S310 (loopback)
 
     return open_tab
-
-
-@pytest.fixture
-def opened(monkeypatch):
-    targets: list[object] = []
-    monkeypatch.setattr(ask_module, "open_in_browser", _loading_opener(targets))
-    return targets
-
-
-def test_a_streamed_ask_returns_at_once_and_grows_the_page_in_place(opened):
-    session = session_module.get_shared_session()
-    first = run_ask(AskRequest(questions=[_q("one")], more_coming=True))
-    assert first == {"ask_id": first["ask_id"], "answers_so_far": []}
-    assert _get_json(_session_url(session, "/status"))["step_count"] == 1
-
-    run_ask(AskRequest(ask_id=first["ask_id"], questions=[_q("two")], more_coming=True))
-    status = _get_json(_session_url(session, "/status"))
-    assert status["step_count"] == 2
-    assert status["more_coming"] is True
-    assert status["generation"] == 1  # grown, not republished: the tab must not reload
-    added = _get_json(_session_url(session, "/steps") + "&from=1")["steps"]
-    assert len(added) == 1
-    assert 'data-step-index="1"' in added[0]
-    assert len(opened) == 1
-
-    answers = {"answers": [{"selected": ["a"]}, {"selected": ["a"], "free_text": "x"}]}
-    timer = threading.Timer(
-        0.2, _post, (_session_url(session, "/submit"), {"kind": "submit", "data": answers})
-    )
-    timer.start()
-    result = run_ask(AskRequest(ask_id=first["ask_id"]))
-    timer.join()
-    assert [answer["selected"] for answer in result["answers"]] == [["a"], ["a"]]
-    assert result["answers"][1]["free_text"] == "x"
-    assert _get_json(_session_url(session, "/status"))["more_coming"] is False
-    # Finished: the shared tab is free again.
-    assert session.try_claim()
-    session.release()
-
-
-def test_a_streamed_ask_reports_the_answers_so_far(opened):
-    session = session_module.get_shared_session()
-    ask_id = run_ask(AskRequest(questions=[_q("one", "x")], more_coming=True))["ask_id"]
-    progress = {"answers": [{"selected": ["x", "nope"], "changed_from": ["y"]}]}
-    _post(_session_url(session, "/submit"), {"kind": "progress", "data": progress})
-
-    result = run_ask(AskRequest(ask_id=ask_id, questions=[_q("two")], more_coming=True))
-    assert len(result["answers_so_far"]) == 1
-    assert result["answers_so_far"][0]["selected"] == ["x"]
-
-
-def test_cancelling_a_streamed_ask_ends_it(opened):
-    session = session_module.get_shared_session()
-    ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
-    _post(_session_url(session, "/submit"), {"kind": "cancel", "data": {}})
-
-    assert run_ask(AskRequest(ask_id=ask_id, questions=[_q("two")], more_coming=True)) == {
-        "cancelled": True
-    }
-    with pytest.raises(InvalidAsk, match="no open ask"):
-        run_ask(AskRequest(ask_id=ask_id))
-
-
-def test_a_streamed_ask_gets_its_own_tab_when_the_shared_one_is_busy(opened):
-    session = session_module.get_shared_session()
-    assert session.try_claim()
-    try:
-        ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
-        assert f":{session.port}/" not in str(opened[0])
-    finally:
-        session.release()
-    _post(str(opened[0]).replace("/?", "/submit?"), {"kind": "cancel", "data": {}})
-    assert run_ask(AskRequest(ask_id=ask_id)) == {"cancelled": True}
-
-
-def test_an_abandoned_stream_frees_the_shared_tab(opened, monkeypatch):
-    session = session_module.get_shared_session()
-    ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
-    assert not session.try_claim()
-
-    assert _get_json(_session_url(session, "/status"))["open"] is True
-
-    monkeypatch.setattr(ask_module, "_STREAM_IDLE_SECONDS", 0.0)
-    with pytest.raises(InvalidAsk, match="expired"):
-        run_ask(AskRequest(ask_id=ask_id))
-    assert _get_json(_session_url(session, "/status"))["open"] is False
-    assert session.try_claim()
-    session.release()
-
-
-@pytest.mark.parametrize(
-    ("kwargs", "match"),
-    [
-        ({"question": "q", "more_coming": True}, "more_coming needs questions"),
-        ({"ask_id": "x", "question": "q"}, "adds questions"),
-        ({"ask_id": "x", "header": "h"}, "first call"),
-        ({"ask_id": "x", "more_coming": True}, "questions is empty"),
-        ({"ask_id": "x", "questions": [Question(question=" ")]}, r"questions\[0\]"),
-    ],
-)
-def test_rejected_stream_requests(kwargs, match):
-    with pytest.raises(InvalidAsk, match=match):
-        AskRequest(**kwargs).validated()
 
 
 def test_a_closed_tab_gets_replaced_instead_of_published_into(monkeypatch):
@@ -810,14 +703,6 @@ def test_a_shared_tab_that_never_loads_is_reported_undelivered(monkeypatch):
     session_module.get_shared_session().release()
 
 
-def test_an_undelivered_stream_is_not_left_open(monkeypatch):
-    monkeypatch.setattr(ask_module, "open_in_browser", lambda target: None)
-    result = run_ask(AskRequest(questions=[_q("one")], more_coming=True))
-    assert result == {"not_delivered": True}
-    assert session_module.get_shared_session().try_claim()
-    session_module.get_shared_session().release()
-
-
 def test_a_question_id_is_echoed_on_its_answer_and_omitted_otherwise(browser):
     browser(
         lambda page: {
@@ -844,18 +729,6 @@ def test_bad_question_ids_are_rejected(ids, match):
     request = AskRequest(questions=[Question(id=i, question="q") for i in ids])
     with pytest.raises(InvalidAsk, match=match):
         request.validated()
-
-
-def test_a_streamed_ask_rejects_an_id_already_used_by_an_earlier_call(opened):
-    first = run_ask(AskRequest(questions=[Question(id="a", question="one")], more_coming=True))
-    with pytest.raises(InvalidAsk, match="duplicate question id 'a'"):
-        run_ask(
-            AskRequest(
-                ask_id=first["ask_id"],
-                questions=[Question(id="a", question="two")],
-                more_coming=True,
-            )
-        )
 
 
 def _checked_inputs(page: str) -> list[str]:
@@ -1029,21 +902,3 @@ def test_a_bad_stop_index_marks_the_first_question(browser):
     browser(lambda page: _interrupt("x", {"free_text": "note"}))
     result = run_ask(AskRequest(questions=[_q("one"), _q("two")]))
     assert result["answers"][0]["interrupted"] is True
-
-
-def test_interrupting_a_streamed_ask_returns_on_the_agents_next_call(opened):
-    session = session_module.get_shared_session()
-    ask_id = run_ask(AskRequest(questions=[_q("one")], more_coming=True))["ask_id"]
-    _post(
-        _session_url(session, "/submit"),
-        _interrupt(0, {"selected": [], "free_text": "wrong"}),
-    )
-
-    result = run_ask(AskRequest(ask_id=ask_id, questions=[_q("two")], more_coming=True))
-    assert result["answers"][0]["interrupted"] is True
-    assert result["answers"][0]["free_text"] == "wrong"
-    assert "resume" in result
-    with pytest.raises(InvalidAsk, match="no open ask"):
-        run_ask(AskRequest(ask_id=ask_id))
-    assert session.try_claim()
-    session.release()

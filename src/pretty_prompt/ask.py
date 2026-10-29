@@ -16,13 +16,6 @@ Two ways a call gets its tab, tried in that order:
      calls safe: the second one can't wait for the first to free the shared tab, so it
      gets its own instead of blocking or colliding with it.
 
-A streamed ask (`more_coming`) spans several calls instead: the first opens the page with
-the questions written so far and returns an `ask_id` at once, each later call with that
-id appends its questions to the open page, and the call that says nothing more is coming
-waits for the answers. It needs a listener that outlives a call, so it holds the shared
-session for the whole stream, or, if that is busy, gets a `SessionListener` of its own
-rather than a `LoopbackListener`.
-
 A cancelled or timed-out ask that had answers entered returns a `resume` id: the pages
 report every change as they go, the server keeps the last report as a draft, and a call
 with `resume` reopens the same questions with those answers prefilled.
@@ -41,7 +34,6 @@ import shutil
 import tempfile
 import threading
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -56,7 +48,6 @@ from .page import (
     InvalidAccent,
     build_multi_page,
     build_page,
-    build_step_fragments,
     parse_accent,
     read_saved_theme,
 )
@@ -232,8 +223,6 @@ class AskRequest(BaseModel):
     questions: list[Question] | None = None
     header: str = ""
     timeout_seconds: float = 300.0
-    more_coming: bool = False
-    ask_id: str | None = None
     resume: str | None = None
     free_text: str | None = None  # prefill of the single-question shorthand; set by resume only
 
@@ -247,17 +236,9 @@ class AskRequest(BaseModel):
                 or self.options
                 or self.questions is not None
                 or self.header.strip()
-                or self.more_coming
-                or self.ask_id is not None
             ):
                 raise InvalidAsk("resume reopens an earlier ask; only timeout_seconds applies")
             return self
-        if self.ask_id is not None:
-            return self._validated_continuation()
-        if self.more_coming and self.questions is None:
-            raise InvalidAsk(
-                "more_coming needs questions: a streamed ask is several questions sent in chunks"
-            )
         if self.header.strip() and self.questions is None:
             raise InvalidAsk(
                 "header needs questions: a single question is already Markdown, so put "
@@ -273,22 +254,6 @@ class AskRequest(BaseModel):
             _check_question_ids(self.questions)
             return self
         self._as_single_question().validated(label="question")
-        return self
-
-    def _validated_continuation(self) -> AskRequest:
-        """The checks for a later call of a streamed ask (`ask_id` set)."""
-        if self.question.strip() or self.options:
-            raise InvalidAsk("a call with ask_id adds questions, not question/options")
-        if self.header.strip():
-            raise InvalidAsk("header can only be set on a streamed ask's first call")
-        if self.more_coming and not self.questions:
-            raise InvalidAsk(
-                "more_coming is set but questions is empty; send the next questions, or "
-                "leave more_coming unset to wait for the answers"
-            )
-        for index, question in enumerate(self.questions or []):
-            question.validated(label=f"questions[{index}]")
-        _check_question_ids(self.questions or [])
         return self
 
     def _as_single_question(self) -> Question:
@@ -671,188 +636,6 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
     )
 
 
-# A streamed ask holds its tab between calls. One the agent never finishes is given up
-# after this long without a call from it, so it can't keep the shared tab forever. Long
-# enough for an agent writing a question with a long body; the final call, which waits
-# on the user instead, is exempt.
-_STREAM_IDLE_SECONDS = 900.0
-
-
-@dataclass
-class _Stream:
-    """A streamed ask between its calls: its listener, and every question sent so far."""
-
-    session: SessionListener
-    shared: bool  # the process's shared session (released at the end) or its own (closed)
-    steps: list[Question]
-    header: str
-    last_call: float
-    waiting: bool = False
-
-
-_streams: dict[str, _Stream] = {}
-_streams_lock = threading.Lock()
-
-
-def _end_stream(ask_id: str) -> None:
-    with _streams_lock:
-        stream = _streams.pop(ask_id, None)
-    if stream is None:
-        return
-    stream.session.end_question()
-    if stream.shared:
-        stream.session.release()
-    else:
-        stream.session.close()
-
-
-def _expire_idle_streams() -> None:
-    now = time.monotonic()
-    with _streams_lock:
-        idle = [
-            ask_id
-            for ask_id, stream in _streams.items()
-            if not stream.waiting and now - stream.last_call > _STREAM_IDLE_SECONDS
-        ]
-    for ask_id in idle:
-        _end_stream(ask_id)
-
-
-def _step_specs(steps: list[Question]) -> list[dict[str, object]]:
-    return [
-        {
-            "question": step.question,
-            "options": [option.model_dump() for option in step.options],
-            "multi_select": step.multi_select,
-            "allow_free_text": step.allow_free_text,
-            "allow_defer": step.allow_defer,
-            "free_text": step.free_text,
-        }
-        for step in steps
-    ]
-
-
-def _stream_page(
-    stream: _Stream, timeout_seconds: float, *, more_coming: bool
-) -> Callable[[int], str]:
-    """A `build_html` for `stream`'s session: the whole page, every step sent so far."""
-    session = stream.session
-    base = f"http://127.0.0.1:{session.port}"
-    token = session.token
-
-    def build(generation: int) -> str:
-        return build_multi_page(
-            questions=_step_specs(stream.steps),
-            header=stream.header,
-            submit_url=f"{base}/submit?t={token}",
-            status_url=f"{base}/status?t={token}",
-            steps_url=f"{base}/steps?t={token}",
-            more_coming=more_coming,
-            timeout_seconds=timeout_seconds,
-            accent=_resolve_accent(),
-            theme=read_saved_theme(),
-            generation=generation,
-        )
-
-    return build
-
-
-def _answers_so_far(stream: _Stream) -> list[dict[str, Any]]:
-    """The answers the page last reported, one per question the user has reached."""
-    progress = stream.session.progress() or {}
-    raw = progress.get("answers")
-    reached = len(raw) if isinstance(raw, list) else 0
-    return _extract_answers(stream.steps[:reached], raw)
-
-
-def _start_stream(request: AskRequest) -> dict[str, Any]:
-    session = get_shared_session()
-    shared = session.try_claim()
-    if not shared:
-        session = SessionListener(secrets.token_hex(16))
-    steps = list(request.questions or [])
-    stream = _Stream(
-        session=session,
-        shared=shared,
-        steps=steps,
-        header=request.header,
-        last_call=time.monotonic(),
-    )
-
-    def give_up() -> None:
-        if shared:
-            session.release()
-        else:
-            session.close()
-
-    try:
-        generation = session.publish(
-            _stream_page(stream, request.timeout_seconds, more_coming=True),
-            steps=build_step_fragments(_step_specs(steps), asset_base_url=session.asset_base_url),
-            more_coming=True,
-        )
-        delivered = session.show_in_tab(generation, open_in_browser)
-    except BaseException:
-        give_up()
-        raise
-    if not delivered:
-        give_up()
-        return NOT_DELIVERED
-    ask_id = secrets.token_hex(8)
-    with _streams_lock:
-        _streams[ask_id] = stream
-    return {"ask_id": ask_id, "answers_so_far": []}
-
-
-def _continue_stream(request: AskRequest) -> dict[str, Any]:
-    ask_id = request.ask_id or ""
-    with _streams_lock:
-        stream = _streams.get(ask_id)
-    if stream is None:
-        raise InvalidAsk(
-            f"no open ask with ask_id {ask_id!r}: it was answered or cancelled, or "
-            f"expired after {_STREAM_IDLE_SECONDS / 60:.0f} minutes without a call"
-        )
-    stream.last_call = time.monotonic()
-
-    # The user cancelled or stopped the ask while the agent was still writing: this call
-    # returns that instead of adding questions nobody will see.
-    submission = stream.session.submission()
-    if submission is not None and submission.kind in ("cancel", "interrupt"):
-        progress = stream.session.progress()
-        _end_stream(ask_id)
-        return _answer_from_submission(
-            stream.steps, submission, multi=True, header=stream.header, progress=progress
-        )
-
-    added = list(request.questions or [])
-    _check_question_ids(added, {step.id for step in stream.steps if step.id is not None})
-    start = len(stream.steps)
-    stream.steps.extend(added)
-    stream.session.extend(
-        _stream_page(stream, request.timeout_seconds, more_coming=request.more_coming),
-        build_step_fragments(
-            _step_specs(added), start, asset_base_url=stream.session.asset_base_url
-        ),
-        more_coming=request.more_coming,
-    )
-    if request.more_coming:
-        return {"ask_id": ask_id, "answers_so_far": _answers_so_far(stream)}
-
-    stream.waiting = True
-    try:
-        submission = stream.session.wait_for_answer(request.timeout_seconds)
-        return _answer_from_submission(
-            stream.steps,
-            submission,
-            multi=True,
-            header=stream.header,
-            progress=stream.session.progress(),
-        )
-    finally:
-        _end_stream(ask_id)
-
-
 def _run_ask(request: AskRequest) -> dict[str, Any]:
     """Open the page for `request` and block until it is answered, cancelled or idle.
 
@@ -870,21 +653,13 @@ def _run_ask(request: AskRequest) -> dict[str, Any]:
     stopped-at question, and `resume` when several questions were asked; see
     `_interrupted`.
 
-    With `more_coming`, returns `{"ask_id", "answers_so_far"}` at once instead; see the
-    module docstring for how the later calls of that streamed ask go.
-
     Tries to reuse the process's one shared browser tab first, falling back to a fresh
     one-off tab if that shared tab is already answering another call — see the module
     docstring.
     """
     request = request.validated()
-    _expire_idle_streams()
     if request.resume is not None:
         request = _resumed_request(request).validated()
-    if request.ask_id is not None:
-        return _continue_stream(request)
-    if request.more_coming:
-        return _start_stream(request)
     steps = request.steps
 
     session = get_shared_session()
@@ -914,11 +689,7 @@ def _long_question_hint(steps: list[Question]) -> str | None:
 def run_ask(request: AskRequest) -> dict[str, Any]:
     """`_run_ask`, plus a `hint` on the result if a question's first paragraph is long."""
     result = _run_ask(request)
-    # A resume or a stream continuation carries no questions of its own to judge.
-    if (
-        request.resume is None
-        and request.ask_id is None
-        and (hint := _long_question_hint(request.steps))
-    ):
+    # A resume carries no questions of its own to judge.
+    if request.resume is None and (hint := _long_question_hint(request.steps)):
         result["hint"] = hint
     return result

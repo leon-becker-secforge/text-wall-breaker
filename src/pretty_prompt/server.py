@@ -93,13 +93,7 @@ at the last one given, plus `resume`: use it only if the rest still makes sense.
 
 `questions`: several questions on one page, set instead of
 `question`/`options`/etc. Returns `{"answers": [...]}`, one entry per question in
-order, carrying the question's `id` when it set one; match by id.
-
-Streamed ask (`questions`+`more_coming`): send in chunks so the user
-starts answering while you write the rest. First call returns `{"ask_id",
-"answers_so_far": []}`; later calls add `questions` under that id; the final call
-(no `more_coming`) waits for the answers. A cancel or interruption returns on your next call.
-Skip this for a short ask."""
+order, carrying the question's `id` when it set one; match by id."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
 if SHARE_INTERACTION_SIGNALS:
@@ -183,11 +177,11 @@ _QUESTIONS_TIMEOUT_SECONDS = 1800.0
 
 
 def _ask_timeout(
-    given: float | None, questions: list[Question] | None, resume: str | None, ask_id: str | None
+    given: float | None, questions: list[Question] | None, resume: str | None
 ) -> float:
     if given is not None:
         return given
-    long_page = questions is not None or resume is not None or ask_id is not None
+    long_page = questions is not None or resume is not None
     return _QUESTIONS_TIMEOUT_SECONDS if long_page else 300.0
 
 
@@ -214,7 +208,7 @@ async def ask(
             description="Give up after this many seconds without hearing from the page. "
             "The visible page keeps the call alive however long the user reads, so this "
             "only runs down while the tab is hidden or closed. Default 300; 1800 with "
-            "questions, resume or ask_id."
+            "questions or resume."
         ),
     ] = None,
     questions: Annotated[
@@ -234,28 +228,12 @@ async def ask(
             "context in question itself."
         ),
     ] = "",
-    more_coming: Annotated[
-        bool,
-        Field(
-            description="Questions only: more questions follow in later "
-            "calls. Returns {ask_id, answers_so_far} at once; see the streamed ask in "
-            "this tool's description."
-        ),
-    ] = False,
     resume: Annotated[
         str | None,
         Field(
             description="The `resume` id a cancelled, timed-out or interrupted ask "
             "returned: reopens that ask with the user's earlier answers prefilled. Only "
             "timeout_seconds applies. Used once."
-        ),
-    ] = None,
-    ask_id: Annotated[
-        str | None,
-        Field(
-            description="The ask_id a more_coming call returned. Appends "
-            "questions to that open page instead of opening a new one; only questions, "
-            "more_coming and timeout_seconds apply."
         ),
     ] = None,
 ) -> dict[str, Any]:
@@ -265,11 +243,9 @@ async def ask(
         multi_select=multi_select,
         allow_free_text=allow_free_text,
         allow_defer=allow_defer,
-        timeout_seconds=_ask_timeout(timeout_seconds, questions, resume, ask_id),
+        timeout_seconds=_ask_timeout(timeout_seconds, questions, resume),
         questions=questions,
         header=header,
-        more_coming=more_coming,
-        ask_id=ask_id,
         resume=resume,
     )
     try:
