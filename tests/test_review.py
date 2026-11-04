@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import difflib
+from typing import Any
 
 import pytest
 
@@ -236,8 +237,9 @@ def _request(*notes: Note) -> ReviewRequest:
     return ReviewRequest(pages=[Page(path="a.py", diff=SHIFTED)], notes=list(notes))
 
 
-def _note(**fields) -> Note:
-    return Note(**{"path": "a.py", "side": "new", "line": 5, "text": " why ", **fields})
+def _note(**fields: Any) -> Note:
+    base: dict[str, Any] = {"path": "a.py", "side": "new", "line": 5, "text": " why "}
+    return Note(**{**base, **fields})
 
 
 def test_a_note_on_a_shown_row_becomes_page_data():

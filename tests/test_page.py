@@ -813,7 +813,7 @@ def test_the_path_is_a_dim_folder_and_a_bold_file_and_the_blurb_is_wrapped():
 
 
 def test_switching_file_drops_an_open_selection_and_its_comment_box():
-    pages = [
+    pages: list[dict[str, object]] = [
         {"path": "a.py", "diff": "@@ -1,1 +1,2 @@\n a\n+b\n"},
         {"path": "b.py", "diff": "@@ -1,1 +1,2 @@\n a\n+b\n"},
     ]
