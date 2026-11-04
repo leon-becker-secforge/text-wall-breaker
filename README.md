@@ -322,13 +322,17 @@ drawer opened from a bar at the top, which also shows the current file and Prev/
 the diff keeps the full width. With exactly one page, that chrome is skipped entirely
 rather than shown inert.
 
-Clicking anywhere on a diff line opens a text box anchored to it — a small bubble icon
-marks a line as commentable on hover, but the whole row is the click/keyboard target, not
-just the icon. Comments are single-line only; there is no range selection. Each page has
-a "Note on this file" box below its diff for a remark about the whole file, and an
-"Overall note" box below the pages holds one for the whole call; neither is tied to a
-line. Once Submit or Cancel is sent, every line and note box stops accepting further
-input.
+A comment covers a line or a run of lines. Clicking a diff line selects it, shift-clicking
+extends the selection from the last click, and selecting text with the mouse takes the
+rows it touches (Enter or Space on a focused row selects it too, shift extends). The rest
+of the diff dims and a box opens under the last selected row for the comment; Ctrl+Enter
+adds it and Esc clears the selection. A comment shows under its rows with Edit and Delete
+until the review is sent. A run may start on a deleted row and end on an added one.
+Selecting text inside the rows also records it as the comment's `quote`.
+
+Each page has a "Note on this file" box below its diff for a remark about the whole file,
+and an "Overall note" box below the pages holds one for the whole call; neither is tied to
+a line. Once Submit or Cancel is sent, nothing accepts further input.
 
 ### Result
 
@@ -343,11 +347,24 @@ input.
 
 Submit always succeeds — an empty review (no comments, no notes) is itself a valid
 answer, since there's nothing to validate. `page_notes` lists only the files the user
-wrote a note for, each as `{"path", "text"}`, and is `[]` otherwise. Each comment is resolved server-side
-from the diff you gave, not trusted from the page: `side` is `"old"` or `"new"`, `line`
-is that side's 1-based line number in the file at `path` (not its position in the diff
-text), and `context` is that line's own source text, so the agent doesn't have to
-re-parse its diff to see what a comment was about.
+wrote a note for, each as `{"path", "text"}`, and is `[]` otherwise. Each comment is
+resolved server-side from the diff you gave, not trusted from the page: `side` is `"old"`
+or `"new"`, `line` is that side's 1-based line number in the file at `path` (not its
+position in the diff text), and `context` is that line's own source text, so the agent
+doesn't have to re-parse its diff to see what a comment was about.
+
+A comment on a run of lines has the same fields plus `end_side` and `end_line`, the last
+row of the run, and each end names its own side (`side: "old", end_side: "new"` is a run
+from a deleted row to an added one; see [ADR 0003](docs/adr/0003-comment-ranges-carry-a-side-per-end.md)).
+Its `context` is every row of the run, one per line, each prefixed with `+`, `-` or a
+space, so a mixed run is unambiguous. A comment made by selecting text adds `quote`, the
+selected part, only when it is shorter than the rows. A single-line comment is unchanged
+since 0.9.0:
+
+```json
+{"path": "src/foo.py", "side": "new", "line": 2, "end_side": "new", "end_line": 3,
+ "text": "why both?", "context": "+    return 2\n+    # twice", "quote": "return 2\n    # tw"}
+```
 
 Cancel returns the same shape as Submit, plus `"cancelled": true` — whatever comments and
 overall note already existed are kept, not discarded, since the user may cancel

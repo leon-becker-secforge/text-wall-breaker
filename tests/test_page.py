@@ -132,10 +132,25 @@ def test_review_with_one_file_has_no_file_list():
     assert "pp-has-files" not in html.split("<body", 1)[1].split(">", 1)[0]
 
 
-def test_review_file_list_counts_come_from_the_boxes_not_a_second_copy():
-    html = _review("a.py", "b.py")
-    assert ".pp-review-comment-box textarea" in html.split("var slides", 1)[1]
-    assert ".pp-page-note" in html.split("var slides", 1)[1]
+def test_review_file_list_counts_come_from_the_page_not_a_second_copy():
+    files_script = _review("a.py", "b.py").split("var slides", 1)[1]
+    assert "querySelectorAll('.pp-comment')" in files_script
+    assert ".pp-page-note" in files_script
+    assert "'pp-comments'" in files_script
+
+
+def test_review_rows_are_selected_not_given_a_comment_box_each():
+    html = _review("a.py")
+    assert 'class="pp-review-row-wrap"' in html
+    assert "pp-review-comment-box" not in html
+    assert html.count('id="pp-dock"') == 1
+    assert 'id="pp-dock-text"' in html
+
+
+def test_review_collects_ranges_with_an_end_and_a_quote():
+    html = _review("a.py")
+    assert "out.end_side = end.side; out.end_line = end.line;" in html
+    assert "if (c.quote) out.quote = c.quote;" in html
 
 
 def test_invalid_accent_raises_from_build_page():

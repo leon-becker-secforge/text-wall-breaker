@@ -22,7 +22,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from .ask import BrowserUnavailable, open_in_browser
-from .diff import InvalidDiff, parse_unified_diff
+from .diff import DiffLine, InvalidDiff, parse_unified_diff
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
     ACCENT_ENV_VAR,
@@ -121,25 +121,60 @@ def _build_html(
     )
 
 
-def _known_coordinates(pages: list[Page]) -> dict[tuple[str, str, int], str]:
-    """Every (path, side, line) a page's diff actually has a row for, to that row's text.
+_MARKERS = {"add": "+", "del": "-", "ctx": " "}
 
-    A comment's coordinate is checked against this rather than trusted outright — the
+
+def _addressable_rows(pages: list[Page]) -> dict[str, list[DiffLine]]:
+    """Per path, the rows of its diff a comment can address, in display order.
+
+    A comment's coordinates are checked against these rather than trusted outright — the
     page is the only thing that should ever POST here, but the result is what the agent
     acts on, same reasoning as `ask._extract_answer` filtering ids against known options.
-    The text doubles as `context` in the returned comment, so the agent doesn't have to
-    re-parse its own diff to see what line a comment was about.
+    The rows' text doubles as `context` in the returned comment, so the agent doesn't have
+    to re-parse its own diff to see what a comment was about.
     """
-    known: dict[tuple[str, str, int], str] = {}
-    for page in pages:
-        for row in parse_unified_diff(page.diff):
-            if row.side is not None and row.line is not None:
-                known[(page.path, row.side, row.line)] = row.text
-    return known
+    return {
+        page.path: [
+            row
+            for row in parse_unified_diff(page.diff)
+            if row.side is not None and row.line is not None
+        ]
+        for page in pages
+    }
+
+
+def _is_line(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _context(rows: list[DiffLine]) -> str:
+    """One row's text as is; a range's rows one per line, each with its diff marker.
+
+    A range may mix deleted and added rows, which look alike without the marker.
+    """
+    if len(rows) == 1:
+        return rows[0].text
+    return "\n".join(_MARKERS[row.kind] + row.text for row in rows)
+
+
+def _valid_quote(raw: object, rows: list[DiffLine]) -> str | None:
+    """`raw` if it is real text of `rows` and shorter than all of it, else None.
+
+    Whitespace is compared loosely: the page reads a selection back from rendered text.
+    """
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    haystack = " ".join("\n".join(row.text for row in rows).split())
+    needle = " ".join(raw.split())
+    return raw.strip() if needle in haystack and needle != haystack else None
 
 
 def _extract_comments(pages: list[Page], raw: object) -> list[dict[str, Any]]:
-    known = _known_coordinates(pages)
+    rows_by_path = _addressable_rows(pages)
+    index_by_path = {
+        path: {(row.side, row.line): i for i, row in enumerate(rows)}
+        for path, rows in rows_by_path.items()
+    }
     comments: list[dict[str, Any]] = []
     if not isinstance(raw, list):
         return comments
@@ -150,23 +185,34 @@ def _extract_comments(pages: list[Page], raw: object) -> list[dict[str, Any]]:
         side = entry.get("side")
         line = entry.get("line")
         text = entry.get("text")
-        if not isinstance(path, str) or side not in ("old", "new"):
-            continue
-        if not isinstance(line, int) or isinstance(line, bool):
-            continue
-        if (path, side, line) not in known:
+        if not isinstance(path, str) or side not in ("old", "new") or not _is_line(line):
             continue
         if not isinstance(text, str) or not text.strip():
             continue
-        comments.append(
-            {
-                "path": path,
-                "side": side,
-                "line": line,
-                "text": text.strip(),
-                "context": known[(path, side, line)],
-            }
-        )
+        index = index_by_path.get(path, {})
+        start = index.get((side, line))
+        if start is None:
+            continue
+        end = start
+        end_side, end_line = entry.get("end_side"), entry.get("end_line")
+        if end_side is not None or end_line is not None:
+            if end_side not in ("old", "new") or not _is_line(end_line):
+                continue
+            found = index.get((end_side, end_line))
+            if found is None or found < start:
+                continue
+            end = found
+        rows = rows_by_path[path][start : end + 1]
+        comment: dict[str, Any] = {"path": path, "side": side, "line": line}
+        if end != start:
+            comment["end_side"] = end_side
+            comment["end_line"] = end_line
+        comment["text"] = text.strip()
+        comment["context"] = _context(rows)
+        quote = _valid_quote(entry.get("quote"), rows)
+        if quote is not None:
+            comment["quote"] = quote
+        comments.append(comment)
     return comments
 
 

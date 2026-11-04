@@ -7,6 +7,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review`: comments on a run of lines and on selected text. Click a row, shift-click to
+  extend, or select text; the rest of the diff dims and a box under the last selected row
+  takes the comment (Ctrl+Enter adds, Esc clears). Comments show under their rows with
+  Edit and Delete. The result gains `end_side`/`end_line` on a run (each end names its
+  own side) and `quote` on a text selection; `context` of a run is every row prefixed
+  `+`, `-` or a space. A single-line comment is unchanged. See ADR 0003.
 - `review`: a file list that stays in view on a multi-page review: a left sidebar with
   one row per file (directory, current file marked, comment count, pencil for a page
   note), replacing the progress bar and Prev/Next arrows. Below 900px it becomes a drawer
@@ -15,13 +21,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   `page_notes: [{"path", "text"}]` (only files with a note, `[]` otherwise) on submit,
   cancel and abandoned alike; `overall_note` is unchanged.
 
-### Removed
-
-- `timeout_seconds` on `ask`, `show` and `review`. A call no longer has a deadline: it
-  waits as long as the page is open.
-
 ### Changed
 
+- `review`: a row no longer opens its own comment box on click. The click selects the row
+  and the comment dock opens under it; an unsent comment is no longer a textarea left open
+  in the diff.
 - `{"timed_out": true}` is now `{"abandoned": true}` on `ask`, `show` (with
   `wait_for_acknowledge`) and `review`. It means the page went silent for 3 minutes
   (tab closed, browser quit, machine asleep), not that an answer was slow.
@@ -31,6 +35,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   cancel. The page reports them with each heartbeat and 0.4 s after typing; before, a
   timeout returned nothing.
 - `ask`: an abandoned call returns `resume` like a cancelled one, as `timed_out` did.
+
+### Removed
+
+- `timeout_seconds` on `ask`, `show` and `review`. A call no longer has a deadline: it
+  waits as long as the page is open.
 
 ## [0.13.0] - 2026-11-04
 

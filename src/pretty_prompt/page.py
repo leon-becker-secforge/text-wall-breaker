@@ -2171,12 +2171,12 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
 /* Whole row is the click/keyboard target — chosen over a separate gutter button in a
    three-variant review (see pretty-prompt's CLAUDE.md): nothing small to aim for, and the
    bubble glyph below is purely decorative, not itself a click target
-   (`pointer-events: none`). The box that opens reads as a callout pointing back at the
-   line, picked in that same review over a plain panel. */
+   (`pointer-events: none`). Selecting rows or text opens the comment dock below. */
 .pp-review-row-wrap { position: relative; cursor: pointer; }
 /* Once Submit/Cancel has been sent (body.pp-review-frozen, set by the script's freeze())
    a row no longer looks clickable — the comments it would collect have already left. */
 body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
+.pp-review-diff ::selection { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
 .pp-review-row { display: flex; align-items: flex-start; padding: 1px 10px 1px 2px;
   white-space: pre; border-left: 3px solid transparent; position: relative; }
 .pp-review-row.add { border-left-color: #1f7a4c; background: rgba(31, 122, 76, 0.08); }
@@ -2186,24 +2186,75 @@ body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
 .pp-review-row-wrap:focus-within .pp-review-row { background: var(--ntw-border); }
 body.pp-review-frozen .pp-review-row-wrap:hover .pp-review-row,
 body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { background: none; }
+/* user-select: none on the glyph and the gutters keeps them out of a selected `quote`. */
 .pp-review-comment-icon { position: absolute; right: 8px; top: 1px; font-size: 0.85em;
-  opacity: 0; color: var(--ntw-fg-muted); pointer-events: none; }
+  opacity: 0; color: var(--ntw-fg-muted); pointer-events: none; user-select: none; }
 .pp-review-row-wrap:hover .pp-review-comment-icon,
 .pp-review-row-wrap.has-comment .pp-review-comment-icon { opacity: 1; }
 .pp-review-row-wrap.has-comment .pp-review-comment-icon { color: var(--ntw-accent); }
+.pp-review-row-wrap.has-comment .pp-review-row { box-shadow: inset -3px 0 0 var(--ntw-accent); }
 .pp-review-gutter { flex: none; width: 2.8em; text-align: right; padding-inline-end: 8px;
   color: var(--ntw-fg-muted); user-select: none; }
-.pp-review-comment-box { display: none; position: relative; margin: 6px 10px 14px 46px;
-  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--ntw-accent);
-  background: var(--ntw-verdict-bg); }
-.pp-review-comment-box::before { content: ""; position: absolute; top: -7px; right: 24px;
-  width: 12px; height: 12px; background: var(--ntw-verdict-bg);
-  border-inline-start: 1px solid var(--ntw-accent);
-  border-block-start: 1px solid var(--ntw-accent); transform: rotate(45deg); }
-.pp-review-comment-box.is-open { display: block; }
-.pp-review-comment-box textarea { width: 100%; min-height: 2.4em; font: inherit;
-  font-size: 0.85em; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--ntw-border);
-  background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
+
+/* Selection: the rest of the diff dims, the selected rows get a ring (picked over a
+   floating pill and a gutter bracket in a three-variant prototype). The dock that takes
+   the comment sits under the last selected row, so the text stays next to what it is
+   about. */
+.pp-review-diff.has-sel .pp-review-row-wrap:not(.is-sel) { opacity: 0.32;
+  transition: opacity 0.12s; }
+.pp-review-row-wrap.is-sel .pp-review-row { --pp-tint: inset 0 0 0 100vmax
+  color-mix(in srgb, var(--ntw-accent) 10%, transparent); box-shadow: var(--pp-tint); }
+.pp-review-row-wrap.is-sel.sel-first .pp-review-row {
+  box-shadow: inset 0 3px 0 var(--ntw-accent), var(--pp-tint); }
+.pp-review-row-wrap.is-sel.sel-last .pp-review-row {
+  box-shadow: inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
+.pp-review-row-wrap.is-sel.sel-first.sel-last .pp-review-row {
+  box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
+.pp-comment, #pp-dock { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+  sans-serif; }
+.pp-comment { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--ntw-accent); background: var(--ntw-verdict-bg); font-size: 0.95em;
+  white-space: normal; user-select: none; cursor: default; }
+.pp-comment-head { display: flex; align-items: center; gap: 10px; }
+.pp-comment-head b { font-family: var(--pp-font-mono); font-size: 0.9em; }
+.pp-comment-actions { margin-inline-start: auto; display: flex; gap: 6px; }
+.pp-comment-actions button { border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated); color: var(--ntw-fg); border-radius: 6px;
+  padding: 1px 9px; cursor: pointer; font: inherit; font-size: 0.85em; }
+.pp-comment-actions button:hover { border-color: var(--ntw-accent); }
+body.pp-review-frozen .pp-comment-actions { display: none; }
+.pp-comment-quote, .pp-dock-quote { font-family: var(--pp-font-mono); font-size: 0.85em;
+  background: var(--ntw-code-bg); border-radius: 4px; padding: 1px 8px; }
+.pp-comment-quote { display: block; margin-top: 6px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.pp-comment-quote[hidden] { display: none; }
+.pp-comment-text { margin-top: 6px; white-space: pre-wrap; }
+#pp-dock { position: absolute; z-index: 55; display: none; box-sizing: border-box;
+  padding: 16px 18px 14px; border-radius: 14px; background: var(--ntw-bg-elevated);
+  color: var(--ntw-fg); border: 2px solid var(--ntw-accent); font-size: 0.85em;
+  line-height: 1.4; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4); }
+#pp-dock.is-open { display: block; }
+#pp-dock::before { content: ""; position: absolute; top: -9px; left: 40px; width: 14px;
+  height: 14px; background: var(--ntw-bg-elevated); transform: rotate(45deg);
+  border-inline-start: 2px solid var(--ntw-accent);
+  border-block-start: 2px solid var(--ntw-accent); }
+.pp-dock-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.pp-dock-head b { font-family: var(--pp-font-mono); font-size: 0.95em; }
+.pp-dock-head span { color: var(--ntw-fg-muted); }
+.pp-dock-quote { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--ntw-fg); }
+.pp-dock-quote[hidden] { display: none; }
+#pp-dock-text { width: 100%; min-height: 6.5em; box-sizing: border-box; font: inherit;
+  padding: 10px 12px; border-radius: 8px; border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg); color: var(--ntw-fg); resize: vertical; }
+.pp-dock-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  margin-top: 12px; }
+.pp-dock-hint { margin-inline-end: auto; font-size: 0.85em; color: var(--ntw-fg-muted); }
+.pp-dock-row button { font: inherit; font-weight: 600; padding: 8px 20px; border-radius: 8px;
+  cursor: pointer; border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); }
+.pp-dock-row button.ghost { background: transparent; color: var(--ntw-fg);
+  border-color: var(--ntw-border); }
 
 #pp-overall-note-label, .pp-page-note-label { font-size: 0.8em; color: var(--ntw-fg-muted);
   display: block; margin: 18px 0 4px; }
@@ -2313,6 +2364,19 @@ __CONTENT__
   </div>
 </main>
 
+<div id="pp-dock" role="dialog" aria-label="Comment on the selected lines">
+  <div class="pp-dock-head">
+    <b id="pp-dock-label"></b><span id="pp-dock-count"></span>
+    <span class="pp-dock-quote" id="pp-dock-quote" hidden></span>
+  </div>
+  <textarea id="pp-dock-text" placeholder="Comment on the highlighted lines"></textarea>
+  <div class="pp-dock-row">
+    <span class="pp-dock-hint">Ctrl+Enter adds &middot; Esc clears</span>
+    <button type="button" class="ghost" id="pp-dock-clear">Clear</button>
+    <button type="button" id="pp-dock-add">Comment</button>
+  </div>
+</div>
+
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
@@ -2339,52 +2403,237 @@ __CONTENT__
     send('theme', { theme: next });
   });
 
-  // The whole row opens/closes its comment box — see page.py's _render_review_diff and
-  // its CSS comment for why (three-variant review). Every page stays in the DOM the
-  // whole time (deck-nav only toggles which .deck-slide is visible), so a comment
-  // survives navigating away from its page and back without any extra state to track.
-  // `frozen` (set by freeze() below, once Submit/Cancel has been sent) stops a row from
-  // opening a box, and a box already open from accepting more text, after the comments
-  // it would collect have already left — editing then would silently go nowhere.
+  // A comment covers a run of rows of one diff, picked by selecting text across them,
+  // clicking a row (that whole line) or shift-clicking to extend from the last click. The
+  // dock under the last selected row takes the text. Every page stays in the DOM the
+  // whole time (the file list only toggles which .deck-slide is visible), so a comment
+  // survives navigating away from its page and back. `frozen` (set by freeze() below,
+  // once Submit/Cancel has been sent) stops any further change: editing then would
+  // silently go nowhere, the comments having already left.
   var frozen = false;
-  var reviewRows = document.querySelectorAll('.pp-review-row-wrap');
-  Array.prototype.slice.call(reviewRows).forEach(function (wrap) {
-    var row = wrap.querySelector('.pp-review-row');
-    var box = wrap.querySelector('.pp-review-comment-box');
-    var textarea = box ? box.querySelector('textarea') : null;
-    if (!row || !box || !textarea) return;
-    function toggleBox() {
-      if (frozen) return;
-      var opening = !box.classList.contains('is-open');
-      box.classList.toggle('is-open', opening);
-      if (opening) textarea.focus();
+  var comments = [];   // {diff, from, to, quote, text, el}: rows are indexes into the diff
+  var sel = null;      // {diff, from, to, quote, editing}
+  var anchor = null;   // {diff, index} of the last plain click, for shift-click
+  var dock = document.getElementById('pp-dock');
+  var dockText = document.getElementById('pp-dock-text');
+  var dockAdd = document.getElementById('pp-dock-add');
+  var slideEls = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
+
+  function wrapsOf(diff) {
+    return Array.prototype.slice.call(diff.querySelectorAll('.pp-review-row-wrap'));
+  }
+  function wrapOf(node) {
+    var el = node && (node.nodeType === 1 ? node : node.parentElement);
+    return el ? el.closest('.pp-review-row-wrap') : null;
+  }
+  function coord(wrap) {
+    return { side: wrap.dataset.side, line: parseInt(wrap.dataset.line, 10) };
+  }
+  function rowLabel(ws, from, to) {
+    var a = coord(ws[from]), b = coord(ws[to]);
+    if (from === to) return a.side + ' ' + a.line;
+    if (a.side === b.side) return a.side + ' ' + a.line + '\\u2013' + b.line;
+    return a.side + ' ' + a.line + ' \\u2192 ' + b.side + ' ' + b.line;
+  }
+  function rowsText(ws, from, to) {
+    return ws.slice(from, to + 1)
+      .map(function (w) { return w.querySelector('.pp-review-text').textContent; })
+      .join('\\n');
+  }
+  function plain(text) { return text.replace(/\\u00a0/g, ' ').replace(/\\s+$/, ''); }
+
+  function placeDock(ws) {
+    var diffBox = sel.diff.getBoundingClientRect();
+    var after = ws[sel.to];
+    // Under the last selected row and any comment already shown there, not over it.
+    while (after.nextElementSibling && after.nextElementSibling.classList.contains('pp-comment')) {
+      after = after.nextElementSibling;
     }
-    row.addEventListener('click', toggleBox);
-    row.addEventListener('keydown', function (event) {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        toggleBox();
+    dock.style.width = Math.max(240, Math.min(680, diffBox.width - 60)) + 'px';
+    dock.style.left = (diffBox.left + window.scrollX + 46) + 'px';
+    dock.style.top = (after.getBoundingClientRect().bottom + window.scrollY + 14) + 'px';
+  }
+
+  function renderSel() {
+    Array.prototype.forEach.call(document.querySelectorAll('.has-sel'), function (e) {
+      e.classList.remove('has-sel');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.is-sel'), function (e) {
+      e.classList.remove('is-sel', 'sel-first', 'sel-last');
+    });
+    if (!sel) { dock.classList.remove('is-open'); return; }
+    var ws = wrapsOf(sel.diff);
+    sel.diff.classList.add('has-sel');
+    for (var i = sel.from; i <= sel.to; i++) ws[i].classList.add('is-sel');
+    ws[sel.from].classList.add('sel-first');
+    ws[sel.to].classList.add('sel-last');
+    document.getElementById('pp-dock-label').textContent = rowLabel(ws, sel.from, sel.to);
+    var count = sel.to - sel.from + 1;
+    document.getElementById('pp-dock-count').textContent = count + (count === 1 ? ' row' : ' rows');
+    var quote = document.getElementById('pp-dock-quote');
+    quote.hidden = !sel.quote;
+    quote.textContent = sel.quote || '';
+    dockText.value = sel.editing ? sel.editing.text : '';
+    dockAdd.textContent = sel.editing ? 'Update' : 'Comment';
+    placeDock(ws);
+    dock.classList.add('is-open');
+    dock.scrollIntoView({
+      block: 'nearest',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    });
+    dockText.focus();
+  }
+  function setSel(next) { sel = next; renderSel(); }
+  function clearSel() {
+    sel = null;
+    window.getSelection().removeAllRanges();
+    renderSel();
+  }
+
+  function selectRow(diff, index, extend) {
+    var from = index, to = index;
+    if (extend && anchor && anchor.diff === diff) {
+      from = Math.min(anchor.index, index);
+      to = Math.max(anchor.index, index);
+    } else {
+      anchor = { diff: diff, index: index };
+    }
+    setSel({ diff: diff, from: from, to: to, quote: '', editing: null });
+  }
+
+  document.addEventListener('mouseup', function (event) {
+    if (frozen) return;
+    var chrome = '#pp-dock, .pp-comment, textarea, button, a, #pp-files, #pp-filebar';
+    if (event.target.closest(chrome)) return;
+    var s = window.getSelection();
+    if (s.rangeCount && !s.isCollapsed) {
+      var r = s.getRangeAt(0);
+      var first = wrapOf(r.startContainer), last = wrapOf(r.endContainer);
+      if (!first && r.startContainer.nodeType === 1) {
+        first = wrapOf(r.startContainer.childNodes[r.startOffset]);
       }
+      var diff = first && first.closest('.pp-review-diff');
+      if (!diff || !last || last.closest('.pp-review-diff') !== diff) return;
+      var ws = wrapsOf(diff), from = ws.indexOf(first), to = ws.indexOf(last);
+      // A drag that ends at the very start of the next row, or starts at the very end of
+      // a row, selected none of that row's text.
+      if (to > from && r.endOffset === 0) to -= 1;
+      if (to > from && r.startContainer.nodeType === 3 &&
+          r.startOffset >= r.startContainer.length) from += 1;
+      var quote = plain(s.toString());
+      anchor = { diff: diff, index: from };
+      setSel({
+        diff: diff, from: from, to: to, editing: null,
+        quote: quote === plain(rowsText(ws, from, to)) ? '' : quote.slice(0, 2000)
+      });
+      return;
+    }
+    var wrap = event.target.closest('.pp-review-row-wrap');
+    if (wrap) {
+      var d = wrap.closest('.pp-review-diff');
+      selectRow(d, wrapsOf(d).indexOf(wrap), event.shiftKey);
+    } else if (sel && dockText.value.trim() === '') {
+      clearSel();
+    }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (frozen) return;
+    if (event.key === 'Escape' && sel) { clearSel(); return; }
+    var row = event.target.classList && event.target.classList.contains('pp-review-row')
+      ? event.target : null;
+    if (row && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      var wrap = row.closest('.pp-review-row-wrap'), d = wrap.closest('.pp-review-diff');
+      selectRow(d, wrapsOf(d).indexOf(wrap), event.shiftKey);
+    }
+  });
+  window.addEventListener('resize', function () { if (sel) placeDock(wrapsOf(sel.diff)); });
+
+  function markRows() {
+    Array.prototype.forEach.call(document.querySelectorAll('.has-comment'), function (e) {
+      e.classList.remove('has-comment');
     });
-    textarea.addEventListener('input', function () {
-      wrap.classList.toggle('has-comment', textarea.value.trim() !== '');
+    comments.forEach(function (c) {
+      var ws = wrapsOf(c.diff);
+      for (var i = c.from; i <= c.to; i++) ws[i].classList.add('has-comment');
     });
+  }
+  function renderComment(c) {
+    var ws = wrapsOf(c.diff);
+    var el = c.el || document.createElement('div');
+    el.className = 'pp-comment';
+    el.innerHTML = '<div class="pp-comment-head"><b></b><span class="pp-comment-actions">' +
+      '<button type="button" data-act="edit">Edit</button>' +
+      '<button type="button" data-act="delete">Delete</button></span></div>' +
+      '<span class="pp-comment-quote" hidden></span><div class="pp-comment-text"></div>';
+    el.querySelector('b').textContent = rowLabel(ws, c.from, c.to);
+    var quote = el.querySelector('.pp-comment-quote');
+    quote.hidden = !c.quote;
+    quote.textContent = c.quote || '';
+    el.querySelector('.pp-comment-text').textContent = c.text;
+    ws[c.to].after(el);
+    c.el = el;
+  }
+  function commentsChanged() {
+    markRows();
+    document.dispatchEvent(new CustomEvent('pp-comments'));
+    reportSoon();
+  }
+  function addComment() {
+    var text = dockText.value.trim();
+    if (!text || !sel || frozen) return;
+    if (sel.editing) {
+      sel.editing.text = text;
+      renderComment(sel.editing);
+    } else {
+      var c = {
+        diff: sel.diff, from: sel.from, to: sel.to, quote: sel.quote, text: text, el: null
+      };
+      comments.push(c);
+      renderComment(c);
+    }
+    clearSel();
+    commentsChanged();
+  }
+  dockAdd.addEventListener('click', addComment);
+  document.getElementById('pp-dock-clear').addEventListener('click', clearSel);
+  dockText.addEventListener('keydown', function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      addComment();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.pp-comment [data-act]');
+    if (!button || frozen) return;
+    var c = comments.filter(function (x) { return x.el === button.closest('.pp-comment'); })[0];
+    if (!c) return;
+    if (button.dataset.act === 'delete') {
+      c.el.remove();
+      comments.splice(comments.indexOf(c), 1);
+      commentsChanged();
+    } else {
+      setSel({ diff: c.diff, from: c.from, to: c.to, quote: c.quote, editing: c });
+    }
   });
 
   function collectComments() {
-    var comments = [];
-    var boxes = document.querySelectorAll('.pp-review-comment-box textarea');
-    Array.prototype.slice.call(boxes).forEach(function (textarea) {
-      var text = textarea.value.trim();
-      if (!text) return;
-      comments.push({
-        path: textarea.dataset.path,
-        side: textarea.dataset.side,
-        line: parseInt(textarea.dataset.line, 10),
-        text: text
+    return comments
+      .slice()
+      .sort(function (a, b) {
+        var sa = slideEls.indexOf(a.diff.closest('.deck-slide'));
+        var sb = slideEls.indexOf(b.diff.closest('.deck-slide'));
+        return sa - sb || a.from - b.from || a.to - b.to;
+      })
+      .map(function (c) {
+        var ws = wrapsOf(c.diff), start = coord(ws[c.from]), end = coord(ws[c.to]);
+        var out = { path: c.diff.dataset.path, side: start.side, line: start.line };
+        if (c.to !== c.from) { out.end_side = end.side; out.end_line = end.line; }
+        if (c.quote) out.quote = c.quote;
+        out.text = c.text;
+        return out;
       });
-    });
-    return comments;
   }
 
   var submitBtn = document.getElementById('pp-submit');
@@ -2414,8 +2663,7 @@ __CONTENT__
     pageNotes.forEach(function (t) { t.readOnly = true; });
     frozen = true;
     document.body.classList.add('pp-review-frozen');
-    Array.prototype.slice.call(document.querySelectorAll('.pp-review-comment-box textarea'))
-      .forEach(function (t) { t.readOnly = true; });
+    clearSel();
     status.textContent = message;
     stopHeartbeat();
   }
@@ -2448,8 +2696,6 @@ __CONTENT__
   });
   overallNote.addEventListener('input', reportSoon);
   pageNotes.forEach(function (t) { t.addEventListener('input', reportSoon); });
-  Array.prototype.slice.call(document.querySelectorAll('.pp-review-comment-box textarea'))
-    .forEach(function (t) { t.addEventListener('input', reportSoon); });
 
   function fallback(payload, reason, title) {
     var box = document.getElementById('pp-fallback');
@@ -2549,15 +2795,15 @@ __MERMAID__
 
 
 def _render_review_diff(path: str, diff: str) -> str:
-    """One page's diff as `.pp-review-row` rows, each wrapped with its comment box.
+    """One page's diff as `.pp-review-row` rows, each wrapped in `.pp-review-row-wrap`.
 
     `parse_unified_diff` is what turns raw diff text into the (side, line) coordinate a
     comment on that row addresses — see `diff.DiffLine.side`/`.line`. A "hunk" row (the
     `@@ ...` header) is not addressable: there's no single line it could attach to.
 
-    The whole row is the click/keyboard target for opening its comment box (`role`,
-    `tabindex`; the actual open/close wiring is in `_REVIEW_TEMPLATE`'s script) — the
-    bubble glyph is a hover affordance only, not a click target itself.
+    The whole row is the click/keyboard target for selecting it (`role`, `tabindex`; the
+    wiring is in `_REVIEW_TEMPLATE`'s script, which also places a comment's note after its
+    last row) — the bubble glyph is a hover affordance only, not a click target itself.
     """
     escaped_path = html.escape(path, quote=True)
     rows: list[DiffLine] = parse_unified_diff(diff)
@@ -2575,15 +2821,11 @@ def _render_review_diff(path: str, diff: str) -> str:
             f'<div class="pp-review-row-wrap" data-path="{escaped_path}" '
             f'data-side="{side}" data-line="{line}">'
             f'<div class="pp-review-row {row.kind}" role="button" tabindex="0" '
-            'aria-label="Comment on this line">'
+            'aria-label="Select this line to comment">'
             f'<span class="pp-review-gutter">{old}</span>'
             f'<span class="pp-review-gutter">{new}</span>'
             f'<span class="pp-review-text">{text_html}</span>'
             '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span>'
-            "</div>"
-            '<div class="pp-review-comment-box">'
-            f'<textarea data-path="{escaped_path}" data-side="{side}" data-line="{line}" '
-            'placeholder="Comment on this line"></textarea>'
             "</div>"
             "</div>"
         )
@@ -2673,8 +2915,8 @@ def _review_files_script(needed: bool) -> str:
     """Switching files and keeping the file list's counts current.
 
     Loaded only for more than one page, where `_render_review_files` rendered the list.
-    The counts are read from the comment and page note boxes on every input, so they
-    stay right without the list owning any state of its own.
+    The counts are read from the comment notes and page note boxes whenever a comment
+    changes or a note is typed, so they stay right without the list owning any state.
     """
     if not needed:
         return ""
@@ -2695,11 +2937,7 @@ def _review_files_script(needed: bool) -> str:
   function refresh() {
     var sum = 0;
     slides.forEach(function (slide, i) {
-      var n = 0;
-      Array.prototype.forEach.call(
-        slide.querySelectorAll('.pp-review-comment-box textarea'),
-        function (t) { if (t.value.trim()) n++; }
-      );
+      var n = slide.querySelectorAll('.pp-comment').length;
       sum += n;
       var count = files[i].querySelector('.pp-file-count');
       count.textContent = n;
@@ -2739,6 +2977,7 @@ def _review_files_script(needed: bool) -> str:
   toggle.addEventListener('click', function () { setOpen(!nav.classList.contains('is-open')); });
   backdrop.addEventListener('click', function () { setOpen(false); });
   document.addEventListener('input', refresh);
+  document.addEventListener('pp-comments', refresh);
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') { setOpen(false); return; }
     if (event.target.matches('input, textarea, [contenteditable]')) return;
