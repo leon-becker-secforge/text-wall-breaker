@@ -149,10 +149,17 @@ class Question(BaseModel):
             "within the ask. Never shown to the user."
         ),
     ] = None
-    question: str
-    options: list[Option] = []
-    multi_select: bool = False
-    allow_free_text: bool = True
+    question: Annotated[str, Field(description="The question, as Markdown.")]
+    options: Annotated[
+        list[Option],
+        Field(description="The choices to offer. May be omitted only if allow_free_text is true."),
+    ] = []
+    multi_select: Annotated[
+        bool, Field(description="Allow more than one option to be selected.")
+    ] = False
+    allow_free_text: Annotated[
+        bool, Field(description="Show a free-text box alongside the options.")
+    ] = True
     allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False
     free_text: Annotated[
         str | None,

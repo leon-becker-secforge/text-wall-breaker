@@ -17,7 +17,7 @@ import secrets
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -90,11 +90,14 @@ class Note(BaseModel):
 
     path: Annotated[str, Field(description="The page's path, as given or as the repo diff has it.")]
     side: Annotated[
-        str, Field(description='"new" for a line of the new file, "old" for a deleted line.')
+        Literal["new", "old"],
+        Field(description='"new" for a line of the new file, "old" for a deleted line.'),
     ]
     line: Annotated[int, Field(description="That side's 1-based line number in the file.")]
     text: Annotated[str, Field(description="The remark, as Markdown.")]
-    end_side: Annotated[str | None, Field(description="Last row of a run; with end_line.")] = None
+    end_side: Annotated[
+        Literal["new", "old"] | None, Field(description="Last row of a run; with end_line.")
+    ] = None
     end_line: Annotated[int | None, Field(description="Last row of a run; with end_side.")] = None
 
 

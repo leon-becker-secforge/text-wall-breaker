@@ -134,3 +134,30 @@ def test_an_unanswerable_call_fails_before_a_page_is_opened(arguments, match):
 def test_show_status_is_registered_and_takes_no_arguments():
     tool = next(t for t in anyio.run(server.list_tools) if t.name == "show_status")
     assert tool.input_schema.get("properties", {}) == {}
+
+
+def _undocumented(schema: dict, where: str) -> list[str]:
+    """Every property of `schema` and of its `$defs` that has no description."""
+    scopes = [(where, schema)]
+    scopes += [(f"{where}.{name}", node) for name, node in schema.get("$defs", {}).items()]
+    return [
+        f"{scope}.{name}"
+        for scope, node in scopes
+        for name, prop in node.get("properties", {}).items()
+        if not prop.get("description")
+    ]
+
+
+def test_every_tool_parameter_is_described():
+    missing = [
+        path
+        for tool in anyio.run(server.list_tools)
+        for path in _undocumented(tool.input_schema, tool.name)
+    ]
+    assert missing == []
+
+
+def test_a_note_side_is_an_enum_in_the_schema():
+    review = next(t for t in anyio.run(server.list_tools) if t.name == "review")
+    note = review.input_schema["$defs"]["Note"]["properties"]
+    assert note["side"]["enum"] == ["new", "old"]
