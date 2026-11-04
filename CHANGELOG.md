@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-04
+
 ### Added
 
 - `review`: syntax coloring of the diff rows by file extension, with Pygments (new
