@@ -7,6 +7,10 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review`: a file list that stays in view on a multi-page review: a left sidebar with
+  one row per file (directory, current file marked, comment count, pencil for a page
+  note), replacing the progress bar and Prev/Next arrows. Below 900px it becomes a drawer
+  opened from a sticky bar with the current file and Prev/Next. `j`/`k` also switch files.
 - `review`: a "Note on this file" box under each page's diff. The result gains
   `page_notes: [{"path", "text"}]` (only files with a note, `[]` otherwise) on submit,
   cancel and abandoned alike; `overall_note` is unchanged.

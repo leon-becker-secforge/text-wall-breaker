@@ -2211,6 +2211,58 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   padding: 8px 10px; border-radius: 6px; border: 1px solid var(--ntw-border);
   background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
 
+/* File list of a multi-page review (see _render_review_files). A sidebar picked over a
+   tab strip and a files card in a three-variant prototype: always in view, one row per
+   file with room for the directory. Below 900px the sidebar becomes a drawer opened from
+   a sticky bar, so the diff keeps the full width. */
+body.pp-has-files { padding-left: 296px; }
+#pp-files { position: fixed; left: 0; top: 0; bottom: 0; width: 280px; overflow-y: auto;
+  box-sizing: border-box; padding: 16px 10px 24px; background: var(--ntw-bg-elevated);
+  border-right: 1px solid var(--ntw-border); font-size: 0.72em; z-index: 20; }
+.pp-files-head { margin: 0 6px 10px; font-size: 0.92em; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--ntw-fg-muted); font-weight: 600; }
+.pp-files-head span { float: right; text-transform: none; letter-spacing: 0; }
+.pp-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px;
+  border-radius: 8px; cursor: pointer; border: 0; background: none; color: var(--ntw-fg);
+  text-align: left; font: inherit; }
+.pp-file:hover { background: var(--ntw-border); }
+.pp-file.is-current { background: color-mix(in srgb, var(--ntw-accent) 18%, transparent);
+  box-shadow: inset 3px 0 0 var(--ntw-accent); }
+.pp-file-paths { flex: 1; min-width: 0; line-height: 1.25; }
+.pp-file-name, .pp-file-dir { display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-family: var(--pp-font-mono); }
+.pp-file.is-current .pp-file-name { font-weight: 700; }
+.pp-file-dir { font-size: 0.85em; color: var(--ntw-fg-muted); }
+.pp-file-note { color: var(--ntw-accent); }
+.pp-file-count { display: inline-flex; align-items: center; justify-content: center;
+  min-width: 1.6em; height: 1.6em; padding: 0 0.45em; box-sizing: border-box;
+  border-radius: 999px; font-size: 0.85em; font-weight: 600; background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); }
+.pp-file-count.is-zero { background: transparent; color: var(--ntw-fg-muted);
+  border: 1px solid var(--ntw-border); font-weight: 400; }
+#pp-filebar, #pp-files-backdrop { display: none; }
+@media (max-width: 900px) {
+  body.pp-has-files { padding-left: 8px; }
+  #pp-filebar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center;
+    gap: 8px; margin: 0 40px 14px 0; padding: 7px 10px; font-size: 0.78em;
+    background: var(--ntw-bg-elevated); border: 1px solid var(--ntw-border);
+    border-radius: 8px; }
+  #pp-filebar button { border: 1px solid var(--ntw-border); background: var(--ntw-bg);
+    color: var(--ntw-fg); border-radius: 6px; padding: 3px 10px; cursor: pointer;
+    font: inherit; }
+  #pp-filebar-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-family: var(--pp-font-mono); }
+  #pp-filebar-pos { color: var(--ntw-fg-muted); white-space: nowrap; }
+  #pp-files { width: min(320px, 86vw); z-index: 60; transform: translateX(-100%);
+    transition: transform 0.18s; }
+  #pp-files.is-open { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, 0.4); }
+  #pp-files-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 50;
+    background: rgba(0, 0, 0, 0.45); }
+}
+@media (max-width: 900px) and (prefers-reduced-motion: reduce) {
+  #pp-files { transition: none; }
+}
+
 .pp-actions { margin-block-start: 16px; }
 
 #pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
@@ -2234,7 +2286,7 @@ _REVIEW_TEMPLATE = """<!doctype html>
 __CSS__
 </style>
 </head>
-<body>
+<body__BODY_CLASS__>
 <main>
   <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
 __HEADER_BLOCK__
@@ -2547,25 +2599,10 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
     (`_render_review_diff`) rather than arbitrary Markdown, and the progress label reads
     "Page", not "Slide" — see `_review_deck_script`.
     """
-    total = len(pages)
-    # A single page has nothing to paginate between — the progress bar and Prev/Next
-    # nav would just be inert chrome around the one diff, so both are skipped rather
-    # than rendered and left doing nothing (caught by Operator on a one-page review).
-    multi = total > 1
-    initial_progress = round(100 / total) if total else 0
-    progress_html = (
-        (
-            '<div class="pp-progress">'
-            f'<span class="pp-progress-label" id="pp-deck-progress-label">Page 1 of {total}</span>'
-            '<span class="pp-progress-track">'
-            f'<span class="pp-progress-fill" id="pp-deck-progress-fill" '
-            f'style="width: {initial_progress}%"></span>'
-            "</span>"
-            "</div>"
-        )
-        if multi
-        else ""
-    )
+    # A single page has nothing to navigate between: the file list would be inert chrome
+    # around the one diff, so it is skipped rather than rendered and left doing nothing
+    # (caught by Operator on a one-page review).
+    files_html = _render_review_files(pages) if len(pages) > 1 else ""
     slide_parts = []
     for index, page in enumerate(pages):
         active = " is-active" if index == 0 else ""
@@ -2587,53 +2624,131 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
             "</textarea>"
             "</section>"
         )
-    nav_html = (
-        (
-            '<div class="deck-nav">'
-            '<button type="button" data-deck-prev aria-label="Previous page">&larr;</button>'
-            '<button type="button" data-deck-next aria-label="Next page">&rarr;</button>'
-            "</div>"
+    return files_html + "\n".join(slide_parts)
+
+
+def _render_review_files(pages: list[dict[str, object]]) -> str:
+    """The file list of a multi-page `review`: a sidebar, and below 900px a bar + drawer.
+
+    Counts and the note mark start at zero/hidden and are kept current by
+    `_review_files_script` from the comment and note boxes themselves, so the list never
+    holds a second copy of what the operator typed. Fixed-position, so where it sits in
+    the document does not matter.
+    """
+    rows = []
+    for index, page in enumerate(pages):
+        path = str(page["path"])
+        directory, _, name = path.rpartition("/")
+        shown_directory = html.escape(directory + "/" if directory else "./")
+        current = " is-current" if index == 0 else ""
+        rows.append(
+            f'<button type="button" class="pp-file{current}" data-index="{index}" '
+            f'title="{html.escape(path, quote=True)}">'
+            '<span class="pp-file-paths">'
+            f'<span class="pp-file-name">{html.escape(name)}</span>'
+            f'<span class="pp-file-dir">{shown_directory}</span>'
+            "</span>"
+            '<span class="pp-file-note" title="Note on this file" hidden>&#9998;</span>'
+            '<span class="pp-file-count is-zero" title="0 comments">0</span>'
+            "</button>"
         )
-        if multi
-        else ""
+    return (
+        '<nav id="pp-files" aria-label="Files">'
+        '<h3 class="pp-files-head">Files <span id="pp-files-total">0 comments</span></h3>'
+        + "".join(rows)
+        + "</nav>"
+        '<div id="pp-files-backdrop" hidden></div>'
+        '<div id="pp-filebar">'
+        '<button type="button" id="pp-files-toggle" aria-expanded="false" '
+        'aria-controls="pp-files">Files</button>'
+        '<span id="pp-filebar-name"></span>'
+        '<span id="pp-filebar-pos"></span>'
+        '<button type="button" data-file-step="-1" aria-label="Previous file">&larr;</button>'
+        '<button type="button" data-file-step="1" aria-label="Next file">&rarr;</button>'
+        "</div>"
     )
-    return progress_html + "\n".join(slide_parts) + nav_html
 
 
-def _review_deck_script(needed: bool) -> str:
-    """`_deck_script`'s nav mechanics, with a "Page N of M" label instead of "Slide".
+def _review_files_script(needed: bool) -> str:
+    """Switching files and keeping the file list's counts current.
 
-    Loaded only when `_render_review_pages` rendered more than one page — with exactly
-    one, there is nothing to paginate between, so the progress bar/Prev/Next markup this
-    acts on doesn't exist either (see its `multi` check).
+    Loaded only for more than one page, where `_render_review_files` rendered the list.
+    The counts are read from the comment and page note boxes on every input, so they
+    stay right without the list owning any state of its own.
     """
     if not needed:
         return ""
     return """<script>
 (function () {
   var slides = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
-  var progressLabel = document.getElementById('pp-deck-progress-label');
-  var progressFill = document.getElementById('pp-deck-progress-fill');
+  var files = Array.prototype.slice.call(document.querySelectorAll('.pp-file'));
+  var nav = document.getElementById('pp-files');
+  var backdrop = document.getElementById('pp-files-backdrop');
+  var toggle = document.getElementById('pp-files-toggle');
+  var barName = document.getElementById('pp-filebar-name');
+  var barPos = document.getElementById('pp-filebar-pos');
+  var total = document.getElementById('pp-files-total');
   var index = 0;
-  function show(next) {
+
+  function plural(n) { return n + (n === 1 ? ' comment' : ' comments'); }
+
+  function refresh() {
+    var sum = 0;
+    slides.forEach(function (slide, i) {
+      var n = 0;
+      Array.prototype.forEach.call(
+        slide.querySelectorAll('.pp-review-comment-box textarea'),
+        function (t) { if (t.value.trim()) n++; }
+      );
+      sum += n;
+      var count = files[i].querySelector('.pp-file-count');
+      count.textContent = n;
+      count.title = plural(n);
+      count.classList.toggle('is-zero', n === 0);
+      files[i].querySelector('.pp-file-note').hidden =
+        slide.querySelector('.pp-page-note').value.trim() === '';
+    });
+    total.textContent = plural(sum);
+  }
+
+  function setOpen(open) {
+    nav.classList.toggle('is-open', open);
+    backdrop.hidden = !open;
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function show(next, scroll) {
     slides[index].classList.remove('is-active');
+    files[index].classList.remove('is-current');
     index = (next + slides.length) % slides.length;
     slides[index].classList.add('is-active');
-    if (progressLabel) progressLabel.textContent = 'Page ' + (index + 1) + ' of ' + slides.length;
-    if (progressFill) {
-      progressFill.style.width = Math.round((index + 1) / slides.length * 100) + '%';
-    }
+    files[index].classList.add('is-current');
+    barName.textContent = files[index].querySelector('.pp-file-name').textContent;
+    barPos.textContent = (index + 1) + ' of ' + slides.length;
+    if (scroll) window.scrollTo(0, 0);
   }
-  var prevBtn = document.querySelector('[data-deck-prev]');
-  var nextBtn = document.querySelector('[data-deck-next]');
-  if (prevBtn) prevBtn.addEventListener('click', function () { show(index - 1); });
-  if (nextBtn) nextBtn.addEventListener('click', function () { show(index + 1); });
+
+  files.forEach(function (row, i) {
+    row.addEventListener('click', function () { show(i, true); setOpen(false); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('[data-file-step]'), function (b) {
+    b.addEventListener('click', function () {
+      show(index + parseInt(b.dataset.fileStep, 10), true);
+    });
+  });
+  toggle.addEventListener('click', function () { setOpen(!nav.classList.contains('is-open')); });
+  backdrop.addEventListener('click', function () { setOpen(false); });
+  document.addEventListener('input', refresh);
   document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') { setOpen(false); return; }
     if (event.target.matches('input, textarea, [contenteditable]')) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (event.key === 'ArrowRight') show(index + 1);
-    if (event.key === 'ArrowLeft') show(index - 1);
+    if (event.key === 'ArrowRight' || event.key === 'j') show(index + 1, true);
+    if (event.key === 'ArrowLeft' || event.key === 'k') show(index - 1, true);
   });
+
+  refresh();
+  show(0, false);
 }());
 </script>"""
 
@@ -2684,7 +2799,8 @@ def build_review_page(
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace("__HEADER_BLOCK__", header_html)
         .replace("__CONTENT__", content_html)
-        .replace("__DECK_SCRIPT__", _review_deck_script(len(pages) > 1))
+        .replace("__BODY_CLASS__", ' class="pp-has-files"' if len(pages) > 1 else "")
+        .replace("__DECK_SCRIPT__", _review_files_script(len(pages) > 1))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html, header_html)))
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__STATUS_URL__", _js_string(status_url))

@@ -97,6 +97,47 @@ def test_review_gives_every_page_its_own_note_box():
     assert "page_notes: collectPageNotes()" in html
 
 
+_REVIEW_DIFF = "@@ -1 +1 @@\n-a\n+b\n"
+
+
+def _review(*paths):
+    return build_review_page(
+        pages=[{"path": path, "diff": _REVIEW_DIFF} for path in paths],
+        submit_url="http://127.0.0.1:1/submit",
+    )
+
+
+def test_review_lists_every_file_with_its_directory_and_marks_the_first_current():
+    html = _review("src/app/config.py", "README.md")
+    assert '<body class="pp-has-files">' in html
+    assert re.findall(r'<span class="pp-file-name">([^<]*)</span>', html) == [
+        "config.py",
+        "README.md",
+    ]
+    assert re.findall(r'<span class="pp-file-dir">([^<]*)</span>', html) == ["src/app/", "./"]
+    assert html.count("pp-file is-current") == 1
+    assert 'title="src/app/config.py"' in html
+
+
+def test_review_file_list_escapes_paths():
+    html = _review('a/<b>"c".py', "x.py")
+    assert 'title="a/&lt;b&gt;&quot;c&quot;.py"' in html
+    assert '<span class="pp-file-name">&lt;b&gt;&quot;c&quot;.py</span>' in html
+
+
+def test_review_with_one_file_has_no_file_list():
+    html = _review("only.py")
+    assert 'id="pp-files"' not in html
+    assert 'id="pp-filebar"' not in html
+    assert "pp-has-files" not in html.split("<body", 1)[1].split(">", 1)[0]
+
+
+def test_review_file_list_counts_come_from_the_boxes_not_a_second_copy():
+    html = _review("a.py", "b.py")
+    assert ".pp-review-comment-box textarea" in html.split("var slides", 1)[1]
+    assert ".pp-page-note" in html.split("var slides", 1)[1]
+
+
 def test_invalid_accent_raises_from_build_page():
     with pytest.raises(InvalidAccent):
         _page(accent="not-a-colour")

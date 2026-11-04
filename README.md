@@ -315,9 +315,12 @@ the agent's context and pasted back. `git_range` is what `git diff` takes (`main
 `context_lines` is `-U` (default 3). Binary files and pure mode changes have no line to
 comment on and are skipped; a rename shows as a delete plus an add.
 
-With more than one page, the user navigates freely between them (Prev/Next, arrow keys,
-a progress bar); with exactly one, that chrome is skipped entirely rather than shown
-inert.
+With more than one page, a file list stays in view on the left: one row per file with its
+directory, the current file marked, a comment count, and a pencil where the file has a
+note. A click, the arrow keys or `j`/`k` switch files. Below 900px wide the list becomes a
+drawer opened from a bar at the top, which also shows the current file and Prev/Next, so
+the diff keeps the full width. With exactly one page, that chrome is skipped entirely
+rather than shown inert.
 
 Clicking anywhere on a diff line opens a text box anchored to it — a small bubble icon
 marks a line as commentable on hover, but the whole row is the click/keyboard target, not
