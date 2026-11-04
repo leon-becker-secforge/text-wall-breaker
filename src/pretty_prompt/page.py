@@ -120,7 +120,9 @@ _ACTIONS_CSS = """
 .pp-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: relative; }
 .pp-actions button { height: 34px; border-radius: 6px; padding: 0 14px; white-space: nowrap;
   font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
-  border: 1px solid var(--ntw-fg-muted); background: transparent; color: var(--ntw-fg); }
+  border: 1px solid var(--ntw-fg-muted); background: transparent; color: var(--ntw-fg);
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease,
+    filter 0.18s ease; }
 .pp-actions button:not(:disabled):hover { background: var(--pp-btn-tint); }
 /* The status text lives inside this group, left of the primary, so showing or hiding it
    never changes the row's height. 260px basis: narrower than that and the group wraps
@@ -143,8 +145,16 @@ _ACTIONS_CSS = """
 .pp-actions button[hidden] { display: none; }
 /* One line, ellipsised: wrapping it would grow the row when it appears. */
 #pp-status { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; color: var(--ntw-fg-muted); font-size: 0.85em; }
-#pp-status:empty, #pp-status[hidden] { display: none; }
+  overflow: hidden; text-overflow: ellipsis; color: var(--ntw-fg-muted); font-size: 0.85em;
+  transition: opacity 0.16s ease; }
+#pp-status:empty { display: none; }
+/* `hidden` fades the text out instead of removing it, so the page JS needs no change.
+   `visibility` follows the fade (delayed) so a faded status is not read aloud. */
+#pp-status[hidden] { display: block; opacity: 0; visibility: hidden;
+  transition: opacity 0.16s ease, visibility 0s linear 0.16s; }
+@media (prefers-reduced-motion: reduce) {
+  .pp-actions button, #pp-status, #pp-status[hidden] { transition: none; }
+}
 """
 
 # Placed after base.css so it overrides rather than fights it. Every component here is

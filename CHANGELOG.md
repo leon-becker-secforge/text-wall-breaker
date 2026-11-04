@@ -14,6 +14,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - Row is split: Cancel and Stop here left, Back and the primary right. The status text
   sits beside the primary so showing or hiding it never moves the buttons, and button
   labels no longer wrap on a phone-width page.
+- Disabled and enabled buttons cross-fade (180ms) and the status text fades (160ms)
+  instead of switching at once; both are off under `prefers-reduced-motion`.
 
 ## [0.12.0] - 2026-10-29
 
