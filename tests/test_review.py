@@ -5,7 +5,7 @@ import difflib
 import pytest
 
 from pretty_prompt.listener import Submission
-from pretty_prompt.review import Page, ReviewRequest, _result_from_submission
+from pretty_prompt.review import InvalidReview, Note, Page, ReviewRequest, _result_from_submission
 
 DIFF = "@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"
 PAGES = [Page(path="a.py", diff=DIFF)]
@@ -218,3 +218,50 @@ def test_hidden_lines_keep_their_old_numbers_after_a_shift():
 def test_a_file_that_does_not_match_its_diff_expands_nothing():
     request = _long_request({"long.py": "completely different\n"})
     assert request.expansion() == {}
+
+
+# Agent notes: a note must sit on a row the page shows.
+SHIFTED = "@@ -4,3 +4,3 @@\n ctx\n-gone\n+here\n tail\n"
+
+
+def _request(*notes: Note) -> ReviewRequest:
+    return ReviewRequest(pages=[Page(path="a.py", diff=SHIFTED)], notes=list(notes))
+
+
+def _note(**fields) -> Note:
+    return Note(**{"path": "a.py", "side": "new", "line": 5, "text": " why ", **fields})
+
+
+def test_a_note_on_a_shown_row_becomes_page_data():
+    request = _request(_note(), _note(side="old", line=5, text="was"))
+    assert request.validated().page_notes() == {
+        "a.py": [
+            {"side": "new", "line": 5, "text": "why"},
+            {"side": "old", "line": 5, "text": "was"},
+        ]
+    }
+
+
+def test_a_range_note_keeps_both_ends_and_a_one_row_range_collapses():
+    request = _request(
+        _note(end_side="new", end_line=6), _note(end_side="new", end_line=5)
+    ).validated()
+    first, single = request.page_notes()["a.py"]
+    assert (first["end_side"], first["end_line"]) == ("new", 6)
+    assert "end_line" not in single
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"path": "other.py"},
+        {"line": 99},
+        {"text": "  "},
+        {"end_side": "new"},
+        {"end_side": "new", "end_line": 99},
+        {"line": 6, "end_side": "new", "end_line": 5},
+    ],
+)
+def test_a_note_that_cannot_be_shown_is_refused(fields):
+    with pytest.raises(InvalidReview, match=r"notes\[0\]"):
+        _request(_note(**fields)).validated()

@@ -2231,6 +2231,33 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   box-shadow: inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
 .pp-review-row-wrap.is-sel.sel-first.sel-last .pp-review-row {
   box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
+.pp-note { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px; display: none;
+  border: 1px dashed var(--ntw-fg-muted); background: var(--ntw-bg-elevated);
+  font: 0.95em/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  white-space: normal; cursor: default; user-select: text; }
+.pp-note.is-open { display: block; }
+.pp-note-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.pp-note-label { font-size: 0.8em; font-weight: 600; color: var(--ntw-fg-muted); }
+.pp-note-reply { margin-inline-start: auto; border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated); color: var(--ntw-fg); border-radius: 6px;
+  padding: 1px 9px; cursor: pointer; font: inherit; font-size: 0.85em; }
+.pp-note-reply:hover { border-color: var(--ntw-accent); color: var(--ntw-accent); }
+body.pp-review-frozen .pp-note-reply { display: none; }
+.pp-note-body p { margin: 6px 0 0; }
+.pp-note-body p:first-child { margin-top: 0; }
+.pp-note-body pre { overflow-x: auto; }
+.pp-note-mark { position: absolute; right: 34px; top: 1px; z-index: 2; line-height: 18px;
+  border: 1px solid var(--ntw-border); border-radius: 999px; padding: 0 8px; cursor: pointer;
+  background: var(--ntw-bg-elevated); color: var(--ntw-accent); font: 600 11px system-ui,
+  sans-serif; }
+.pp-note-mark ~ .pp-note-mark { right: 92px; }
+.pp-note-mark:hover, .pp-note-mark.is-open { background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); border-color: var(--ntw-accent); }
+.pp-notes-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px;
+  font: 13px system-ui, sans-serif; color: var(--ntw-fg-muted); }
+.pp-notes-bar button { border: 0; background: none; cursor: pointer; font: inherit;
+  color: var(--ntw-accent); padding: 1px 6px; border-radius: 4px; }
+.pp-notes-bar button:hover { background: var(--ntw-border); }
 .pp-comment, #pp-dock { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
   sans-serif; }
 .pp-comment { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px;
@@ -2493,7 +2520,8 @@ __CONTENT__
     var diffBox = sel.diff.getBoundingClientRect();
     var after = sel.last;
     // Under the last selected row and any comment already shown there, not over it.
-    while (after.nextElementSibling && after.nextElementSibling.classList.contains('pp-comment')) {
+    while (after.nextElementSibling &&
+        after.nextElementSibling.matches('.pp-comment, .pp-note')) {
       after = after.nextElementSibling;
     }
     dock.style.width = Math.max(240, Math.min(680, diffBox.width - 60)) + 'px';
@@ -2551,7 +2579,7 @@ __CONTENT__
 
   document.addEventListener('mouseup', function (event) {
     if (frozen) return;
-    var chrome = '#pp-dock, .pp-comment, textarea, button, a, #pp-files, #pp-filebar';
+    var chrome = '#pp-dock, .pp-comment, .pp-note, textarea, button, a, #pp-files, #pp-filebar';
     if (event.target.closest(chrome)) return;
     var s = window.getSelection();
     if (s.rangeCount && !s.isCollapsed) {
@@ -2661,6 +2689,49 @@ __CONTENT__
       commentsChanged();
     } else {
       setSel({ diff: c.diff, first: c.first, last: c.last, quote: c.quote, editing: c });
+    }
+  });
+
+  // Agent notes: a chip on a note's first row folds it, the bar folds a page's notes, and
+  // Reply selects the note's rows so the dock opens on them. A note's last row is the wrap
+  // just before it, its first row the one holding its chip.
+  function noteMark(note) {
+    return note.parentNode.querySelector('.pp-note-mark[data-note="' + note.dataset.note + '"]');
+  }
+  function foldNote(note, open) {
+    note.classList.toggle('is-open', open);
+    var mark = noteMark(note);
+    if (mark) { mark.classList.toggle('is-open', open); mark.setAttribute('aria-expanded', open); }
+  }
+  document.addEventListener('click', function (event) {
+    var mark = event.target.closest('.pp-note-mark');
+    if (mark) {
+      event.stopPropagation();
+      var n = mark.parentNode.parentNode.querySelector(
+        '.pp-note[data-note="' + mark.dataset.note + '"]');
+      if (n) foldNote(n, !n.classList.contains('is-open'));
+      return;
+    }
+    var all = event.target.closest('.pp-notes-bar [data-all]');
+    if (all) {
+      var d = all.closest('.deck-slide').querySelector('.pp-review-diff');
+      Array.prototype.forEach.call(d.querySelectorAll('.pp-note'), function (x) {
+        foldNote(x, all.dataset.all === '1');
+      });
+      return;
+    }
+    var reply = event.target.closest('.pp-note [data-act="reply"]');
+    if (reply && !frozen) {
+      var note = reply.closest('.pp-note');
+      var last = note.previousElementSibling;
+      while (last && !last.classList.contains('pp-review-row-wrap')) {
+        last = last.previousElementSibling;
+      }
+      var m = noteMark(note), first = m && m.closest('.pp-review-row-wrap');
+      if (!first || !last) return;
+      var diff = first.closest('.pp-review-diff');
+      anchor = { diff: diff, wrap: first };
+      setSel({ diff: diff, first: first, last: last, quote: '', editing: null });
     }
   });
 
@@ -2958,7 +3029,33 @@ def _render_review_gap(gap: Gap) -> str:
     )
 
 
-def _render_review_diff(path: str, diff: str, lines: list[str] | None = None) -> str:
+def _note_label(note: dict[str, object]) -> str:
+    start = f"{note['side']} {note['line']}"
+    if "end_line" not in note:
+        return start
+    if note.get("end_side") == note["side"]:
+        return f"{start}\N{EN DASH}{note['end_line']}"
+    return f"{start} \N{RIGHTWARDS ARROW} {note['end_side']} {note['end_line']}"
+
+
+def _render_review_note(index: int, note: dict[str, object], asset_base_url: str | None) -> str:
+    label = html.escape(_note_label(note))
+    body = render_markdown(str(note["text"]), asset_base_url=asset_base_url)
+    return (
+        f'<div class="pp-note is-open" data-note="{index}">'
+        f'<div class="pp-note-head"><span class="pp-note-label">&#10022; Agent &middot; '
+        f'{label}</span><button type="button" class="pp-note-reply" data-act="reply">Reply'
+        f'</button></div><div class="pp-note-body">{body}</div></div>'
+    )
+
+
+def _render_review_diff(
+    path: str,
+    diff: str,
+    lines: list[str] | None = None,
+    notes: list[dict[str, object]] | None = None,
+    asset_base_url: str | None = None,
+) -> str:
     """One page's diff as `.pp-review-row` rows, each wrapped in `.pp-review-row-wrap`.
 
     `parse_unified_diff` is what turns raw diff text into the (side, line) coordinate a
@@ -2972,11 +3069,23 @@ def _render_review_diff(path: str, diff: str, lines: list[str] | None = None) ->
     With `lines` (the whole new-side file, only known for a `repo` source) the stretches
     the diff leaves out get a gap bar, and the text of each travels in one JSON script
     element, in gap order, for the script to turn into rows when the bar is clicked.
+
+    `notes` are the agent's read-only remarks, each anchored like a comment on rows the
+    diff shows (`Page.validated` checks that). A note opens inline under its last row; a
+    chip on its first row folds it. They start open: the reasoning is what the operator
+    is there to read.
     """
     escaped_path = html.escape(path, quote=True)
     rows: list[DiffLine] = parse_unified_diff(diff)
     gaps = gaps_of(diff, len(lines)) if lines is not None else []
     gap_before = {gap.hunk: gap for gap in gaps if gap.position != "end"}
+    marks: dict[tuple[str, int], list[int]] = {}
+    closings: dict[tuple[str, int], list[int]] = {}
+    for index, note in enumerate(notes or []):
+        start = (str(note["side"]), int(str(note["line"])))
+        end = (str(note["end_side"]), int(str(note["end_line"]))) if "end_line" in note else start
+        marks.setdefault(start, []).append(index)
+        closings.setdefault(end, []).append(index)
     parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
     hunk = -1
     for row in rows:
@@ -3001,7 +3110,16 @@ def _render_review_diff(path: str, diff: str, lines: list[str] | None = None) ->
             f'<span class="pp-review-text">{text_html}</span>'
             '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span>'
             "</div>"
-            "</div>"
+            + "".join(
+                f'<button type="button" class="pp-note-mark is-open" data-note="{i}" '
+                'aria-expanded="true">&#10022; note</button>'
+                for i in marks.get((side, line), [])
+            )
+            + "</div>"
+        )
+        parts.extend(
+            _render_review_note(i, (notes or [])[i], asset_base_url)
+            for i in closings.get((side, line), [])
         )
     parts.extend(_render_review_gap(gap) for gap in gaps if gap.position == "end")
     if gaps and lines is not None:
@@ -3010,6 +3128,14 @@ def _render_review_diff(path: str, diff: str, lines: list[str] | None = None) ->
         escaped = payload.replace("<", "\\u003c")
         parts.append(f'<script type="application/json" class="pp-review-lines">{escaped}</script>')
     parts.append("</div>")
+    if notes:
+        count = len(notes)
+        parts.insert(
+            0,
+            f'<div class="pp-notes-bar"><span>&#10022; {count} note{"" if count == 1 else "s"} '
+            'from the agent</span><button type="button" data-all="0">Hide all</button>'
+            '<button type="button" data-all="1">Show all</button></div>',
+        )
     return "".join(parts)
 
 
@@ -3032,8 +3158,13 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         blurb = page.get("blurb")
         blurb_html = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
         page_lines = page.get("lines")
+        page_notes = page.get("notes")
         diff_html = _render_review_diff(
-            path, str(page["diff"]), page_lines if isinstance(page_lines, list) else None
+            path,
+            str(page["diff"]),
+            page_lines if isinstance(page_lines, list) else None,
+            page_notes if isinstance(page_notes, list) else None,
+            asset_base_url,
         )
         note_id = f"pp-page-note-{index}"
         slide_parts.append(

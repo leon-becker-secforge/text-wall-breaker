@@ -39,7 +39,7 @@ from .page import (
 )
 from .session import get_shared_session
 
-__all__ = ["BrowserUnavailable", "InvalidReview", "Page", "ReviewRequest", "run_review"]
+__all__ = ["BrowserUnavailable", "InvalidReview", "Note", "Page", "ReviewRequest", "run_review"]
 
 # The page never loaded, so nobody saw it — same reasoning as ask.NOT_DELIVERED.
 NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
@@ -79,10 +79,28 @@ class Page(BaseModel):
         return self
 
 
+class Note(BaseModel):
+    """The agent's remark on a line or run of lines of a page — CONTEXT.md's "Agent note".
+
+    Anchored like a comment: `side`/`line` is the first row, `end_side`/`end_line` the last
+    (set both or neither). Read-only on the page and not echoed in the result.
+    """
+
+    path: Annotated[str, Field(description="The page's path, as given or as the repo diff has it.")]
+    side: Annotated[
+        str, Field(description='"new" for a line of the new file, "old" for a deleted line.')
+    ]
+    line: Annotated[int, Field(description="That side's 1-based line number in the file.")]
+    text: Annotated[str, Field(description="The remark, as Markdown.")]
+    end_side: Annotated[str | None, Field(description="Last row of a run; with end_line.")] = None
+    end_line: Annotated[int | None, Field(description="Last row of a run; with end_side.")] = None
+
+
 class ReviewRequest(BaseModel):
     """A validated `review` call — see CONTEXT.md's "Review" section."""
 
     pages: list[Page] = []
+    notes: list[Note] = []
     header: str | None = None
     title: str = "Claude Code"
     # path -> the file's new-side text, set only by the `repo` source, which can read it.
@@ -94,7 +112,56 @@ class ReviewRequest(BaseModel):
             raise InvalidReview("pages is empty; give pages, or repo to diff a git repository")
         for index, page in enumerate(self.pages):
             page.validated(label=f"pages[{index}]")
+        self.page_notes()
         return self
+
+    def page_notes(self) -> dict[str, list[dict[str, Any]]]:
+        """Per path, the notes as page data, each checked against the rows its diff shows.
+
+        A note on a row the page does not show (an unchanged line outside the hunks, an
+        old-side line that is not deleted, a wrong path) raises: a note the operator can
+        never see would silently lose the agent's reasoning.
+        """
+        rows = {
+            page.path: [
+                (row.side, row.line)
+                for row in parse_unified_diff(page.diff)
+                if row.side is not None and row.line is not None
+            ]
+            for page in self.pages
+        }
+        found: dict[str, list[dict[str, Any]]] = {}
+        for index, note in enumerate(self.notes):
+            label = f"notes[{index}]"
+            if note.path not in rows:
+                raise InvalidReview(f"{label}: no page with path {note.path!r}")
+            if not note.text.strip():
+                raise InvalidReview(f"{label}: text is empty")
+            shown = rows[note.path]
+            if (note.end_side is None) != (note.end_line is None):
+                raise InvalidReview(f"{label}: set end_side and end_line together, or neither")
+            start = (note.side, note.line)
+            if start not in shown:
+                raise InvalidReview(
+                    f"{label}: {note.side} line {note.line} is not a row of the diff of "
+                    f"{note.path} (only changed lines and their context, old side for "
+                    "deleted lines only)"
+                )
+            entry: dict[str, Any] = {
+                "side": note.side,
+                "line": note.line,
+                "text": note.text.strip(),
+            }
+            if note.end_side is not None and note.end_line is not None:
+                end = (note.end_side, note.end_line)
+                if end not in shown:
+                    raise InvalidReview(f"{label}: end {end[0]} line {end[1]} is not a row")
+                if shown.index(end) < shown.index(start):
+                    raise InvalidReview(f"{label}: the end comes before the start")
+                if end != start:
+                    entry["end_side"], entry["end_line"] = end
+            found.setdefault(note.path, []).append(entry)
+        return found
 
     def expansion(self) -> dict[str, list[str]]:
         """Per path, the file's lines, for each page whose text is the diff's new side.
@@ -131,6 +198,7 @@ def _build_html(
     generation: int = 0,
 ) -> str:
     expansion = request.expansion()
+    notes = request.page_notes()
     return build_review_page(
         pages=[
             {
@@ -138,6 +206,7 @@ def _build_html(
                 "diff": page.diff,
                 "blurb": page.blurb,
                 "lines": expansion.get(page.path),
+                "notes": notes.get(page.path),
             }
             for page in request.pages
         ],

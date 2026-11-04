@@ -742,3 +742,24 @@ def test_progress_fill_is_a_block_so_it_has_a_size():
     for html in pages:
         # An inline span ignores width and height, so the fill never showed.
         assert ".pp-progress-fill { display: block;" in html
+
+
+def test_agent_notes_render_open_under_their_last_row_with_a_chip_on_the_first():
+    diff = "@@ -1,2 +1,3 @@\n a\n+b\n+c\n"
+    notes = [{"side": "new", "line": 2, "end_side": "new", "end_line": 3, "text": "Why **x**"}]
+    html = build_review_page(
+        pages=[{"path": "a.py", "diff": diff, "notes": notes}], submit_url="http://x/submit"
+    )
+    body = html.split('<div class="pp-review-diff"', 1)[1]
+    chip = body.index('class="pp-note-mark is-open" data-note="0"')
+    note = body.index('<div class="pp-note is-open" data-note="0">')
+    assert body.index('data-line="2"') < chip < body.index('data-line="3"') < note
+    assert "Agent &middot; new 2\N{EN DASH}3" in body
+    assert "<strong>x</strong>" in body[note:]
+    assert "1 note from the agent" in html
+
+
+def test_a_page_without_notes_has_no_note_markup():
+    html = _review("a.py")
+    assert '<div class="pp-notes-bar">' not in html
+    assert '<button type="button" class="pp-note-mark' not in html

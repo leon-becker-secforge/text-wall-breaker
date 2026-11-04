@@ -7,6 +7,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review`: `notes`, the agent's own remarks on lines the diff shows (`path`, `side`,
+  `line`, optional `end_side`/`end_line`, Markdown `text`). Each opens inline under its
+  last row, with a chip on its first row to fold it and a bar to hide or show all;
+  Reply opens the comment box on the note's rows. Read-only and not returned in the
+  result. A note on a row the page does not show (wrong path, an unchanged line outside
+  the hunks, an old-side line that is not deleted) is a tool error.
 - `review`: hidden context can be expanded when the source is `repo`. Each stretch the
   diff leaves out (before, between and after the hunks) is a dashed bar with a pill: the
   middle shows it all, `↓ 10` and `↑ 10` show ten lines at a time from the hunk above or

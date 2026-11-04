@@ -342,6 +342,14 @@ adds it and Esc clears the selection. A comment shows under its rows with Edit a
 until the review is sent. A run may start on a deleted row and end on an added one.
 Selecting text inside the rows also records it as the comment's `quote`.
 
+The agent can explain itself with `notes`, each `{path, side, line, text}` plus optional
+`end_side`/`end_line` for a run, `text` in Markdown. A note opens under its last row, with
+a "✦ note" chip on its first row to fold it and a bar above the diff to hide or show all
+of a page's notes. Reply selects the note's rows and opens the comment box. Notes are
+read-only and not returned. They must sit on rows the page shows: a changed line or its
+context, and an old-side line only if deleted; anything else is a tool error. Hidden lines
+revealed by expansion cannot hold a note.
+
 Each page has a "Note on this file" box below its diff for a remark about the whole file,
 and an "Overall note" box below the pages holds one for the whole call; neither is tied to
 a line. Once Submit or Cancel is sent, nothing accepts further input.

@@ -32,7 +32,7 @@ from .ask import (
 from .gitdiff import GitDiffError, pages_from_git
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
-from .review import InvalidReview, Page, ReviewRequest, run_review
+from .review import InvalidReview, Note, Page, ReviewRequest, run_review
 from .show import InvalidShow, ShowRequest, run_show, show_status
 
 __all__ = [
@@ -137,7 +137,8 @@ Source, one of:
   - `pages`: a diff you already hold, one entry per file.
 
 The user comments on a line or a run of lines, can select text inside them, and can
-leave a note per file and one overall note.
+leave a note per file and one overall note. Give `notes` to explain your changes on the
+rows the diff shows (a bad anchor is an error); the user reads them inline and may reply.
 
 Returns `{"comments": [...], "page_notes": [{"path", "text"}], "overall_note": "..." |
 null}` on Submit (`page_notes` lists only files with a note). Each comment
@@ -345,6 +346,13 @@ async def review(
     context_lines: Annotated[
         int, Field(description="With repo: unchanged lines around each change (git -U).")
     ] = 3,
+    notes: Annotated[
+        list[Note] | None,
+        Field(
+            description="Your remarks on lines the diff shows, to explain why. The user "
+            "reads them inline and can reply with a comment; they are not returned."
+        ),
+    ] = None,
     header: Annotated[str | None, Field(description="Markdown shown above every page.")] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
 ) -> dict[str, Any]:
@@ -364,6 +372,7 @@ async def review(
         files = {entry["path"]: entry["text"] for entry in entries if "text" in entry}
     request = ReviewRequest(
         pages=pages or [],
+        notes=notes or [],
         header=header,
         title=title,
         files=files,
