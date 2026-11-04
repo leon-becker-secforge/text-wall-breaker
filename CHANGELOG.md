@@ -5,6 +5,17 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.14.2] - 2026-11-04
+
+### Changed
+
+- Tool schema: the `ask` `questions[]` entries describe `question`, `options`,
+  `multi_select` and `allow_free_text`; a `review` note's `side` and `end_side` are an
+  enum (`"new"`, `"old"`) instead of free strings.
+- Tool descriptions drop what the parameter descriptions already say (the `questions`,
+  `resume`, button, `slides`, `pages` and `notes` restatements); the `review` description
+  says `notes` work with both sources.
+
 ## [0.14.1] - 2026-11-04
 
 ### Added
