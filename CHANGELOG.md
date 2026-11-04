@@ -78,6 +78,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Fixed
 
+- `review`: switching file (list, arrows, `j`/`k`) left the comment box floating over the
+  new file; it and the selection are now dropped on a switch.
 - `review` with `repo` no longer fails on a file that is not valid UTF-8: `git diff` output
   is decoded with replacement characters instead of raising.
 

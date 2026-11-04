@@ -2899,6 +2899,7 @@ __CONTENT__
     }
   });
   window.addEventListener('resize', function () { if (sel) placeDock(); });
+  document.addEventListener('pp-file-change', function () { if (sel) clearSel(); });
 
   function markRows() {
     Array.prototype.forEach.call(document.querySelectorAll('.has-comment'), function (e) {
@@ -3626,6 +3627,8 @@ def _review_files_script(needed: bool) -> str:
   }
 
   function show(next, scroll) {
+    // The comment box is placed on the page, not in its file: it would be left floating.
+    document.dispatchEvent(new CustomEvent('pp-file-change'));
     slides[index].classList.remove('is-active');
     files[index].classList.remove('is-current');
     index = (next + slides.length) % slides.length;

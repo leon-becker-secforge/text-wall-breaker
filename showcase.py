@@ -368,7 +368,7 @@ GUIDE_OLD = (
 )
 GUIDE_NEW = list(GUIDE_OLD)
 GUIDE_NEW[2] = "Deploy from `main` only. **Never on a Friday.** ![x](pic.png)"
-GUIDE_NEW[11] = "Redeploy the previous tag and open an incident."
+GUIDE_NEW[14] = "Redeploy the previous tag and open an incident."
 GUIDE_NEW[-3] = "| prod | two reviewers |"
 
 SERVICE_OLD = ["import os", "", "RETRIES = 3", ""] + [
@@ -376,7 +376,7 @@ SERVICE_OLD = ["import os", "", "RETRIES = 3", ""] + [
 ]
 SERVICE_NEW = list(SERVICE_OLD)
 SERVICE_NEW[2] = "RETRIES = 5"
-SERVICE_NEW[-2] = "    return 24 + RETRIES"
+SERVICE_NEW[-1] = "def step_24():\n    return 24 + RETRIES\n"
 
 ADOC_OLD = "= Architecture\n\nThe service has one queue.\n\n== Parts\n\n* queue\n* worker\n"
 ADOC_NEW = (

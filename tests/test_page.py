@@ -812,6 +812,19 @@ def test_the_path_is_a_dim_folder_and_a_bold_file_and_the_blurb_is_wrapped():
     assert '<div class="pp-blurb"><p>The <strong>core</strong> change.</p></div>' in html
 
 
+def test_switching_file_drops_an_open_selection_and_its_comment_box():
+    pages = [
+        {"path": "a.py", "diff": "@@ -1,1 +1,2 @@\n a\n+b\n"},
+        {"path": "b.py", "diff": "@@ -1,1 +1,2 @@\n a\n+b\n"},
+    ]
+    html = build_review_page(pages=pages, submit_url="http://x/submit")
+    # the file list announces every switch and the review script clears the selection on it
+    assert "document.dispatchEvent(new CustomEvent('pp-file-change'))" in html
+    assert (
+        "document.addEventListener('pp-file-change', function () { if (sel) clearSel(); });" in html
+    )
+
+
 def test_a_page_without_notes_has_no_note_markup():
     html = _review("a.py")
     assert '<div class="pp-notes-bar">' not in html

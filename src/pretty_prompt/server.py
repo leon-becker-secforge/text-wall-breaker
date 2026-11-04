@@ -350,11 +350,19 @@ async def review(
     notes: Annotated[
         list[Note] | None,
         Field(
-            description="Your remarks on lines the diff shows, to explain why. The user "
-            "reads them inline and can reply with a comment; they are not returned."
+            description="Your remarks on lines the diff shows, to explain why. `line` is the "
+            'number in the file (as in the diff\'s `@@` headers), `side` "old" only for a '
+            "deleted line. The user reads them inline; a reply comes back as an ordinary "
+            "comment on those lines. The notes themselves are not returned."
         ),
     ] = None,
-    header: Annotated[str | None, Field(description="Markdown shown above every page.")] = None,
+    header: Annotated[
+        str | None,
+        Field(
+            description="Markdown for the top of the page, once. A leading `# Title` stays in "
+            "view next to the file, comment and note counts; the rest folds under Details."
+        ),
+    ] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
 ) -> dict[str, Any]:
     if repo is None and (git_range is not None or paths):
