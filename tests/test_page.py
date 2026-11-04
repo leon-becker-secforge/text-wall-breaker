@@ -508,3 +508,24 @@ def test_both_pages_offer_stop_here_and_send_it_as_an_interrupt():
         assert 'id="pp-stop-send" hidden disabled' in html
         assert "send('interrupt', data)" in html
         assert "__STOP__" not in html
+
+
+def test_every_page_type_shares_one_action_row_stylesheet():
+    from pretty_prompt.page import build_review_page, build_show_page
+
+    u = "http://127.0.0.1:1/submit"
+    diff = "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x\n+y\n"
+    pages = (
+        _page(),
+        _multi_page(),
+        build_show_page(content="# R", submit_url=u),
+        build_review_page(
+            pages=[{"path": "a.py", "diff": diff}], submit_url=u, timeout_seconds=300
+        ),
+    )
+    for html in pages:
+        assert html.count(".pp-actions .pp-actions-end") == 1
+        # A colour rule keyed on an id alone outranks `:disabled` and keeps a disabled
+        # primary solid; every one must be scoped to `:not(:disabled)`.
+        assert "#pp-submit, #pp-next" not in html
+        assert ".pp-actions button:disabled" in html

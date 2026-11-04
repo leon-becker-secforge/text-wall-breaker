@@ -108,6 +108,41 @@ class InvalidAccent(ValueError):
     """`PRETTY_PROMPT_ACCENT` is set but is not a usable colour."""
 
 
+# The action row of every page type (ask, wizard, show, review), one stylesheet so the four
+# cannot drift. Three looks only: solid accent (the one primary action), outlined (every
+# other action), dashed and transparent (disabled, never a fill, so it cannot pass for an
+# outlined button). Placed before the page's own addendum; the row is split: leave actions
+# (Cancel, Stop here) left, forward actions (Back, primary) in `.pp-actions-end` right.
+_ACTIONS_CSS = """
+:root { --pp-btn-tint: #eef0f2; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --pp-btn-tint: #2e2e2e; } }
+:root[data-theme="dark"] { --pp-btn-tint: #2e2e2e; }
+.pp-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; position: relative; }
+.pp-actions button { height: 34px; border-radius: 6px; padding: 0 14px; white-space: nowrap;
+  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
+  border: 1px solid var(--ntw-fg-muted); background: transparent; color: var(--ntw-fg); }
+.pp-actions button:not(:disabled):hover { background: var(--pp-btn-tint); }
+.pp-actions .pp-actions-end { display: flex; gap: 8px; margin-inline-start: auto; }
+/* Every colour rule below is `:not(:disabled)`: an id selector otherwise outranks the
+   `:disabled` rule and a disabled primary keeps its solid fill. */
+#pp-submit:not(:disabled), #pp-next:not(:disabled), #pp-ack:not(:disabled) {
+  border-color: var(--ntw-accent); background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); }
+#pp-submit:not(:disabled):hover, #pp-next:not(:disabled):hover, #pp-ack:not(:disabled):hover {
+  background: var(--ntw-accent); filter: brightness(0.9); }
+#pp-stop:not(:disabled) { border-color: var(--ntw-warning); color: var(--ntw-warning); }
+#pp-stop-send:not(:disabled) { border-color: var(--ntw-warning); background: var(--ntw-warning);
+  color: var(--ntw-bg); }
+#pp-stop-send:not(:disabled):hover { background: var(--ntw-warning); filter: brightness(0.9); }
+.pp-actions button:disabled { background: transparent; color: var(--ntw-fg-muted);
+  border: 1px dashed var(--ntw-border); cursor: not-allowed; }
+.pp-actions button[hidden] { display: none; }
+/* Own full-width line above the buttons: between the two groups it was squeezed to a few
+   characters per line on a phone-width page. */
+#pp-status { flex-basis: 100%; order: -1; color: var(--ntw-fg-muted); font-size: 0.85em; }
+#pp-status:empty, #pp-status[hidden] { display: none; }
+"""
+
 # Placed after base.css so it overrides rather than fights it. Every component here is
 # pretty-prompt's own, sized for one short question rather than a long report — see the
 # module docstring for why this stopped composing onto base.css's `.card`/`.theme-toggle`.
@@ -373,30 +408,8 @@ main img { cursor: zoom-in; }
   color: var(--ntw-fg); font: inherit; font-size: 0.92em; padding: 7px 9px; resize: vertical; }
 .pp-free-text textarea:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px; }
 
-.pp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pp-actions button { border-radius: 6px; padding: 7px 14px; font: inherit;
-  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer; }
-/* #pp-next is the wizard page's equivalent of #pp-submit (the primary action), and
-   #pp-back its equivalent of #pp-cancel (secondary) — grouped here rather than
-   duplicated in _MULTI_ADDENDUM, since neither pair of ids ever coexists on one page. */
-#pp-submit, #pp-next { border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
-  color: var(--ntw-accent-contrast); }
-#pp-cancel, #pp-back { border: 1px solid var(--ntw-border); background: transparent;
-  color: var(--ntw-fg); }
-.pp-actions button:disabled { opacity: 0.5; cursor: default; }
-#pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
-/* Interruption ("Stop here"): picked in a three-way visual A/B/C over a link by the
-   question opening its own panel, and a checkbox under the text box. Quieter than Cancel
-   until hovered; once pressed, the text box turns required and the warning-coloured
-   "Stop and send" takes the primary button's place. */
-#pp-stop { border: 1px solid var(--ntw-border); background: transparent;
-  color: var(--ntw-fg-muted); }
-#pp-stop:hover:not(:disabled) { border-color: var(--ntw-warning); color: var(--ntw-warning); }
-#pp-stop-send { border: 1px solid var(--ntw-warning); background: var(--ntw-warning);
-  color: var(--ntw-bg); }
-.pp-actions #pp-stop-undo { border: none; background: none; padding: 0;
-  color: var(--ntw-fg-muted); text-decoration: underline dotted; }
-.pp-actions button[hidden] { display: none; }
+/* Interruption ("Stop here"): once pressed, the question's text box turns required and the
+   warning-coloured "Stop and send" takes the primary button's place. */
 .pp-free-text.pp-required textarea { border-color: var(--ntw-warning);
   box-shadow: 0 0 0 1px var(--ntw-warning); }
 
@@ -466,12 +479,14 @@ __QUESTION_BLOCK__
 __OPTIONS__
 __FREE_TEXT__
     <div class="pp-actions">
-      <button type="submit" id="pp-submit" disabled>Send answer</button>
-      <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
-      <button type="button" id="pp-stop-undo" hidden>never mind</button>
-      <button type="button" id="pp-stop">Stop here</button>
-      <button type="button" id="pp-cancel">Cancel</button>
       <span id="pp-status">__HINT__</span>
+      <button type="button" id="pp-cancel">Cancel</button>
+      <button type="button" id="pp-stop">Stop here</button>
+      <button type="button" id="pp-stop-undo" hidden>never mind</button>
+      <div class="pp-actions-end">
+        <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
+        <button type="submit" id="pp-submit" disabled>Send answer</button>
+      </div>
     </div>
   </form>
 
@@ -990,13 +1005,15 @@ __HEADER__
   <form id="pp-form" novalidate>
 __STEPS__
     <div class="pp-actions">
-      <button type="button" id="pp-back" disabled>Back</button>
-      <button type="button" id="pp-next" disabled>__INITIAL_NEXT_LABEL__</button>
-      <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
-      <button type="button" id="pp-stop-undo" hidden>never mind</button>
-      <button type="button" id="pp-stop">Stop here</button>
-      <button type="button" id="pp-cancel">Cancel</button>
       <span id="pp-status"></span>
+      <button type="button" id="pp-cancel">Cancel</button>
+      <button type="button" id="pp-stop">Stop here</button>
+      <button type="button" id="pp-stop-undo" hidden>never mind</button>
+      <div class="pp-actions-end">
+        <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
+        <button type="button" id="pp-back" disabled>Back</button>
+        <button type="button" id="pp-next" disabled>__INITIAL_NEXT_LABEL__</button>
+      </div>
     </div>
   </form>
 
@@ -1634,18 +1651,7 @@ main img { cursor: zoom-in; max-width: 100%; height: auto; border-radius: 6px; }
 .pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
   transition: width .15s; }
 
-/* Same visual language as _ADDENDUM's .pp-actions/button, duplicated rather than
-   shared for the same reason _SHOW_ADDENDUM as a whole is its own block — see the
-   module docstring. */
-.pp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-block-start: 22px; position: relative; }
-.pp-actions button { border-radius: 6px; padding: 7px 14px; font: inherit;
-  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
-  border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
-#pp-ack { border-color: var(--ntw-accent); background: var(--ntw-accent);
-  color: var(--ntw-accent-contrast); }
-.pp-actions button:disabled { opacity: 0.5; cursor: default; }
-#pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
+.pp-actions { margin-block-start: 22px; }
 
 .pp-save-menu { position: absolute; top: 100%; left: 0; margin-block-start: 6px;
   display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--ntw-border);
@@ -1691,9 +1697,9 @@ __CONTENT__
   </div>
 
   <div class="pp-actions">
+    <span id="pp-status"></span>
 __SAVE_BUTTON__
 __ACK_BUTTON__
-    <span id="pp-status"></span>
   </div>
 
   <div id="pp-fallback" hidden>
@@ -1995,7 +2001,7 @@ def build_show_page(
     together when this page is served by a `SessionListener` or a one-shot
     `LoopbackListener`, left at their defaults for a plain unlistened page.
     """
-    css = _load_base_css() + _SHOW_ADDENDUM
+    css = _load_base_css() + _ACTIONS_CSS + _SHOW_ADDENDUM
     if accent is not None:
         css += _accent_css(accent)
 
@@ -2010,7 +2016,11 @@ def build_show_page(
         )
     ack_html = ""
     if acknowledge_button:
-        ack_html = '    <button type="button" id="pp-ack">Acknowledge</button>'
+        ack_html = (
+            '    <div class="pp-actions-end">\n'
+            '      <button type="button" id="pp-ack">Acknowledge</button>\n'
+            "    </div>"
+        )
 
     asset_base_url = _asset_base_url(status_url)
     if slides is not None:
@@ -2161,15 +2171,7 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   padding: 8px 10px; border-radius: 6px; border: 1px solid var(--ntw-border);
   background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
 
-.pp-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-block-start: 16px; position: relative; }
-.pp-actions button { border-radius: 6px; padding: 7px 14px; font: inherit;
-  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
-  border: 1px solid var(--ntw-border); background: transparent; color: var(--ntw-fg); }
-#pp-submit { border-color: var(--ntw-accent); background: var(--ntw-accent);
-  color: var(--ntw-accent-contrast); }
-.pp-actions button:disabled { opacity: 0.5; cursor: default; }
-#pp-status { color: var(--ntw-fg-muted); font-size: 0.85em; }
+.pp-actions { margin-block-start: 16px; }
 
 #pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
   background: #fef2f2; padding: 12px 14px; margin-block-start: 12px; }
@@ -2205,9 +2207,11 @@ __CONTENT__
     placeholder="Anything for the whole call, beyond the per-line comments above"></textarea>
 
   <div class="pp-actions">
-    <button type="button" id="pp-submit">Send review</button>
-    <button type="button" id="pp-cancel">Cancel</button>
     <span id="pp-status"></span>
+    <button type="button" id="pp-cancel">Cancel</button>
+    <div class="pp-actions-end">
+      <button type="button" id="pp-submit">Send review</button>
+    </div>
   </div>
 
   <div id="pp-fallback" hidden>
@@ -2593,7 +2597,7 @@ def build_review_page(
     `submit_url`/`timeout_seconds`/`status_url`/`generation` mirror `build_page`'s — see
     there.
     """
-    css = _load_base_css() + _REVIEW_ADDENDUM
+    css = _load_base_css() + _ACTIONS_CSS + _REVIEW_ADDENDUM
     if accent is not None:
         css += _accent_css(accent)
 
@@ -2978,7 +2982,7 @@ def build_page(
     next question without a new tab. Leave both at their defaults for the ordinary
     one-shot, `file://`-opened page, where there is nothing to poll.
     """
-    css = _load_base_css() + _ADDENDUM
+    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM
     if accent is not None:
         css += _accent_css(accent)
 
@@ -3157,7 +3161,7 @@ def build_multi_page(
 
     `theme`, `status_url` and `generation` are as `build_page` takes them.
     """
-    css = _load_base_css() + _ADDENDUM + _MULTI_ADDENDUM
+    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + _MULTI_ADDENDUM
     if accent is not None:
         css += _accent_css(accent)
 

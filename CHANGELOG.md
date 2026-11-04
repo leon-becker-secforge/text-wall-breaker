@@ -5,6 +5,16 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Action row redesigned on `ask`, the wizard, `show` and `review`, from one shared stylesheet
+  instead of four copies: solid accent primary, one outlined style for every other
+  button (incl. `never mind`), dashed and unfilled when disabled (was 50% opacity, so a
+  disabled primary looked like a faded accent button).
+- Row is split: Cancel and Stop here left, Back and the primary right. The status text
+  has its own line above the buttons, and button labels no longer wrap on a phone-width
+  page.
+
 ## [0.12.0] - 2026-10-29
 
 ### Removed
