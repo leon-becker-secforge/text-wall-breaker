@@ -78,3 +78,14 @@ _Avoid_: annotation, note
 The one free-text remark the operator can leave for the whole call, in addition to any
 per-page comments. Never a forced approve/reject verdict.
 _Avoid_: summary, verdict, review body
+
+**Page note**:
+The one free-text remark the operator can leave for a single page, not tied to a line.
+Sits between a comment (one place) and the overall note (the whole call).
+_Avoid_: file note, page comment, summary
+
+**Agent note**:
+A remark the agent attaches to a line of a page's diff before the review opens, shown
+inline for the operator to read. Read-only: the operator answers it with a comment of
+their own. Distinct from a blurb, which explains the whole page.
+_Avoid_: annotation, reasoning, explanation
