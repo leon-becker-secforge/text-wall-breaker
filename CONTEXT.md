@@ -68,11 +68,18 @@ from `header`, which spans every page of the call.
 _Avoid_: description, intro, page context
 
 **Comment**:
-A remark anchored to one line of a page's diff, addressed by path, side (old/new), and
-line number in that file — not by its position in the diff text. Returned alongside its
-`context`: that line's own text, so the agent isn't required to re-parse its diff to see
-what the remark was about.
+A remark anchored to one line or a run of lines of a page's diff, addressed by path, side
+(old/new), and line number in that file — not by its position in the diff text. A run
+(a **range**) names a side on each end, so it may start on a deleted row and end on an
+added one; see [ADR 0003](./docs/adr/0003-comment-ranges-carry-a-side-per-end.md).
+Returned alongside its `context`: the anchored rows' own text, so the agent isn't
+required to re-parse its diff to see what the remark was about.
 _Avoid_: annotation, note
+
+**Quote**:
+The exact text the operator selected inside a comment's rows, returned only when it is
+shorter than those rows. Tells the agent which part of a line the remark is about.
+_Avoid_: selection, snippet, highlight
 
 **Overall note**:
 The one free-text remark the operator can leave for the whole call, in addition to any
