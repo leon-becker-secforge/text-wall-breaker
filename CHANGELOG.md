@@ -12,8 +12,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   button (incl. `never mind`), dashed and unfilled when disabled (was 50% opacity, so a
   disabled primary looked like a faded accent button).
 - Row is split: Cancel and Stop here left, Back and the primary right. The status text
-  has its own line above the buttons, and button labels no longer wrap on a phone-width
-  page.
+  sits beside the primary so showing or hiding it never moves the buttons, and button
+  labels no longer wrap on a phone-width page.
 
 ## [0.12.0] - 2026-10-29
 

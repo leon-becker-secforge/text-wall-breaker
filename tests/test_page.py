@@ -529,3 +529,6 @@ def test_every_page_type_shares_one_action_row_stylesheet():
         # primary solid; every one must be scoped to `:not(:disabled)`.
         assert "#pp-submit, #pp-next" not in html
         assert ".pp-actions button:disabled" in html
+        # Beside the primary, inside its group: above or between the groups, showing or
+        # hiding it moved the buttons.
+        assert re.search(r'pp-actions-end">\s*<span id="pp-status"', html)

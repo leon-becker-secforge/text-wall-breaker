@@ -122,7 +122,11 @@ _ACTIONS_CSS = """
   font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; cursor: pointer;
   border: 1px solid var(--ntw-fg-muted); background: transparent; color: var(--ntw-fg); }
 .pp-actions button:not(:disabled):hover { background: var(--pp-btn-tint); }
-.pp-actions .pp-actions-end { display: flex; gap: 8px; margin-inline-start: auto; }
+/* The status text lives inside this group, left of the primary, so showing or hiding it
+   never changes the row's height. 260px basis: narrower than that and the group wraps
+   onto its own line (status still beside the primary) rather than squeezing the text. */
+.pp-actions .pp-actions-end { display: flex; align-items: center; justify-content: flex-end;
+  gap: 8px; flex: 1 1 260px; min-width: 0; }
 /* Every colour rule below is `:not(:disabled)`: an id selector otherwise outranks the
    `:disabled` rule and a disabled primary keeps its solid fill. */
 #pp-submit:not(:disabled), #pp-next:not(:disabled), #pp-ack:not(:disabled) {
@@ -137,9 +141,9 @@ _ACTIONS_CSS = """
 .pp-actions button:disabled { background: transparent; color: var(--ntw-fg-muted);
   border: 1px dashed var(--ntw-border); cursor: not-allowed; }
 .pp-actions button[hidden] { display: none; }
-/* Own full-width line above the buttons: between the two groups it was squeezed to a few
-   characters per line on a phone-width page. */
-#pp-status { flex-basis: 100%; order: -1; color: var(--ntw-fg-muted); font-size: 0.85em; }
+/* One line, ellipsised: wrapping it would grow the row when it appears. */
+#pp-status { flex: 1 1 0; min-width: 0; text-align: right; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; color: var(--ntw-fg-muted); font-size: 0.85em; }
 #pp-status:empty, #pp-status[hidden] { display: none; }
 """
 
@@ -479,11 +483,11 @@ __QUESTION_BLOCK__
 __OPTIONS__
 __FREE_TEXT__
     <div class="pp-actions">
-      <span id="pp-status">__HINT__</span>
       <button type="button" id="pp-cancel">Cancel</button>
       <button type="button" id="pp-stop">Stop here</button>
       <button type="button" id="pp-stop-undo" hidden>never mind</button>
       <div class="pp-actions-end">
+        <span id="pp-status">__HINT__</span>
         <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
         <button type="submit" id="pp-submit" disabled>Send answer</button>
       </div>
@@ -1005,11 +1009,11 @@ __HEADER__
   <form id="pp-form" novalidate>
 __STEPS__
     <div class="pp-actions">
-      <span id="pp-status"></span>
       <button type="button" id="pp-cancel">Cancel</button>
       <button type="button" id="pp-stop">Stop here</button>
       <button type="button" id="pp-stop-undo" hidden>never mind</button>
       <div class="pp-actions-end">
+        <span id="pp-status"></span>
         <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
         <button type="button" id="pp-back" disabled>Back</button>
         <button type="button" id="pp-next" disabled>__INITIAL_NEXT_LABEL__</button>
@@ -1697,9 +1701,11 @@ __CONTENT__
   </div>
 
   <div class="pp-actions">
-    <span id="pp-status"></span>
 __SAVE_BUTTON__
+    <div class="pp-actions-end">
+      <span id="pp-status"></span>
 __ACK_BUTTON__
+    </div>
   </div>
 
   <div id="pp-fallback" hidden>
@@ -2016,11 +2022,7 @@ def build_show_page(
         )
     ack_html = ""
     if acknowledge_button:
-        ack_html = (
-            '    <div class="pp-actions-end">\n'
-            '      <button type="button" id="pp-ack">Acknowledge</button>\n'
-            "    </div>"
-        )
+        ack_html = '      <button type="button" id="pp-ack">Acknowledge</button>'
 
     asset_base_url = _asset_base_url(status_url)
     if slides is not None:
@@ -2207,9 +2209,9 @@ __CONTENT__
     placeholder="Anything for the whole call, beyond the per-line comments above"></textarea>
 
   <div class="pp-actions">
-    <span id="pp-status"></span>
     <button type="button" id="pp-cancel">Cancel</button>
     <div class="pp-actions-end">
+      <span id="pp-status"></span>
       <button type="button" id="pp-submit">Send review</button>
     </div>
   </div>
