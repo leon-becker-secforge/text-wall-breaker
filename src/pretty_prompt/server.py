@@ -68,7 +68,7 @@ server = MCPServer(
 _ASK_DESCRIPTION = """Ask the user a question in a local browser page; blocks until answered,
 cancelled, or timed out.
 
-`question` and option `body` are Markdown. Images: `![alt](/abs/path)` or `file:///abs/path`.
+Images in Markdown: `![alt](/abs/path)` or `file:///abs/path`.
 Paragraph breaks are real newlines, not the `\\n` escape.
 
 Keep `question` a short heading (at most 2 lines); detail goes in lists, blockquotes
@@ -84,17 +84,15 @@ Returns one of:
 `selected` and `free_text` are additive. `expanded`: option ids whose body was ever
 opened. `not_delivered` (~30s): the user never saw it; ask again. `abandoned`: the
 tab was closed with no answer; there is no deadline while it stays open. A cancelled or
-abandoned ask carries `resume` when answers were entered: pass it back as `resume` to
-reopen the ask prefilled.
+abandoned ask carries `resume` when answers were entered.
 
 `interrupted: true` on an answer: the user stopped the ask there for you to read now.
 Its `free_text` may correct your plan or only constrain this answer: do what it says,
 no more; its pick counts. The call returns at once; with `questions`, `answers` ends
 at the last one given, plus `resume`: use it only if the rest still makes sense.
 
-`questions`: several questions on one page, set instead of
-`question`/`options`/etc. Returns `{"answers": [...]}`, one entry per question in
-order, carrying the question's `id` when it set one; match by id."""
+With `questions`, returns `{"answers": [...]}`, one entry per question in order,
+carrying the question's `id` when it set one; match by id."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
 if SHARE_INTERACTION_SIGNALS:
@@ -108,38 +106,34 @@ ask next."""
 _SHOW_DESCRIPTION = """Show the user a formatted result in a local browser page, for
 anything that would be a wall of text in the terminal. Returns at once.
 
-`content` is Markdown, the same subset as `ask` (headings, lists, tables, code,
-images, blockquotes). Paragraph breaks are real newlines, not the `\\n` escape.
+Markdown, the same subset as `ask` (headings, lists, tables, code, images,
+blockquotes). Paragraph breaks are real newlines, not the `\\n` escape.
 
 While the report is unacknowledged, any later call, `show` too, opens in a second tab,
 so the report stays up. Before asking about the report, check `show_status` or set
 `wait_for_acknowledge`.
 
-Two buttons, both on by default (`save_button`, `acknowledge_button`):
-  - Save report: downloads Markdown or HTML, client-side only.
-  - Acknowledge: marks it seen. `wait_for_acknowledge` blocks on it like `ask`,
-    returning `{"acknowledged": true}` or, if the tab is closed, `{"abandoned": true}`.
+Save is client-side only. With `wait_for_acknowledge` it returns
+`{"acknowledged": true}` or, if the tab is closed, `{"abandoned": true}`.
 
 Otherwise returns `{"opened": true, "path": "..."}` (`path` only for a one-off tab).
-`{"not_delivered": true}`: the page never loaded.
-
-`slides` shows a deck instead of `content`; see its parameter."""
+`{"not_delivered": true}`: the page never loaded."""
 
 _REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page, one file per page;
 blocks until submit, cancel, or the tab is closed. For a reaction that reduces to a choice, use
 `ask`.
 
 Source, one of:
-  - `repo` (+ optional `git_range`, `paths`, `context_lines`): the server runs
-    `git diff` itself. Prefer it for anything in git: passing the diff as arguments
-    puts a second copy of it in your context. The user can also show the hidden lines
-    between hunks and comment on them, and a changed Markdown or AsciiDoc file gets a
-    rendered view to comment on; `pages` cannot do either.
-  - `pages`: a diff you already hold, one entry per file.
+  - `repo`: the server runs `git diff` itself. Prefer it for anything in git: passing the
+    diff as arguments puts a second copy of it in your context. The user can also show
+    the hidden lines between hunks and comment on them, and a changed Markdown or AsciiDoc
+    file gets a rendered view to comment on; `pages` cannot do either. `notes` work with
+    both sources.
+  - `pages`: a diff you already hold.
 
 The user comments on a line or a run of lines, can select text inside them, and can
-leave a note per file and one overall note. Give `notes` to explain your changes on the
-rows the diff shows (a bad anchor is an error); the user reads them inline and may reply.
+leave a note per file and one overall note. A `notes` entry on a row the diff does not
+show is an error.
 
 Returns `{"comments": [...], "page_notes": [{"path", "text"}], "overall_note": "..." |
 null}` on Submit (`page_notes` lists only files with a note). Each comment
