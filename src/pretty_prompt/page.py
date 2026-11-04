@@ -464,10 +464,25 @@ details.pp-header[open] > summary::before { transform: rotate(90deg); }
 .pp-header-body { margin-block-start: 6px; }
 .pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 18px 0; }
 .pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
-.pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
-  overflow: hidden; }
-.pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
-  transition: width .15s; }
+/* One segment per question: filled = answered or already passed, ringed = current. A
+   segment before the current one is a button that goes back to that question; the
+   current and later ones are disabled (forward stays Next's job, so it keeps checking
+   each answer). Each button is 18px tall for a usable click target; its ::before is the
+   visible 6px bar. */
+.pp-segments { flex: 1; display: flex; gap: 6px; }
+.pp-seg { flex: 1; position: relative; height: 18px; padding: 0; border: 0; background: none; }
+.pp-seg::before { content: ""; position: absolute; inset-block: 6px; inset-inline: 0;
+  border-radius: 3px; background: var(--ntw-border);
+  transition: background-color .2s ease, opacity .2s ease; }
+.pp-seg.pp-seg-done::before { background: var(--ntw-accent); }
+.pp-seg.pp-seg-cur::before { background: var(--ntw-accent); opacity: .45;
+  box-shadow: 0 0 0 2px var(--ntw-bg), 0 0 0 3px var(--ntw-accent); }
+.pp-seg.pp-seg-cur.pp-seg-done::before { opacity: 1; }
+.pp-seg:not(:disabled) { cursor: pointer; }
+.pp-seg:not(:disabled):hover::before { opacity: .7; }
+.pp-seg:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px;
+  border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .pp-seg::before { transition: none; } }
 .pp-step { display: none; }
 .pp-step.pp-step-active { display: block; }
 .pp-step .pp-question { margin: 0 0 10px; }
@@ -1010,10 +1025,7 @@ __CSS__
 __HEADER__
   <div class="pp-progress">
     <span class="pp-progress-label" id="pp-progress-label">__INITIAL_LABEL__</span>
-    <span class="pp-progress-track">
-      <span class="pp-progress-fill" id="pp-progress-fill"
-        style="width: __INITIAL_PROGRESS__%"></span>
-    </span>
+    <span class="pp-segments" id="pp-segments">__SEGMENTS__</span>
   </div>
 
   <form id="pp-form" novalidate>
@@ -1089,7 +1101,9 @@ __STEPS__
   var cancelBtn = document.getElementById('pp-cancel');
   var status = document.getElementById('pp-status');
   var progressLabel = document.getElementById('pp-progress-label');
-  var progressFill = document.getElementById('pp-progress-fill');
+  var segments = Array.prototype.slice.call(document.querySelectorAll('.pp-seg'));
+  // True while "Stop here" is open: the segments, like Back, stop navigating.
+  var segmentsLocked = false;
   var steps = [];
   var inputs = [];
   var drawers = [];
@@ -1259,6 +1273,27 @@ __STEPS__
     return { answers: answers };
   }
 
+  // Filled = answered or already passed; the ring marks the current one. Only segments
+  // before the current question are enabled, so a click can only go back, the same move
+  // as Back (forward stays with Next, which checks the answer on the way).
+  function syncSegments() {
+    segments.forEach(function (seg, i) {
+      seg.classList.toggle('pp-seg-done', i < current || stepAnswered(i));
+      seg.classList.toggle('pp-seg-cur', i === current);
+      if (i === current) seg.setAttribute('aria-current', 'step');
+      else seg.removeAttribute('aria-current');
+      seg.disabled = frozen || segmentsLocked || i >= current;
+      seg.title = i < current ? 'Back to question ' + (i + 1) : '';
+    });
+  }
+  segments.forEach(function (seg, i) {
+    seg.addEventListener('click', function () {
+      if (frozen || segmentsLocked || i >= current) return;
+      current = i;
+      showStep(current);
+    });
+  });
+
   function showStep(index) {
     visits[index] += 1;
     furthest = Math.max(furthest, index);
@@ -1275,7 +1310,7 @@ __STEPS__
     if (frozen) return;
     var last = current === STEP_COUNT - 1;
     progressLabel.textContent = 'Question ' + (current + 1) + ' of ' + STEP_COUNT;
-    progressFill.style.width = ((current + 1) / STEP_COUNT * 100) + '%';
+    syncSegments();
     nextBtn.textContent = last ? 'Send answers' : 'Next';
     nextBtn.disabled = !stepAnswered(current);
     reportProgress();
@@ -1318,6 +1353,8 @@ __STEPS__
   function stopMode(on) {
     nextBtn.hidden = on;
     backBtn.disabled = on || current === 0;
+    segmentsLocked = on;
+    syncSegments();
   }
   function stopPayload(stop) {
     var data = collect();
@@ -1402,6 +1439,7 @@ __STEPS__
     backBtn.disabled = true;
     nextBtn.disabled = true;
     cancelBtn.disabled = true;
+    syncSegments();
     status.hidden = false;
     status.textContent = message;
     stopHeartbeat();
@@ -1662,8 +1700,8 @@ main img { cursor: zoom-in; max-width: 100%; height: auto; border-radius: 6px; }
 .pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
 .pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
   overflow: hidden; }
-.pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
-  transition: width .15s; }
+.pp-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
+  border-radius: 999px; transition: width .15s; }
 
 .pp-actions { margin-block-start: 22px; }
 
@@ -2131,8 +2169,8 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
 .pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
 .pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
   overflow: hidden; }
-.pp-progress-fill { height: 100%; background: var(--ntw-accent); border-radius: 999px;
-  transition: width .15s; }
+.pp-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
+  border-radius: 999px; transition: width .15s; }
 
 .pp-review-path { font-family: var(--pp-font-mono); font-size: 0.82em; color: var(--ntw-fg-muted);
   margin-block-end: 8px; word-break: break-all; }
@@ -3181,7 +3219,11 @@ def build_multi_page(
     asset_base_url = _asset_base_url(status_url)
     steps_html = "\n".join(build_step_fragments(questions, asset_base_url=asset_base_url))
     header_html = _render_header(header, asset_base_url=asset_base_url)
-    initial_progress = round(100 / total) if total else 0
+    segments_html = "".join(
+        f'<button type="button" class="pp-seg{" pp-seg-cur" if i == 0 else ""}" '
+        f'data-step="{i}" aria-label="Question {i + 1}" disabled></button>'
+        for i in range(total)
+    )
     initial_label = f"Question 1 of {total}"
     initial_next = "Next" if total > 1 else "Send answers"
     any_gallery = any(
@@ -3198,7 +3240,7 @@ def build_multi_page(
         .replace("__HEADER__", header_html)
         .replace("__STEPS__", steps_html)
         .replace("__INITIAL_LABEL__", html.escape(initial_label, quote=True))
-        .replace("__INITIAL_PROGRESS__", str(initial_progress))
+        .replace("__SEGMENTS__", segments_html)
         .replace("__INITIAL_NEXT_LABEL__", initial_next)
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))

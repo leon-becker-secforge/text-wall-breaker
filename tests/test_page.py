@@ -232,10 +232,16 @@ def test_multi_page_renders_every_question():
     assert 'data-option-id="b"' in body
 
 
-def test_multi_page_shows_a_shared_progress_label_and_bar():
+def test_multi_page_shows_a_shared_progress_label_and_one_segment_per_question():
     body = _body(_multi_page())
     assert 'id="pp-progress-label">Question 1 of 2<' in body
-    assert "width: 50%" in body
+    # Starts on question 1: its segment is current, and none is enabled (going back needs
+    # a question to go back to).
+    assert body.count('<button type="button" class="pp-seg') == 2
+    assert 'class="pp-seg pp-seg-cur" data-step="0"' in body
+    assert 'class="pp-seg" data-step="1"' in body
+    assert body.count('aria-label="Question ') == 2
+    assert 'data-step="0" aria-label="Question 1" disabled' in body
 
 
 def test_multi_page_only_the_first_step_starts_active():
@@ -532,3 +538,27 @@ def test_every_page_type_shares_one_action_row_stylesheet():
         # Beside the primary, inside its group: above or between the groups, showing or
         # hiding it moved the buttons.
         assert re.search(r'pp-actions-end">\s*<span id="pp-status"', html)
+
+
+def test_wizard_segments_only_navigate_backwards():
+    html = _multi_page()
+    # An enabled segment is one before the current question; the script must never enable
+    # the current or a later one, or a click could skip Next's answer check.
+    assert "seg.disabled = frozen || segmentsLocked || i >= current;" in html
+    assert "if (frozen || segmentsLocked || i >= current) return;" in html
+
+
+def test_progress_fill_is_a_block_so_it_has_a_size():
+    from pretty_prompt.page import build_review_page, build_show_page
+
+    u = "http://127.0.0.1:1/submit"
+    diff = "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x\n+y\n"
+    pages = (
+        build_show_page(slides=["# 1", "# 2"], submit_url=u),
+        build_review_page(
+            pages=[{"path": "a.py", "diff": diff}], submit_url=u, timeout_seconds=300
+        ),
+    )
+    for html in pages:
+        # An inline span ignores width and height, so the fill never showed.
+        assert ".pp-progress-fill { display: block;" in html

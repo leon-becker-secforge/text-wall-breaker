@@ -14,8 +14,17 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - Row is split: Cancel and Stop here left, Back and the primary right. The status text
   sits beside the primary so showing or hiding it never moves the buttons, and button
   labels no longer wrap on a phone-width page.
+- The wizard's progress bar is one segment per question (answered or passed filled, current
+  ringed). A segment before the current question is a button that goes back to it, the
+  same as Back; later ones stay disabled so Next still checks each answer.
 - Disabled and enabled buttons cross-fade (180ms) and the status text fades (160ms)
   instead of switching at once; both are off under `prefers-reduced-motion`.
+
+### Fixed
+
+- The progress bar fill never rendered on the wizard, slide deck and review pages: it was an
+  inline `<span>`, which ignores `width` and `height`, so only the grey track showed. The
+  deck and review fill is a block now; the wizard's bar is the segmented one above.
 
 ## [0.12.0] - 2026-10-29
 
