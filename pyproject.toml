@@ -9,6 +9,8 @@ dependencies = [
     # the 2.x API, so the major is pinned rather than left open.
     "mcp>=2.2,<3",
     "pydantic>=2.7",
+    # The rendered view of a Markdown file; its block source lines (token.map) place comments.
+    "markdown-it-py>=3",
 ]
 
 [project.scripts]

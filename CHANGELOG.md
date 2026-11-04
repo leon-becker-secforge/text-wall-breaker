@@ -7,6 +7,14 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review`: a rendered view of a changed Markdown (`.md`, `.markdown`) or AsciiDoc
+  (`.adoc`, `.asciidoc`) file when the source is `repo`. Beside the diff from 1000px wide,
+  a Diff | Rendered switch below; a new file opens on the rendered one. A click on a block
+  (shift-click extends) selects the source lines it stands for and the comment is the usual
+  range comment on those new-side lines; dragging over text also records a `quote` (kept
+  when it matches the source text) and marks it in the diff. Markdown renders with `markdown-it-py` (new
+  dependency, raw HTML escaped); AsciiDoc needs `ruby` and `asciidoctor` and shows the diff
+  only without them. Remote images are not loaded and local ones must be inside the repo.
 - `review`: `notes`, the agent's own remarks on lines the diff shows (`path`, `side`,
   `line`, optional `end_side`/`end_line`, Markdown `text`). Each opens inline under its
   last row, with a chip on its first row to fold it and a bar to hide or show all;

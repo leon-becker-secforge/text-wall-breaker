@@ -327,6 +327,26 @@ file comes from the working tree when the diff is against it, and from the end o
 hunks, when it is over 512 KB, past 4 MB over all files, binary or not UTF-8, a symlink,
 or not the text the diff was made from. `pages` has no file to read, so it never expands.
 
+A `repo` page for a `.md`, `.markdown`, `.adoc` or `.asciidoc` file also gets a rendered
+view of its new side. From 1000px wide it sits beside the diff; below that a `Diff |
+Rendered` switch shows one at a time, and a newly added file opens on the rendered one.
+Clicking a block (shift-click extends over several) selects the source lines it stands
+for, lights them up in the diff, and opens the comment box; the result is the usual range
+comment on new-side lines, so `context` is the source text. Lines that are still hidden
+are shown first. Dragging over text in the rendered view selects the blocks it touches and
+records the text as the comment's `quote`, marked in the diff row as well. The quote is
+kept only if it reads the same in the source; a selection across formatting (`**bold**`,
+a link) comments on the blocks with no quote.
+
+- Markdown uses `markdown-it-py`; raw HTML in the file is escaped. A block is a heading,
+  paragraph, list item, quote, table or table row, or code block.
+- AsciiDoc needs `ruby` and the `asciidoctor` gem on the machine; without them the file
+  shows the diff only, with no error. It runs in secure mode (no `include::`). A block is
+  a heading, paragraph, list, list item, table, listing and so on; a table is one block.
+- Links open in a new tab. A remote image is not loaded (the alt text shows instead), and
+  a local one only if it is a file inside the repository.
+- A page from `pages` has no file text, so it has no rendered view.
+
 With more than one page, a file list stays in view on the left: one row per file with its
 directory, the current file marked, a comment count, and a pencil where the file has a
 note. A click, the arrow keys or `j`/`k` switch files. Below 900px wide the list becomes a

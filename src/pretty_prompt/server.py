@@ -133,7 +133,8 @@ Source, one of:
   - `repo` (+ optional `git_range`, `paths`, `context_lines`): the server runs
     `git diff` itself. Prefer it for anything in git: passing the diff as arguments
     puts a second copy of it in your context. The user can also show the hidden lines
-    between hunks and comment on them; `pages` cannot do that.
+    between hunks and comment on them, and a changed Markdown or AsciiDoc file gets a
+    rendered view to comment on; `pages` cannot do either.
   - `pages`: a diff you already hold, one entry per file.
 
 The user comments on a line or a run of lines, can select text inside them, and can
@@ -376,6 +377,7 @@ async def review(
         header=header,
         title=title,
         files=files,
+        root=repo,
     )
     try:
         request.validated()

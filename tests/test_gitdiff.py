@@ -10,7 +10,10 @@ from pretty_prompt.review import Page
 
 def _git(repo: Path, *args: str) -> None:
     subprocess.run(  # noqa: S603
-        ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t", *args],  # noqa: S607
+        [
+            *["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@t"],
+            *["-c", "commit.gpgsign=false", *args],  # a scratch repo needs no signing key
+        ],
         check=True,
         capture_output=True,
     )

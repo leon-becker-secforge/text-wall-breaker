@@ -5,7 +5,15 @@ import difflib
 import pytest
 
 from pretty_prompt.listener import Submission
-from pretty_prompt.review import InvalidReview, Note, Page, ReviewRequest, _result_from_submission
+from pretty_prompt.review import (
+    InvalidReview,
+    Note,
+    Page,
+    ReviewRequest,
+    _build_html,
+    _is_new_file,
+    _result_from_submission,
+)
 
 DIFF = "@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"
 PAGES = [Page(path="a.py", diff=DIFF)]
@@ -265,3 +273,41 @@ def test_a_range_note_keeps_both_ends_and_a_one_row_range_collapses():
 def test_a_note_that_cannot_be_shown_is_refused(fields):
     with pytest.raises(InvalidReview, match=r"notes\[0\]"):
         _request(_note(**fields)).validated()
+
+
+# Rendered view: only a Markdown/AsciiDoc page whose file text is known gets one.
+MD_OLD = ["# T", "", "one", "", "two"]
+MD_NEW = ["# T", "", "one!", "", "two"]
+
+
+def _md_html(path: str, files: dict[str, str]) -> str:
+    diff = _unified(MD_OLD, MD_NEW)
+    request = ReviewRequest(pages=[Page(path=path, diff=diff)], files=files, root=None)
+    return _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
+
+
+def _unified(old: list[str], new: list[str]) -> str:
+    return "".join(
+        difflib.unified_diff(
+            [line + "\n" for line in old], [line + "\n" for line in new], "a/f", "b/f", n=3
+        )
+    )
+
+
+def test_a_markdown_page_with_its_file_gets_a_rendered_view():
+    html = _md_html("docs/a.md", {"docs/a.md": "\n".join(MD_NEW) + "\n"})
+    assert '<div class="pp-rendered"' in html
+    assert '<p data-first="3" data-last="3">one!</p>' in html
+    assert '<div class="pp-views" data-show="diff">' in html
+
+
+def test_a_page_without_its_file_or_of_another_kind_has_none():
+    assert '<div class="pp-rendered"' not in _md_html("docs/a.md", {})
+    text = {"docs/a.py": "\n".join(MD_NEW) + "\n"}
+    assert '<div class="pp-rendered"' not in _md_html("docs/a.py", text)
+
+
+def test_a_new_file_opens_on_the_rendered_view_and_a_changed_one_on_the_diff():
+    assert _is_new_file(_unified([], ["# T", "", "x"]))
+    assert not _is_new_file(_unified(MD_OLD, MD_NEW))
+    assert not _is_new_file("@@ -1,1 +1,1 @@\n-a\n+b\n")

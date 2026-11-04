@@ -33,10 +33,12 @@ from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
     ACCENT_ENV_VAR,
     InvalidAccent,
+    _asset_base_url,
     build_review_page,
     parse_accent,
     read_saved_theme,
 )
+from .render import rendered_view
 from .session import get_shared_session
 
 __all__ = ["BrowserUnavailable", "InvalidReview", "Note", "Page", "ReviewRequest", "run_review"]
@@ -106,6 +108,8 @@ class ReviewRequest(BaseModel):
     # path -> the file's new-side text, set only by the `repo` source, which can read it.
     # It lets the page show the lines between the hunks; see `expansion`.
     files: dict[str, str] = {}
+    # The repository the `repo` source diffed: where a rendered view finds its images.
+    root: str | None = None
 
     def validated(self) -> ReviewRequest:
         if not self.pages:
@@ -199,17 +203,28 @@ def _build_html(
 ) -> str:
     expansion = request.expansion()
     notes = request.page_notes()
-    return build_review_page(
-        pages=[
+    asset_base_url = _asset_base_url(status_url)
+    entries: list[dict[str, Any]] = []
+    for page in request.pages:
+        lines = expansion.get(page.path)
+        rendered = (
+            rendered_view(page.path, lines, root=request.root, asset_base_url=asset_base_url)
+            if lines is not None
+            else None
+        )
+        entries.append(
             {
                 "path": page.path,
                 "diff": page.diff,
                 "blurb": page.blurb,
-                "lines": expansion.get(page.path),
+                "lines": lines,
                 "notes": notes.get(page.path),
+                "rendered": rendered,
+                "rendered_first": _is_new_file(page.diff),
             }
-            for page in request.pages
-        ],
+        )
+    return build_review_page(
+        pages=entries,
         header=request.header,
         title=request.title,
         accent=_resolve_accent(),
@@ -218,6 +233,12 @@ def _build_html(
         status_url=status_url,
         generation=generation,
     )
+
+
+def _is_new_file(diff: str) -> bool:
+    """Whether the diff has nothing but added lines: a new file's diff is a wall of green."""
+    rows = [row for row in parse_unified_diff(diff) if row.kind != "hunk"]
+    return bool(rows) and all(row.kind == "add" for row in rows)
 
 
 _MARKERS = {"add": "+", "del": "-", "ctx": " "}

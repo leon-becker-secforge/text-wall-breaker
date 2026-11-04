@@ -2231,6 +2231,57 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   box-shadow: inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
 .pp-review-row-wrap.is-sel.sel-first.sel-last .pp-review-row {
   box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
+/* Rendered view: beside the diff on a wide screen, a Diff | Rendered switch below that. */
+.pp-views-toggle { display: none; gap: 8px; margin: 0.6em 0 0; font: 13px system-ui, sans-serif; }
+.pp-views-toggle button { border: 1px solid var(--ntw-border); background: none; cursor: pointer;
+  padding: 3px 12px; border-radius: 999px; color: var(--ntw-fg); font: inherit; }
+.pp-views[data-show="diff"] [data-show="diff"],
+.pp-views[data-show="rendered"] [data-show="rendered"] { background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); border-color: var(--ntw-accent); }
+.pp-views-diff, .pp-rendered { min-width: 0; }
+.pp-rendered { margin: 0.6em 0; padding: 4px 18px 14px; border: 1px solid var(--ntw-border);
+  border-radius: 10px; background: var(--ntw-bg-elevated); line-height: 1.55;
+  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow-wrap: anywhere; }
+.pp-rendered h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; }
+.pp-rendered h2 { font-size: 1.25em; margin: 1em 0 0.3em; }
+.pp-rendered h3, .pp-rendered h4 { font-size: 1.05em; margin: 1em 0 0.3em; }
+.pp-rendered p, .pp-rendered li, .pp-rendered pre { margin: 0.35em 0; }
+.pp-rendered code { font-family: var(--pp-font-mono); background: var(--ntw-code-bg);
+  padding: 0 4px; border-radius: 3px; font-size: 0.9em; }
+.pp-rendered pre { background: var(--ntw-code-bg); border-radius: 6px; padding: 8px 10px;
+  overflow-x: auto; }
+.pp-rendered pre code { display: block; background: none; padding: 0; }
+.pp-rendered img { max-width: 100%; }
+.pp-rendered table { border-collapse: collapse; margin: 0.6em 0; }
+.pp-rendered td, .pp-rendered th { border: 1px solid var(--ntw-border); padding: 3px 10px; }
+.pp-rendered blockquote { margin: 0.4em 0; padding-left: 12px;
+  border-left: 3px solid var(--ntw-border); color: var(--ntw-fg-muted); }
+.pp-rendered [data-first] { cursor: pointer; border-radius: 4px; }
+.pp-rendered [data-first]:hover {
+  background: color-mix(in srgb, var(--ntw-accent) 8%, transparent); }
+.pp-rendered .is-sel { outline: 2px solid var(--ntw-accent); outline-offset: 2px;
+  background: color-mix(in srgb, var(--ntw-accent) 10%, transparent); }
+.pp-rendered .has-comment { box-shadow: -4px 0 0 var(--ntw-accent); }
+::highlight(pp-quote) { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
+body.pp-review-frozen .pp-rendered [data-first] { cursor: default; }
+@media (min-width: 1000px) {
+  .pp-views { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px;
+    align-items: start; }
+  .pp-rendered { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; }
+}
+@media (min-width: 1000px) and (max-width: 1249px) {
+  body.pp-has-files .pp-views { display: block; }
+  body.pp-has-files .pp-views-toggle { display: flex; }
+  body.pp-has-files .pp-rendered { position: static; max-height: none; }
+  body.pp-has-files .pp-views[data-show="rendered"] .pp-views-diff,
+  body.pp-has-files .pp-views[data-show="diff"] .pp-rendered { display: none; }
+}
+@media (max-width: 999px) {
+  .pp-views-toggle { display: flex; }
+  .pp-views[data-show="rendered"] .pp-views-diff, .pp-views[data-show="diff"] .pp-rendered
+    { display: none; }
+}
 .pp-note { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px; display: none;
   border: 1px dashed var(--ntw-fg-muted); background: var(--ntw-bg-elevated);
   font: 0.95em/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -2517,17 +2568,150 @@ __CONTENT__
   }
 
   function placeDock() {
-    var diffBox = sel.diff.getBoundingClientRect();
-    var after = sel.last;
-    // Under the last selected row and any comment already shown there, not over it.
-    while (after.nextElementSibling &&
-        after.nextElementSibling.matches('.pp-comment, .pp-note')) {
-      after = after.nextElementSibling;
+    var after = sel.last, inset = 46;
+    var box = sel.diff.getBoundingClientRect();
+    if (sel.diff.offsetParent === null && sel.block) {
+      // The diff is not on screen (one view at a time): the box goes under the block.
+      after = sel.block;
+      box = sel.block.closest('.pp-rendered').getBoundingClientRect();
+      inset = 18;
+    } else {
+      // Under the last selected row and any comment already shown there, not over it.
+      while (after.nextElementSibling &&
+          after.nextElementSibling.matches('.pp-comment, .pp-note')) {
+        after = after.nextElementSibling;
+      }
     }
-    dock.style.width = Math.max(240, Math.min(680, diffBox.width - 60)) + 'px';
-    dock.style.left = (diffBox.left + window.scrollX + 46) + 'px';
+    dock.style.width = Math.max(240, Math.min(680, box.width - inset - 14)) + 'px';
+    dock.style.left = (box.left + window.scrollX + inset) + 'px';
     dock.style.top = (after.getBoundingClientRect().bottom + window.scrollY + 14) + 'px';
   }
+
+  // The rendered view's blocks that lie wholly within the new-side lines `o` covers
+  // (outermost only), marked with `cls`. A selection or comment is made on the diff's rows;
+  // this is how it shows on the rendered file as well.
+  function markRendered(cls, o, all) {
+    Array.prototype.forEach.call(document.querySelectorAll('.pp-rendered .' + cls), function (e) {
+      e.classList.remove(cls);
+    });
+    (all || (o ? [o] : [])).forEach(function (c) {
+      var views = c.diff.closest('.pp-views');
+      var nums = [], covered = span(c);
+      for (var i = covered.from; i <= covered.to; i++) {
+        var w = covered.ws[i];
+        if (w.dataset.side === 'new') nums.push(parseInt(w.dataset.line, 10));
+      }
+      if (!views || !nums.length) return;
+      var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+      var inside = function (e) {
+        return e && parseInt(e.dataset.first, 10) >= lo && parseInt(e.dataset.last, 10) <= hi;
+      };
+      var blocks = views.querySelectorAll('.pp-rendered [data-first]');
+      Array.prototype.forEach.call(blocks, function (e) {
+        var up = e.parentElement && e.parentElement.closest('[data-first]');
+        if (inside(e) && !inside(up)) e.classList.add(cls);
+      });
+    });
+  }
+  function revealLines(diff, a, z) {
+    Array.prototype.forEach.call(diff.querySelectorAll('.pp-review-gap'), function (el) {
+      var g = el._gap;
+      if (g && g.last - g.bottom >= a && g.first + g.top <= z) {
+        revealGap(g, g.size, g.position === 'end' ? 'down' : 'up');
+      }
+    });
+  }
+  var blockAnchor = null, textSelectedAt = 0;
+  document.addEventListener('click', function (event) {
+    var block =event.target.closest('.pp-rendered [data-first]');
+    if (!block || frozen) return;
+    var picked = window.getSelection();
+    if (picked && !picked.isCollapsed) return;
+    // The click that ends a drag follows its mouseup at once; focusing the box has already
+    // collapsed the text selection by then, and must not replace the quote's selection.
+    if (Date.now() - textSelectedAt < 300) return;
+    var diff = block.closest('.pp-views').querySelector('.pp-review-diff');
+    var from = block, to = block;
+    if (event.shiftKey && blockAnchor && blockAnchor.isConnected &&
+        blockAnchor.closest('.pp-views') === block.closest('.pp-views')) {
+      var early = parseInt(blockAnchor.dataset.first, 10) <= parseInt(block.dataset.first, 10);
+      from = early ? blockAnchor : block;
+      to = early ? block : blockAnchor;
+    } else {
+      blockAnchor = block;
+    }
+    selectBlocks(diff, from, to, '');
+  });
+  function selectBlocks(diff, from, to, quote) {
+    var a = parseInt(from.dataset.first, 10), z = parseInt(to.dataset.last, 10);
+    revealLines(diff, a, z);
+    var rowFor = function (n) {
+      return diff.querySelector('.pp-review-row-wrap[data-side="new"][data-line="' + n + '"]');
+    };
+    var first = rowFor(a), last = rowFor(z);
+    if (!first || !last) return;
+    anchor = { diff: diff, wrap: first };
+    var ws = wrapsOf(diff), from_ = ws.indexOf(first), to_ = ws.indexOf(last);
+    // The quote is only kept if it is real text of those rows (the server checks the same):
+    // a selection across formatting reads differently rendered than in the source.
+    var source = rowsText(ws, from_, to_).split(/\\s+/).join(' ');
+    var needle = quote.split(/\\s+/).join(' ').trim();
+    var keep = needle && source.indexOf(needle) >= 0 && needle !== source.trim();
+    setSel({ diff: diff, first: first, last: last, quote: keep ? quote : '', editing: null,
+      block: to });
+  }
+  // A drag over text in the rendered view: the blocks it touches, and the text as the quote.
+  function selectRenderedText(s) {
+    var r = s.getRangeAt(0);
+    function blockAt(node, offset, atEnd) {
+      var n = node;
+      if (n.nodeType === 1) n = n.childNodes[atEnd ? offset - 1 : offset] || n;
+      var el = n.nodeType === 1 ? n : n.parentElement;
+      return el && el.closest('.pp-rendered [data-first]');
+    }
+    var from = blockAt(r.startContainer, r.startOffset, false);
+    var to = blockAt(r.endContainer, r.endOffset, true);
+    var views = from && from.closest('.pp-views');
+    if (!views || !to || to.closest('.pp-views') !== views) return false;
+    if (parseInt(to.dataset.first, 10) < parseInt(from.dataset.first, 10)) return false;
+    blockAnchor = from;
+    textSelectedAt = Date.now();
+    selectBlocks(views.querySelector('.pp-review-diff'), from, to, plain(s.toString()));
+    return true;
+  }
+  // The quote shown in the diff as well, where it can be found as written.
+  function markQuote() {
+    if (!window.CSS || !CSS.highlights || typeof Highlight === 'undefined') return;
+    CSS.highlights.delete('pp-quote');
+    if (!sel || !sel.quote) return;
+    var covered = span(sel), texts = [], joined = '';
+    for (var i = covered.from; i <= covered.to; i++) {
+      var node = covered.ws[i].querySelector('.pp-review-text').firstChild;
+      if (node) texts.push({ node: node, start: joined.length });
+      joined += (node ? node.textContent : '') + '\\n';
+    }
+    var at = joined.indexOf(sel.quote);
+    if (at < 0) return;
+    function point(offset) {
+      for (var k = texts.length - 1; k >= 0; k--) {
+        if (offset >= texts[k].start) return [texts[k].node, offset - texts[k].start];
+      }
+      return null;
+    }
+    var a = point(at), b = point(at + sel.quote.length);
+    if (!a || !b) return;
+    var range = new Range();
+    range.setStart(a[0], Math.min(a[1], a[0].length));
+    range.setEnd(b[0], Math.min(b[1], b[0].length));
+    CSS.highlights.set('pp-quote', new Highlight(range));
+  }
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.pp-views-toggle [data-show]');
+    if (button) {
+      button.closest('.pp-views').dataset.show = button.dataset.show;
+      if (sel) placeDock();
+    }
+  });
 
   function renderSel() {
     Array.prototype.forEach.call(document.querySelectorAll('.has-sel'), function (e) {
@@ -2536,6 +2720,8 @@ __CONTENT__
     Array.prototype.forEach.call(document.querySelectorAll('.is-sel'), function (e) {
       e.classList.remove('is-sel', 'sel-first', 'sel-last');
     });
+    markRendered('is-sel', sel);
+    markQuote();
     if (!sel) { dock.classList.remove('is-open'); return; }
     var covered = span(sel), ws = covered.ws;
     sel.diff.classList.add('has-sel');
@@ -2583,6 +2769,7 @@ __CONTENT__
     if (event.target.closest(chrome)) return;
     var s = window.getSelection();
     if (s.rangeCount && !s.isCollapsed) {
+      if (selectRenderedText(s)) return;
       var r = s.getRangeAt(0);
       var first = wrapOf(r.startContainer), last = wrapOf(r.endContainer);
       if (!first && r.startContainer.nodeType === 1) {
@@ -2632,6 +2819,7 @@ __CONTENT__
       var covered = span(c);
       for (var i = covered.from; i <= covered.to; i++) covered.ws[i].classList.add('has-comment');
     });
+    markRendered('has-comment', null, comments);
   }
   function renderComment(c) {
     var el = c.el || document.createElement('div');
@@ -3166,6 +3354,19 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
             page_notes if isinstance(page_notes, list) else None,
             asset_base_url,
         )
+        rendered = page.get("rendered")
+        if isinstance(rendered, str) and rendered:
+            # Beside the diff on a wide screen; below that one view at a time, a new file
+            # opening on the rendered one since its diff is only added lines.
+            show = "rendered" if page.get("rendered_first") else "diff"
+            diff_html = (
+                f'<div class="pp-views" data-show="{show}">'
+                '<div class="pp-views-toggle">'
+                '<button type="button" data-show="diff">Diff</button>'
+                '<button type="button" data-show="rendered">Rendered</button></div>'
+                f'<div class="pp-views-diff">{diff_html}</div>'
+                f'<div class="pp-rendered" aria-label="Rendered file">{rendered}</div></div>'
+            )
         note_id = f"pp-page-note-{index}"
         slide_parts.append(
             f'<section class="deck-slide card{active}">'
