@@ -2165,8 +2165,9 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
 .pp-review-path { font-family: var(--pp-font-mono); font-size: 0.82em; color: var(--ntw-fg-muted);
   margin-block-end: 8px; word-break: break-all; }
 .pp-review-diff { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0.6em 0;
-  border: 1px solid var(--ntw-border); border-radius: 6px; overflow: hidden; overflow-x: auto; }
-.pp-review-row.hunk { color: var(--ntw-fg-muted); padding: 2px 10px;
+  line-height: 1.55; border: 1px solid var(--ntw-border); border-radius: 12px;
+  overflow: hidden; overflow-x: auto; }
+.pp-review-row.hunk { color: var(--ntw-fg-muted); padding: 4px 14px;
   background: var(--ntw-code-bg); }
 /* Hidden lines between hunks: a dashed divider with a pill (see _render_review_gap). The
    step buttons show on hover or focus, and always where there is no hover. */
@@ -2198,11 +2199,30 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
    a row no longer looks clickable — the comments it would collect have already left. */
 body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
 .pp-review-diff ::selection { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
-.pp-review-row { display: flex; align-items: flex-start; padding: 1px 10px 1px 2px;
-  white-space: pre; border-left: 3px solid transparent; position: relative; }
-.pp-review-row.add { border-left-color: #1f7a4c; background: rgba(31, 122, 76, 0.08); }
-.pp-review-row.del { border-left-color: #b3261e; background: rgba(179, 38, 30, 0.06);
-  color: var(--ntw-fg-muted); }
+/* Soft rows (picked over gutter-coloured and minimal rows in a three-variant prototype,
+   palette kept as it was): the change is a tint across the row, a stronger tint behind its
+   line numbers, and a plus or minus mark before the text, so no meaning rests on colour
+   alone. */
+:root { --pp-add: #1f7a4c; --pp-del: #b3261e; --pp-add-bg: rgba(31, 122, 76, 0.12);
+  --pp-del-bg: rgba(179, 38, 30, 0.10); --pp-add-gut: rgba(31, 122, 76, 0.22);
+  --pp-del-gut: rgba(179, 38, 30, 0.20); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pp-add: #3fb97a; --pp-del: #f0716a;
+    --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
+    --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24); }
+}
+:root[data-theme="dark"] { --pp-add: #3fb97a; --pp-del: #f0716a;
+  --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
+  --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24); }
+.pp-review-row { display: flex; align-items: flex-start; padding: 1px 12px 1px 0;
+  white-space: pre; position: relative; }
+.pp-review-row.add { background: var(--pp-add-bg); }
+.pp-review-row.del { background: var(--pp-del-bg); }
+.pp-review-row.add .pp-review-gutter { background: var(--pp-add-gut); color: var(--pp-add); }
+.pp-review-row.del .pp-review-gutter { background: var(--pp-del-gut); color: var(--pp-del); }
+.pp-review-row.add .pp-review-text::before { content: "+ "; color: var(--pp-add); }
+.pp-review-row.del .pp-review-text::before { content: "\\2212  "; color: var(--pp-del); }  /* two spaces: the first ends the escape */
+.pp-review-row.ctx .pp-review-text::before { content: "  "; }
 .pp-review-row-wrap:hover .pp-review-row,
 .pp-review-row-wrap:focus-within .pp-review-row { background: var(--ntw-border); }
 body.pp-review-frozen .pp-review-row-wrap:hover .pp-review-row,
@@ -2214,7 +2234,7 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
 .pp-review-row-wrap.has-comment .pp-review-comment-icon { opacity: 1; }
 .pp-review-row-wrap.has-comment .pp-review-comment-icon { color: var(--ntw-accent); }
 .pp-review-row-wrap.has-comment .pp-review-row { box-shadow: inset -3px 0 0 var(--ntw-accent); }
-.pp-review-gutter { flex: none; width: 2.8em; text-align: right; padding-inline-end: 8px;
+.pp-review-gutter { flex: none; width: 3.2em; text-align: right; padding-inline-end: 10px;
   color: var(--ntw-fg-muted); user-select: none; }
 
 /* Selection: the rest of the diff dims, the selected rows get a ring (picked over a

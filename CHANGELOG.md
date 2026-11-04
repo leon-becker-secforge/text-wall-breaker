@@ -44,6 +44,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Changed
 
+- `review`: softer diff rows. An added or deleted row is tinted across, its line numbers
+  sit on a stronger tint, and a `+` or `−` mark stands before the text, so the change no
+  longer rests on colour alone. The numbers are wider, rows have more line height, the
+  box has rounder corners and the hunk header more padding. The green and red are the
+  ones used before, with brighter values in the dark theme.
 - `review`: a row no longer opens its own comment box on click. The click selects the row
   and the comment dock opens under it; an unsent comment is no longer a textarea left open
   in the diff.
