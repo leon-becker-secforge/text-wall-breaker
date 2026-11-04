@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `review`: a "Note on this file" box under each page's diff. The result gains
+  `page_notes: [{"path", "text"}]` (only files with a note, `[]` otherwise) on submit,
+  cancel and abandoned alike; `overall_note` is unchanged.
+
 ### Removed
 
 - `timeout_seconds` on `ask`, `show` and `review`. A call no longer has a deadline: it

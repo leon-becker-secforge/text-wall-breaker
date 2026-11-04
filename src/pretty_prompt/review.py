@@ -170,6 +170,21 @@ def _extract_comments(pages: list[Page], raw: object) -> list[dict[str, Any]]:
     return comments
 
 
+def _extract_page_notes(pages: list[Page], raw: object) -> list[dict[str, str]]:
+    """The non-empty page notes whose path is one of `pages`, in the order sent."""
+    if not isinstance(raw, list):
+        return []
+    paths = {page.path for page in pages}
+    notes: list[dict[str, str]] = []
+    for entry in raw:
+        if not isinstance(entry, dict):
+            continue
+        path, text = entry.get("path"), entry.get("text")
+        if isinstance(path, str) and path in paths and isinstance(text, str) and text.strip():
+            notes.append({"path": path, "text": text.strip()})
+    return notes
+
+
 def _result_from_submission(
     pages: list[Page], submission: Submission | None, progress: dict[str, Any] | None
 ) -> dict[str, Any]:
@@ -183,6 +198,7 @@ def _result_from_submission(
     note = data.get("overall_note")
     result: dict[str, Any] = {
         "comments": comments,
+        "page_notes": _extract_page_notes(pages, data.get("page_notes")),
         "overall_note": note.strip() if isinstance(note, str) and note.strip() else None,
     }
     if submission is None:
@@ -238,7 +254,8 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
 def run_review(request: ReviewRequest) -> dict[str, Any]:
     """Open the page for `request` and block until it is submitted, cancelled, or abandoned.
 
-    Returns `{"comments": [...], "overall_note": "..." | None}` on Submit, the same
+    Returns `{"comments": [...], "page_notes": [{"path", "text"}], "overall_note": "..." |
+    None}` on Submit, the same
     shape plus `"cancelled": True` on Cancel (comments/overall_note reflect whatever
     existed at that point — see the module docstring and ADR 0002), the same plus
     `"abandoned": True` if the tab was closed without either (comments/overall_note from

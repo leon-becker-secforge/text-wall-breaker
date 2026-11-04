@@ -321,23 +321,26 @@ inert.
 
 Clicking anywhere on a diff line opens a text box anchored to it — a small bubble icon
 marks a line as commentable on hover, but the whole row is the click/keyboard target, not
-just the icon. Comments are single-line only; there is no range selection. An "Overall
-note" box below the pages holds one free-text remark for the whole call, not tied to any
-line. Once Submit or Cancel is sent, every line and the note box stop accepting further
+just the icon. Comments are single-line only; there is no range selection. Each page has
+a "Note on this file" box below its diff for a remark about the whole file, and an
+"Overall note" box below the pages holds one for the whole call; neither is tied to a
+line. Once Submit or Cancel is sent, every line and note box stops accepting further
 input.
 
 ### Result
 
 ```json
 {"comments": [{"path": "src/foo.py", "side": "new", "line": 2, "text": "why 2?", "context": "    return 2"}],
+ "page_notes": [{"path": "src/foo.py", "text": "Split this file."}],
  "overall_note": "Looks fine overall."}
-{"cancelled": true, "comments": [...], "overall_note": null}
-{"abandoned": true, "comments": [...], "overall_note": null}
+{"cancelled": true, "comments": [...], "page_notes": [...], "overall_note": null}
+{"abandoned": true, "comments": [...], "page_notes": [...], "overall_note": null}
 {"not_delivered": true}
 ```
 
-Submit always succeeds — an empty review (no comments, no overall note) is itself a
-valid answer, since there's nothing to validate. Each comment is resolved server-side
+Submit always succeeds — an empty review (no comments, no notes) is itself a valid
+answer, since there's nothing to validate. `page_notes` lists only the files the user
+wrote a note for, each as `{"path", "text"}`, and is `[]` otherwise. Each comment is resolved server-side
 from the diff you gave, not trusted from the page: `side` is `"old"` or `"new"`, `line`
 is that side's 1-based line number in the file at `path` (not its position in the diff
 text), and `context` is that line's own source text, so the agent doesn't have to

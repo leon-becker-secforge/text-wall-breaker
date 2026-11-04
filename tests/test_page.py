@@ -84,6 +84,19 @@ def test_review_heartbeat_reports_the_comments_so_far():
     assert "send('progress', collect())" in html
 
 
+def test_review_gives_every_page_its_own_note_box():
+    diff = "@@ -1 +1 @@\n-a\n+b\n"
+    html = build_review_page(
+        pages=[{"path": "a.py", "diff": diff}, {"path": 'we"ird<.py', "diff": diff}],
+        submit_url="http://127.0.0.1:1/submit",
+    )
+    assert len(re.findall(r'<textarea class="pp-page-note"', html)) == 2
+    assert 'id="pp-page-note-0"' in html
+    assert 'id="pp-page-note-1"' in html
+    assert 'data-path="we&quot;ird&lt;.py"' in html
+    assert "page_notes: collectPageNotes()" in html
+
+
 def test_invalid_accent_raises_from_build_page():
     with pytest.raises(InvalidAccent):
         _page(accent="not-a-colour")

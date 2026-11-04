@@ -12,8 +12,38 @@ def test_submit_returns_comments_with_their_context():
     submission = Submission(kind="submit", data={"comments": [COMMENT], "overall_note": " ok "})
     assert _result_from_submission(PAGES, submission, None) == {
         "comments": [{**COMMENT, "text": "why?", "context": "new"}],
+        "page_notes": [],
         "overall_note": "ok",
     }
+
+
+def test_page_notes_are_returned_trimmed_and_blank_ones_dropped():
+    data = {
+        "page_notes": [
+            {"path": "a.py", "text": " split this file "},
+            {"path": "a.py", "text": "   "},
+        ]
+    }
+    result = _result_from_submission(PAGES, Submission(kind="submit", data=data), None)
+    assert result["page_notes"] == [{"path": "a.py", "text": "split this file"}]
+
+
+def test_a_page_note_for_an_unknown_path_or_of_the_wrong_shape_is_dropped():
+    data = {
+        "page_notes": [
+            {"path": "other.py", "text": "x"},
+            {"path": "a.py", "text": 3},
+            "not a dict",
+        ]
+    }
+    result = _result_from_submission(PAGES, Submission(kind="submit", data=data), None)
+    assert result["page_notes"] == []
+
+
+def test_abandoned_keeps_the_page_notes_of_the_last_report():
+    progress = {"page_notes": [{"path": "a.py", "text": "wip"}]}
+    result = _result_from_submission(PAGES, None, progress)
+    assert result["page_notes"] == [{"path": "a.py", "text": "wip"}]
 
 
 def test_cancel_keeps_the_comments_and_says_so():
@@ -35,6 +65,7 @@ def test_abandoned_returns_the_last_progress_report():
 def test_abandoned_without_any_report_is_an_empty_review():
     assert _result_from_submission(PAGES, None, None) == {
         "comments": [],
+        "page_notes": [],
         "overall_note": None,
         "abandoned": True,
     }

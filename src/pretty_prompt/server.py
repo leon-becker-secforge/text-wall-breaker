@@ -135,9 +135,11 @@ Source, one of:
     puts a second copy of it in your context.
   - `pages`: a diff you already hold, one entry per file.
 
-The user comments on single lines (no ranges) and can leave one overall note.
+The user comments on single lines (no ranges), can leave a note per file and one
+overall note.
 
-Returns `{"comments": [...], "overall_note": "..." | null}` on Submit. Each comment
+Returns `{"comments": [...], "page_notes": [{"path", "text"}], "overall_note": "..." |
+null}` on Submit (`page_notes` lists only files with a note). Each comment
 is `{"path", "side", "line", "text", "context"}`: `side` "old" or "new", `line` that
 side's 1-based line number in the file (not its position in the diff text),
 `context` that line's text. Cancel returns the same shape plus `"cancelled": true`,

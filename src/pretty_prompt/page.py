@@ -2205,9 +2205,9 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   font-size: 0.85em; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--ntw-border);
   background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
 
-#pp-overall-note-label { font-size: 0.8em; color: var(--ntw-fg-muted); display: block;
-  margin: 18px 0 4px; }
-#pp-overall-note { width: 100%; min-height: 4em; font: inherit; font-size: 0.9em;
+#pp-overall-note-label, .pp-page-note-label { font-size: 0.8em; color: var(--ntw-fg-muted);
+  display: block; margin: 18px 0 4px; }
+#pp-overall-note, .pp-page-note { width: 100%; min-height: 4em; font: inherit; font-size: 0.9em;
   padding: 8px 10px; border-radius: 6px; border: 1px solid var(--ntw-border);
   background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
 
@@ -2340,14 +2340,26 @@ __CONTENT__
   var status = document.getElementById('pp-status');
   var overallNote = document.getElementById('pp-overall-note');
 
+  var pageNotes = Array.prototype.slice.call(document.querySelectorAll('.pp-page-note'));
+  function collectPageNotes() {
+    return pageNotes
+      .map(function (t) { return { path: t.dataset.path, text: t.value.trim() }; })
+      .filter(function (n) { return n.text; });
+  }
+
   function collect() {
-    return { comments: collectComments(), overall_note: overallNote.value.trim() };
+    return {
+      comments: collectComments(),
+      page_notes: collectPageNotes(),
+      overall_note: overallNote.value.trim()
+    };
   }
 
   function freeze(message) {
     submitBtn.disabled = true;
     cancelBtn.disabled = true;
     overallNote.readOnly = true;
+    pageNotes.forEach(function (t) { t.readOnly = true; });
     frozen = true;
     document.body.classList.add('pp-review-frozen');
     Array.prototype.slice.call(document.querySelectorAll('.pp-review-comment-box textarea'))
@@ -2383,6 +2395,7 @@ __CONTENT__
     if (document.visibilityState === 'visible') heartbeat();
   });
   overallNote.addEventListener('input', reportSoon);
+  pageNotes.forEach(function (t) { t.addEventListener('input', reportSoon); });
   Array.prototype.slice.call(document.querySelectorAll('.pp-review-comment-box textarea'))
     .forEach(function (t) { t.addEventListener('input', reportSoon); });
 
@@ -2560,11 +2573,18 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         blurb = page.get("blurb")
         blurb_html = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
         diff_html = _render_review_diff(path, str(page["diff"]))
+        note_id = f"pp-page-note-{index}"
         slide_parts.append(
             f'<section class="deck-slide card{active}">'
             f'<div class="pp-review-path">{html.escape(path)}</div>'
             f"{blurb_html}"
             f"{diff_html}"
+            f'<label class="pp-page-note-label" for="{note_id}">'
+            "Note on this file (optional)</label>"
+            f'<textarea class="pp-page-note" id="{note_id}" '
+            f'data-path="{html.escape(path, quote=True)}" '
+            'placeholder="Anything about this file as a whole, beyond the line comments">'
+            "</textarea>"
             "</section>"
         )
     nav_html = (
