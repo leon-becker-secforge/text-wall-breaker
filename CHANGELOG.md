@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-04
+
 ### Changed
 
 - Action row redesigned on `ask`, the wizard, `show` and `review`, from one shared stylesheet
