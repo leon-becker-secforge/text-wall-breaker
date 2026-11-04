@@ -277,53 +277,6 @@ async def showcase_ask(client: Client, images: dict[str, str]) -> None:
         rprint("[yellow]Ended early with answers entered; reopening via resume.[/yellow]")
         await _call(client, "resume prefilled", "ask", {"resume": result["resume"]})
 
-    # Streamed ask: the page opens with the first chunk; later calls append to it.
-    first = await _call(
-        client,
-        "streamed ask, chunk 1",
-        "ask",
-        {
-            "header": "A streamed ask: questions arrive while you answer.",
-            "questions": [
-                {
-                    "id": "s1",
-                    "question": "First streamed question?",
-                    "options": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}],
-                }
-            ],
-            "more_coming": True,
-        },
-    )
-    if "ask_id" not in first:
-        return
-    await asyncio.sleep(5)
-    await _call(
-        client,
-        "streamed ask, chunk 2",
-        "ask",
-        {
-            "ask_id": first["ask_id"],
-            "questions": [{"id": "s2", "question": "Second streamed question?"}],
-            "more_coming": True,
-        },
-    )
-    await asyncio.sleep(5)
-    await _call(
-        client,
-        "streamed ask, final chunk (waits)",
-        "ask",
-        {
-            "ask_id": first["ask_id"],
-            "questions": [
-                {
-                    "id": "s3",
-                    "question": "Last one: ship it?",
-                    "options": [{"id": "yes", "label": "Yes"}, {"id": "no", "label": "No"}],
-                }
-            ],
-        },
-    )
-
 
 async def showcase_show(client: Client) -> None:
     await _call(client, "show_status before any show", "show_status", {})
@@ -353,7 +306,9 @@ async def showcase_show(client: Client) -> None:
                 await asyncio.sleep(1)
     rprint(f"show_status: [bold]{state}[/bold]")
 
-    # Republishing to the open shared tab updates it live.
+    # Republishing to the open shared tab updates it live. Each update sets
+    # acknowledge_button False: an Acknowledge button would mark the tab as holding an
+    # unread report, and the next show would then open a new tab instead of updating it.
     for step in range(1, 4):
         await asyncio.sleep(2)
         await _call(
@@ -364,6 +319,7 @@ async def showcase_show(client: Client) -> None:
                 "content": f"# Progress\n\nStep **{step}** of 3 done.",
                 "title": "Showcase: progress",
                 "save_button": False,
+                "acknowledge_button": False,
             },
         )
 

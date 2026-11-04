@@ -72,7 +72,7 @@ def test_no_tool_description_risks_truncation():
     # The MCP client silently truncates a tool's description past this length — a hard
     # prefix cut, mid-sentence, with no signal to the agent that anything was cut. This
     # caught `ask`'s description once (4268 chars) doing exactly that; the tool's whole
-    # streamed-ask section and more were invisible to every agent until it was compressed.
+    # later sections were invisible to every agent until it was compressed.
     tools = anyio.run(server.list_tools)
     over_limit = {
         tool.name: len(tool.description or "")

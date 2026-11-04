@@ -48,11 +48,6 @@ and always carries the operator's own words on that question. Distinct from canc
 which ends the ask with nothing to say, and from deferring, which keeps the ask going.
 _Avoid_: escalation, flag, raise, urgent answer
 
-**Streamed ask**:
-An ask sent in chunks over several calls, each adding questions to the page the operator
-is already answering. Only the last call waits for the answers.
-_Avoid_: incremental ask, paged ask, append mode
-
 ### Review
 
 A `review` call presents one diff per page and blocks until the operator submits, so the

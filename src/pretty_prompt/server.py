@@ -46,7 +46,7 @@ __all__ = [
 # The MCP client silently truncates a tool's description at this length — a hard prefix
 # cut, mid-sentence, with no signal to the agent that anything was cut. `_ASK_DESCRIPTION`
 # once exceeded it (4268 chars) and lost everything from partway through `expanded`
-# onward (allow_defer, questions, streamed ask, changed_from/visits) invisibly; see
+# onward (allow_defer, questions, changed_from/visits) invisibly; see
 # test_server.py's test_no_tool_description_risks_truncation, which now guards every
 # registered tool against a repeat, at a margin below this rather than flush against it.
 MAX_TOOL_DESCRIPTION_CHARS = 2048
