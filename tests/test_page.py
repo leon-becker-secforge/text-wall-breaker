@@ -8,6 +8,8 @@ from pretty_prompt.page import (
     InvalidAccent,
     build_multi_page,
     build_page,
+    build_review_page,
+    build_show_page,
     parse_accent,
     read_saved_theme,
     save_theme,
@@ -27,7 +29,6 @@ def test_parse_accent_rejects_anything_else(value):
 
 def _page(**overrides):
     overrides.setdefault("options", [])
-    overrides.setdefault("timeout_seconds", 300.0)
     return build_page(
         question="q",
         multi_select=False,
@@ -56,9 +57,31 @@ def test_custom_accent_overrides_the_built_in_green():
     assert "#1f7a4c" in html
 
 
-def test_timeout_seconds_is_embedded_for_the_heartbeat():
-    html = _page(timeout_seconds=42.0)
-    assert "var TIMEOUT_SECONDS = 42.0;" in html
+def test_heartbeat_runs_whether_or_not_the_tab_is_visible():
+    # A hidden tab is still in use; gating the heartbeat on visibility would make the
+    # server abandon the call while the user is in another window.
+    review = build_review_page(
+        pages=[{"path": "a.py", "diff": "@@ -1 +1 @@\n-a\n+b\n"}],
+        submit_url="http://127.0.0.1:1/submit",
+    )
+    for html in (
+        _page(),
+        _multi_page(),
+        build_show_page(content="# R", submit_url="http://x"),
+        review,
+    ):
+        assert "var HEARTBEAT_MS = 15000;" in html
+        assert "TIMEOUT_SECONDS" not in html
+        assert "visibilityState !== 'visible') return" not in html
+        assert "visibilityState === 'visible') send(" not in html
+
+
+def test_review_heartbeat_reports_the_comments_so_far():
+    html = build_review_page(
+        pages=[{"path": "a.py", "diff": "@@ -1 +1 @@\n-a\n+b\n"}],
+        submit_url="http://127.0.0.1:1/submit",
+    )
+    assert "send('progress', collect())" in html
 
 
 def test_invalid_accent_raises_from_build_page():
@@ -218,7 +241,6 @@ def _multi_page(**overrides):
             {"question": "second", "options": [_option(id="b", label="B")]},
         ],
     )
-    overrides.setdefault("timeout_seconds", 300.0)
     return build_multi_page(submit_url="http://127.0.0.1:1/submit", **overrides)
 
 
@@ -480,7 +502,6 @@ def test_multi_page_prefills_per_step():
             {"question": "q2", "options": [], "free_text": "hello"},
         ],
         submit_url="http://127.0.0.1:1/submit",
-        timeout_seconds=300.0,
     )
     assert len(re.findall(r"<input[^>]* checked ", page)) == 1
     assert ">\nhello</textarea>" in page
@@ -493,7 +514,6 @@ def test_long_question_marks_its_block_and_bolds_only_the_lead():
         multi_select=False,
         allow_free_text=False,
         submit_url="http://127.0.0.1:1/s",
-        timeout_seconds=300,
     )
     assert 'class="pp-question pp-long"' in html
     assert "<strong>Lead sentence.</strong>" in html
@@ -525,9 +545,7 @@ def test_every_page_type_shares_one_action_row_stylesheet():
         _page(),
         _multi_page(),
         build_show_page(content="# R", submit_url=u),
-        build_review_page(
-            pages=[{"path": "a.py", "diff": diff}], submit_url=u, timeout_seconds=300
-        ),
+        build_review_page(pages=[{"path": "a.py", "diff": diff}], submit_url=u),
     )
     for html in pages:
         assert html.count(".pp-actions .pp-actions-end") == 1
@@ -555,9 +573,7 @@ def test_progress_fill_is_a_block_so_it_has_a_size():
     diff = "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x\n+y\n"
     pages = (
         build_show_page(slides=["# 1", "# 2"], submit_url=u),
-        build_review_page(
-            pages=[{"path": "a.py", "diff": diff}], submit_url=u, timeout_seconds=300
-        ),
+        build_review_page(pages=[{"path": "a.py", "diff": diff}], submit_url=u),
     )
     for html in pages:
         # An inline span ignores width and height, so the fill never showed.

@@ -202,7 +202,6 @@ async def showcase_ask(client: Client, images: dict[str, str]) -> None:
             ],
             "allow_free_text": True,
             "allow_defer": True,
-            "timeout_seconds": 300,
         },
     )
 
@@ -270,7 +269,6 @@ async def showcase_ask(client: Client, images: dict[str, str]) -> None:
                 },
                 {"id": "name", "question": "Service name?", "free_text": "orders-api"},
             ],
-            "timeout_seconds": 1800,
         },
     )
     if "resume" in result:
@@ -337,7 +335,6 @@ async def showcase_show(client: Client) -> None:
             "footer": "Footer on every slide.",
             "title": "Showcase: slides",
             "wait_for_acknowledge": True,
-            "timeout_seconds": 600,
         },
     )
     await _call(client, "show_status after Acknowledge", "show_status", {})

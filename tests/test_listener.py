@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import urllib.error
 import urllib.request
 
@@ -21,10 +22,16 @@ def post(port: int, query: str, payload: object, content_type: str = "text/plain
     return urllib.request.urlopen(request, timeout=5)  # noqa: S310 — fixed loopback URL
 
 
-def wait_in_thread(listener: LoopbackListener, timeout: float = 5.0):
+@pytest.fixture(autouse=True)
+def short_abandon_window(monkeypatch):
+    """A silent page counts as abandoned after 0.5 s here instead of 3 minutes."""
+    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 0.5)
+
+
+def wait_in_thread(listener: LoopbackListener):
     """Run the blocking wait() off the test thread and hand back its result."""
     result: list[object] = []
-    thread = threading.Thread(target=lambda: result.append(listener.wait(timeout)))
+    thread = threading.Thread(target=lambda: result.append(listener.wait()))
     thread.start()
     return thread, result
 
@@ -54,9 +61,24 @@ def test_cancel_is_distinguishable_from_a_submission():
     assert result[0].kind == "cancel"
 
 
-def test_timeout_returns_none():
+def test_a_silent_page_is_abandoned():
     with LoopbackListener("tok") as listener:
-        assert listener.wait(0.01) is None
+        listener.mark_seen()
+        assert listener.wait() is None
+
+
+def test_a_heartbeat_keeps_the_wait_alive(monkeypatch):
+    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 0.6)
+    with LoopbackListener("tok") as listener:
+        thread, result = wait_in_thread(listener)
+        # Three probes 0.4 s apart: past the 0.6 s window in total, never within it alone.
+        for _ in range(3):
+            time.sleep(0.4)
+            assert post(listener.port, "?t=tok", {"kind": "probe"}).status == 204
+        post(listener.port, "?t=tok", {"kind": "submit", "data": {}})
+        thread.join(timeout=5)
+
+    assert result[0].kind == "submit"
 
 
 # A probe proves the token and CORS response are readable from a real page load. If it
@@ -74,7 +96,7 @@ def test_probe_does_not_end_the_wait():
 @pytest.mark.parametrize("query", ["", "?t=wrong"])
 def test_wrong_token_is_rejected(query):
     with LoopbackListener("tok") as listener:
-        thread, result = wait_in_thread(listener, timeout=0.5)
+        thread, result = wait_in_thread(listener)
         with pytest.raises(urllib.error.HTTPError) as caught:
             post(listener.port, query, {"kind": "submit", "data": {}})
         assert caught.value.code == 403
@@ -116,7 +138,7 @@ def test_malformed_body_is_rejected_without_ending_the_wait():
 
 def test_unknown_kind_is_rejected():
     with LoopbackListener("tok") as listener:
-        thread, result = wait_in_thread(listener, timeout=0.5)
+        thread, result = wait_in_thread(listener)
         with pytest.raises(urllib.error.HTTPError) as caught:
             post(listener.port, "?t=tok", {"kind": "whatever"})
         assert caught.value.code == 400
@@ -127,7 +149,7 @@ def test_unknown_kind_is_rejected():
 
 def test_wrong_path_is_a_404():
     with LoopbackListener("tok") as listener:
-        thread, _ = wait_in_thread(listener, timeout=0.5)
+        thread, _ = wait_in_thread(listener)
         request = urllib.request.Request(
             f"http://127.0.0.1:{listener.port}/nope?t=tok", data=b"{}", method="POST"
         )
@@ -141,7 +163,7 @@ def test_theme_kind_persists_and_does_not_end_the_wait(monkeypatch):
     saved = []
     monkeypatch.setattr(listener_module, "save_theme", saved.append)
     with LoopbackListener("tok") as listener:
-        thread, result = wait_in_thread(listener, timeout=0.5)
+        thread, result = wait_in_thread(listener)
         response = post(listener.port, "?t=tok", {"kind": "theme", "data": {"theme": "dark"}})
         assert response.status == 204
         thread.join(timeout=5)
@@ -154,7 +176,7 @@ def test_theme_kind_with_a_non_string_theme_is_ignored(monkeypatch):
     saved = []
     monkeypatch.setattr(listener_module, "save_theme", saved.append)
     with LoopbackListener("tok") as listener:
-        thread, _ = wait_in_thread(listener, timeout=0.5)
+        thread, _ = wait_in_thread(listener)
         response = post(listener.port, "?t=tok", {"kind": "theme", "data": {"theme": 3}})
         assert response.status == 204
         thread.join(timeout=5)

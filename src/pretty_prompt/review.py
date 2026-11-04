@@ -79,11 +79,8 @@ class ReviewRequest(BaseModel):
     pages: list[Page] = []
     header: str | None = None
     title: str = "Claude Code"
-    timeout_seconds: float = 300.0
 
     def validated(self) -> ReviewRequest:
-        if self.timeout_seconds <= 0:
-            raise InvalidReview("timeout_seconds must be positive")
         if not self.pages:
             raise InvalidReview("pages is empty; give pages, or repo to diff a git repository")
         for index, page in enumerate(self.pages):
@@ -119,7 +116,6 @@ def _build_html(
         accent=_resolve_accent(),
         theme=read_saved_theme(),
         submit_url=submit_url,
-        timeout_seconds=request.timeout_seconds,
         status_url=status_url,
         generation=generation,
     )
@@ -174,16 +170,24 @@ def _extract_comments(pages: list[Page], raw: object) -> list[dict[str, Any]]:
     return comments
 
 
-def _result_from_submission(pages: list[Page], submission: Submission | None) -> dict[str, Any]:
-    if submission is None:
-        return {"timed_out": True}
-    comments = _extract_comments(pages, submission.data.get("comments"))
-    note = submission.data.get("overall_note")
+def _result_from_submission(
+    pages: list[Page], submission: Submission | None, progress: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Submit, cancel or abandon, all in one shape.
+
+    An abandoned review (no submission) returns what the page last reported in its
+    heartbeat, the same way cancel keeps its comments (ADR 0002).
+    """
+    data = submission.data if submission is not None else (progress or {})
+    comments = _extract_comments(pages, data.get("comments"))
+    note = data.get("overall_note")
     result: dict[str, Any] = {
         "comments": comments,
         "overall_note": note.strip() if isinstance(note, str) and note.strip() else None,
     }
-    if submission.kind == "cancel":
+    if submission is None:
+        result["abandoned"] = True
+    elif submission.kind == "cancel":
         result["cancelled"] = True
     return result
 
@@ -201,8 +205,11 @@ def _run_review_reusing_tab(request: ReviewRequest, session: SessionListener) ->
     if not session.show_in_tab(generation, open_in_browser):
         return NOT_DELIVERED
 
-    submission = session.wait_for_answer(request.timeout_seconds)
-    return _result_from_submission(request.pages, submission)
+    try:
+        submission = session.wait_for_answer()
+    finally:
+        session.end_question()
+    return _result_from_submission(request.pages, submission, session.progress())
 
 
 def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
@@ -218,22 +225,24 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
             page = directory / "review.html"
             page.write_text(html, encoding="utf-8")
             open_in_browser(page)
-            submission = listener.wait(request.timeout_seconds)
+            submission = listener.wait()
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
             return NOT_DELIVERED
+        progress = listener.progress()
 
-    return _result_from_submission(request.pages, submission)
+    return _result_from_submission(request.pages, submission, progress)
 
 
 def run_review(request: ReviewRequest) -> dict[str, Any]:
-    """Open the page for `request` and block until it is submitted, cancelled, or idle.
+    """Open the page for `request` and block until it is submitted, cancelled, or abandoned.
 
     Returns `{"comments": [...], "overall_note": "..." | None}` on Submit, the same
     shape plus `"cancelled": True` on Cancel (comments/overall_note reflect whatever
-    existed at that point — see the module docstring and ADR 0002), `{"timed_out": True}`
-    if nothing arrives before `timeout_seconds` of idle time, or `{"not_delivered": True}`
+    existed at that point — see the module docstring and ADR 0002), the same plus
+    `"abandoned": True` if the tab was closed without either (comments/overall_note from
+    the page's last progress report), or `{"not_delivered": True}`
     if the page never loaded in a browser at all. Each comment is
     `{"path", "side", "line", "text", "context"}`, `side` being "old" or "new", `line`
     that side's 1-based line number in the file at `path`, and `context` the diff line's

@@ -5,6 +5,23 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- `timeout_seconds` on `ask`, `show` and `review`. A call no longer has a deadline: it
+  waits as long as the page is open.
+
+### Changed
+
+- `{"timed_out": true}` is now `{"abandoned": true}` on `ask`, `show` (with
+  `wait_for_acknowledge`) and `review`. It means the page went silent for 3 minutes
+  (tab closed, browser quit, machine asleep), not that an answer was slow.
+- The page heartbeat is a fixed 15 s and also runs while the tab is hidden. It stopped
+  while hidden before, so a user in another window lost the call after the timeout.
+- `review`: an abandoned call returns the comments and overall note entered so far, like
+  cancel. The page reports them with each heartbeat and 0.4 s after typing; before, a
+  timeout returned nothing.
+- `ask`: an abandoned call returns `resume` like a cancelled one, as `timed_out` did.
+
 ## [0.13.0] - 2026-11-04
 
 ### Changed

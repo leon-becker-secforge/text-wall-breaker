@@ -78,7 +78,6 @@ def test_duplicate_option_ids_are_rejected():
         ({"question": "  "}, "question is empty"),
         ({"question": "q", "options": [Option(id=" ", label="A")]}, "non-empty id"),
         ({"question": "q", "options": [Option(id="a", label=" ")]}, "empty label"),
-        ({"question": "q", "timeout_seconds": 0}, "must be positive"),
         (
             {
                 "question": "q",
@@ -229,16 +228,18 @@ def test_cancel_is_reported_as_cancelled(browser):
     }
 
 
-def test_a_page_that_never_loads_is_reported_undelivered(browser):
+def test_a_page_that_never_loads_is_reported_undelivered(browser, monkeypatch):
+    monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 0.05)
     browser(lambda page: None)
-    result = run_ask(AskRequest(question="q", timeout_seconds=0.05))
+    result = run_ask(AskRequest(question="q"))
     assert result == {"not_delivered": True}
 
 
-def test_a_loaded_page_left_unanswered_times_out(browser):
+def test_a_loaded_page_that_goes_silent_is_abandoned(browser, monkeypatch):
+    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 0.3)
     browser(lambda page: {"kind": "probe", "data": {}})
-    result = run_ask(AskRequest(question="q", timeout_seconds=0.3))
-    assert result == {"timed_out": True}
+    result = run_ask(AskRequest(question="q"))
+    assert result == {"abandoned": True}
 
 
 def test_unknown_ids_in_a_submission_are_dropped(browser):
@@ -295,7 +296,7 @@ def test_a_browser_failure_surfaces_rather_than_blocking(monkeypatch):
 
     monkeypatch.setattr(ask_module, "open_in_browser", refuse)
     with pytest.raises(BrowserUnavailable):
-        run_ask(AskRequest(question="q", timeout_seconds=60))
+        run_ask(AskRequest(question="q"))
 
 
 def test_questions_and_question_together_are_rejected():
@@ -484,12 +485,13 @@ def test_run_ask_reuses_the_tab_for_a_second_call(monkeypatch):
     assert len(opened) == 1
 
 
-def test_a_timed_out_ask_tells_its_tab_nobody_waits_any_more(monkeypatch):
+def test_an_abandoned_ask_tells_its_tab_nobody_waits_any_more(monkeypatch):
     session = session_module.get_shared_session()
     monkeypatch.setattr(ask_module, "open_in_browser", _loading_opener([]))
+    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 0.3)
 
-    result = run_ask(AskRequest(question="q", timeout_seconds=0.3))
-    assert result == {"timed_out": True}
+    result = run_ask(AskRequest(question="q"))
+    assert result == {"abandoned": True}
     status = _get_json(_session_url(session, "/status"))
     assert (status["generation"], status["open"]) == (1, False)
 
@@ -812,8 +814,8 @@ def test_an_ask_with_nothing_entered_has_no_resume_id(browser):
     assert run_ask(AskRequest(question="q", options=_a_b())) == {"cancelled": True}
 
 
-def test_resume_takes_nothing_but_a_timeout():
-    with pytest.raises(InvalidAsk, match="only timeout_seconds applies"):
+def test_resume_takes_nothing_else():
+    with pytest.raises(InvalidAsk, match="takes nothing else"):
         AskRequest(resume="x", question="q").validated()
 
 

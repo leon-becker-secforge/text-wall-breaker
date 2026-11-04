@@ -59,11 +59,8 @@ class ShowRequest(BaseModel):
     save_button: bool = True
     acknowledge_button: bool = True
     wait_for_acknowledge: bool = False
-    timeout_seconds: float = 300.0
 
     def validated(self) -> ShowRequest:
-        if self.timeout_seconds <= 0:
-            raise InvalidShow("timeout_seconds must be positive")
         if self.wait_for_acknowledge and not self.acknowledge_button:
             raise InvalidShow("wait_for_acknowledge requires acknowledge_button")
         if self.slides is not None:
@@ -111,7 +108,6 @@ def _build_html(
         save_button=request.save_button,
         acknowledge_button=request.acknowledge_button,
         submit_url=submit_url,
-        timeout_seconds=request.timeout_seconds,
         status_url=status_url,
         generation=generation,
     )
@@ -119,7 +115,7 @@ def _build_html(
 
 def _result_from_submission(submission: Submission | None) -> dict[str, Any]:
     if submission is None:
-        return {"timed_out": True}
+        return {"abandoned": True}
     return {"acknowledged": submission.kind == "acknowledge"}
 
 
@@ -147,7 +143,7 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
         return {"not_delivered": True}
     if not request.wait_for_acknowledge:
         return {"opened": True}
-    submission = session.wait_for_answer(request.timeout_seconds)
+    submission = session.wait_for_answer()
     return _result_from_submission(submission)
 
 
@@ -175,7 +171,7 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
         page.write_text(html, encoding="utf-8")
         try:
             open_in_browser(page)
-            submission = listener.wait(request.timeout_seconds)
+            submission = listener.wait()
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
@@ -186,8 +182,7 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
 def run_show(request: ShowRequest) -> dict[str, Any]:
     """Open the page for `request`. Returns `{"opened": True[, "path": ...]}` unless
     `wait_for_acknowledge` is set, in which case it blocks until the Acknowledge button
-    is clicked, the idle timeout elapses (`{"timed_out": True}`), or it's clicked
-    (`{"acknowledged": True}`).
+    is clicked (`{"acknowledged": True}`) or the tab is closed (`{"abandoned": True}`).
 
     Tries the process's one shared browser tab first — the same one `ask` uses — falling
     back to a fresh one-off tab if that shared tab is already asking something else or

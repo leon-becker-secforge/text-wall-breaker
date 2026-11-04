@@ -11,9 +11,11 @@ guessed the port — the unguessable token in the query string is what stands in
 This mirrors the contract in no-text-wall's `INTERACTIVE.md`, which the page's submit
 script is adapted from.
 
-The timeout is an *idle* timeout, bumped by any request the handler sees, including the
-probe the page fires on load. That matters: the window the operator gets to answer in
-should start when the browser actually renders the page, not when `xdg-open` returned.
+There is no deadline for an answer. A call ends when the page is *abandoned*: it sends
+nothing for ABANDON_SECONDS. Every request the handler sees bumps that clock, and an open
+page sends a heartbeat every few seconds (hidden or not), so only a closed tab, a dead
+browser or a sleeping machine stops it. The clock starts when the page first renders, not
+when `xdg-open` returned.
 """
 
 from __future__ import annotations
@@ -61,8 +63,14 @@ _POLL_SECONDS = 0.5
 # A page that hasn't loaded this long after its tab was opened never will: the browser
 # didn't open it, or opened it somewhere the user can't see. Long enough for a cold
 # browser start. The caller reports that as undelivered instead of waiting out its whole
-# timeout for an answer that can't come.
+# wait for an answer that can't come.
 DELIVERY_SECONDS = 30.0
+
+# How long a page that was loaded may stay silent before its call is given up as
+# abandoned. The page's heartbeat is every 15 s, but a browser throttles a background tab's
+# timers to about once a minute, so this must stay well above 60 s or a tab merely sitting
+# in another window would count as closed.
+ABANDON_SECONDS = 180.0
 
 # An open tab on the shared session reloads for a new page within ~1.5 s: it polls
 # /status. One that hasn't after this long was closed (or is an unanswered page that
@@ -202,7 +210,7 @@ class LoopbackListener:
     """Binds a loopback port now, waits for one submission later.
 
     Used as a context manager so the socket is closed on every exit path, including the
-    timeout and a cancelled tool call.
+    abandonment and a cancelled tool call.
     """
 
     def __init__(self, token: str) -> None:
@@ -245,18 +253,18 @@ class LoopbackListener:
         """Whether the page has been in touch at all (its load probe, at the latest)."""
         return self._seen
 
-    def wait(self, timeout_seconds: float) -> Submission | None:
-        """Block until a submission arrives, or `timeout_seconds` pass with no traffic.
+    def wait(self) -> Submission | None:
+        """Block until a submission arrives, or the page is abandoned.
 
-        Returns None on timeout, and early, after DELIVERY_SECONDS, if the page never
-        loaded; `page_seen` tells the two apart. Blocking, so callers on an event loop
-        run this in a worker thread.
+        Returns None once ABANDON_SECONDS pass with no traffic, and early, after
+        DELIVERY_SECONDS, if the page never loaded; `page_seen` tells the two apart.
+        Blocking, so callers on an event loop run this in a worker thread.
         """
         self.note_activity()
         started = time.monotonic()
         while self._submission is None:
             now = time.monotonic()
-            if now > self._last_activity + timeout_seconds:
+            if now > self._last_activity + ABANDON_SECONDS:
                 return None
             if not self._seen and now > started + DELIVERY_SECONDS:
                 return None
@@ -376,7 +384,7 @@ class SessionListener:
         self._submission: Submission | None = None
         self._answered = threading.Event()
         # Whether a call still waits on the current page. Reported by GET /status, so a
-        # tab left open after its call timed out can say so instead of taking answers
+        # tab left open after its call was abandoned can say so instead of taking answers
         # nobody will read.
         self._open = False
         # The latest answers-so-far the page reported, for a `resume` draft. Reset by
@@ -578,12 +586,12 @@ class SessionListener:
                 self._report["state"] = "acknowledged"
         self._answered.set()
 
-    def wait_for_answer(self, timeout_seconds: float) -> Submission | None:
-        """Block until the current question is answered, or the tab goes idle too long.
+    def wait_for_answer(self) -> Submission | None:
+        """Block until the current question is answered, or the tab is abandoned.
 
-        Polls in `_POLL_SECONDS` slices rather than blocking for the whole timeout in one
-        wait() so an idle deadline bumped by GET/POST traffic (see note_activity) is
-        re-checked promptly instead of only after the original window would have lapsed.
+        Abandoned means ABANDON_SECONDS without any GET/POST traffic (see note_activity).
+        Polls in `_POLL_SECONDS` slices so traffic that moves the deadline is re-checked
+        promptly instead of only after the original window would have lapsed.
         """
         self.note_activity()
         while True:
@@ -592,7 +600,7 @@ class SessionListener:
                     return self._submission
             with self._state_lock:
                 idle_for = time.monotonic() - self._last_activity
-            if idle_for > timeout_seconds:
+            if idle_for > ABANDON_SECONDS:
                 return None
 
     def close(self) -> None:

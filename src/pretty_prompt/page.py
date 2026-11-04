@@ -531,7 +531,6 @@ __FREE_TEXT__
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
-  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var THEME_KEY = 'no-text-wall:theme';
   // So the tab bar shows whether this question is open or done without switching to the
   // tab — useful once several are open, or once one is answered and left to wait its
@@ -832,20 +831,16 @@ __FREE_TEXT__
     stopHeartbeat();
   }
 
-  // The server's timeout is idle, not absolute — bumped by any request it sees,
-  // including a 'probe' (see listener.py). Without this, someone who opens the page and
-  // reads for a while before touching anything gets timed out for no better reason than
-  // not having clicked yet. Interval scales with the actual timeout instead of a fixed
-  // number, so a short timeout_seconds still gets pinged well before it would lapse.
-  // Only while the tab is visible: minimising it or switching away is meant to still
-  // let an abandoned call time out rather than being kept alive forever unattended.
-  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  // The server treats a page that sends nothing for ABANDON_SECONDS (listener.py) as
+  // gone, so this is how an open tab says it is still there. It runs while the tab is
+  // hidden too: a hidden tab is still being used, only a closed one stops sending.
+  // Browsers throttle background timers to about once a minute, well inside the window.
+  var HEARTBEAT_MS = 15000;
   var heartbeatTimer = null;
   // On a reused tab GET /status keeps the call alive the same way a probe does, and
   // also says whether a call still waits on this page. A one-shot page learns that its
   // call ended from the probe failing, since its listener closes with the call.
   async function heartbeat() {
-    if (document.visibilityState !== 'visible') return;
     if (!STATUS_URL) { send('probe', {}); return; }
     try {
       var res = await fetch(STATUS_URL);
@@ -871,9 +866,10 @@ __FREE_TEXT__
     if (document.visibilityState === 'visible') heartbeat();
   });
 
-  // The call this page answers ended without an answer: it timed out while the tab was
-  // hidden, or the server is gone. Freezing beats taking an answer nobody will read. On a
-  // reused tab still showing its own generation, the next question can still land here.
+  // The call this page answers ended without an answer: Claude Code stopped waiting
+  // (abandoned, interrupted), or the server is gone. Freezing beats taking an answer
+  // nobody will read. On a reused tab still showing its own generation, the next
+  // question can still land here.
   function expire(reusable) {
     if (frozen) return;
     freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
@@ -1055,7 +1051,6 @@ __STEPS__
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
-  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var STEP_COUNT = __STEP_COUNT__;
   var THEME_KEY = 'no-text-wall:theme';
   // So the tab bar shows whether this question is open or done without switching to the
@@ -1445,13 +1440,12 @@ __STEPS__
     stopHeartbeat();
   }
 
-  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  var HEARTBEAT_MS = 15000;
   var heartbeatTimer = null;
   // On a reused tab GET /status keeps the call alive the same way a probe does, and
   // also says whether a call still waits on this page. A one-shot page learns that its
   // call ended from the probe failing, since its listener closes with the call.
   async function heartbeat() {
-    if (document.visibilityState !== 'visible') return;
     if (!STATUS_URL) { send('probe', {}); return; }
     try {
       var res = await fetch(STATUS_URL);
@@ -1475,9 +1469,10 @@ __STEPS__
     if (document.visibilityState === 'visible') heartbeat();
   });
 
-  // The call this page answers ended without an answer: it timed out while the tab was
-  // hidden, or the server is gone. Freezing beats taking an answer nobody will read. On a
-  // reused tab still showing its own generation, the next question can still land here.
+  // The call this page answers ended without an answer: Claude Code stopped waiting
+  // (abandoned, interrupted), or the server is gone. Freezing beats taking an answer
+  // nobody will read. On a reused tab still showing its own generation, the next
+  // question can still land here.
   function expire(reusable) {
     if (frozen) return;
     freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
@@ -1729,7 +1724,7 @@ main img { cursor: zoom-in; max-width: 100%; height: auto; border-radius: 6px; }
 # `show` gets a listener-driven submit script only when a call actually wires one up
 # (see page.py's build_show_page and show.py's run_show) — the fallback box, heartbeat
 # and reuse-polling are copied from _TEMPLATE's script since a listener-backed show page
-# needs the exact same idle-timeout and tab-reuse behaviour ask's page does. Save is pure
+# needs the exact same abandonment-heartbeat and tab-reuse behaviour ask's page does. Save is pure
 # client-side Blob download and needs none of that, whether or not a listener exists.
 _SHOW_TEMPLATE = """<!doctype html>
 <html lang="en"__THEME_ATTR__>
@@ -1767,7 +1762,6 @@ __ACK_BUTTON__
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
-  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var STATUS_URL = __STATUS_URL__;
   var GENERATION = __GENERATION__;
   var RAW_CONTENT = __RAW_CONTENT__;
@@ -1868,11 +1862,9 @@ __ACK_BUTTON__
       reason + ' \\u2014 the report is still on screen; only the acknowledgement failed to send.';
   }
 
-  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  var HEARTBEAT_MS = 15000;
   var heartbeatTimer = null;
-  function heartbeat() {
-    if (document.visibilityState === 'visible') send('probe', {});
-  }
+  function heartbeat() { send('probe', {}); }
   function startHeartbeat() {
     stopHeartbeat();
     heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
@@ -2034,7 +2026,6 @@ def build_show_page(
     save_button: bool = True,
     acknowledge_button: bool = True,
     submit_url: str | None = None,
-    timeout_seconds: float = 300.0,
     status_url: str | None = None,
     generation: int = 0,
 ) -> str:
@@ -2051,7 +2042,7 @@ def build_show_page(
     `submit_url`, the Acknowledge button still shows and responds, but purely as a local
     "seen" mark, never sent anywhere.
 
-    `submit_url`/`status_url`/`generation`/`timeout_seconds` mirror `build_page`'s: set
+    `submit_url`/`status_url`/`generation` mirror `build_page`'s: set
     together when this page is served by a `SessionListener` or a one-shot
     `LoopbackListener`, left at their defaults for a plain unlistened page.
     """
@@ -2091,7 +2082,6 @@ def build_show_page(
         .replace("__SAVE_BUTTON__", save_html)
         .replace("__ACK_BUTTON__", ack_html)
         .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
         .replace("__RAW_CONTENT__", _js_string(raw_content))
@@ -2274,7 +2264,6 @@ __CONTENT__
 <script>
 (function () {
   var SUBMIT_URL = __SUBMIT_URL__;
-  var TIMEOUT_SECONDS = __TIMEOUT_SECONDS__;
   var STATUS_URL = __STATUS_URL__;
   var GENERATION = __GENERATION__;
   var THEME_KEY = 'no-text-wall:theme';
@@ -2367,10 +2356,17 @@ __CONTENT__
     stopHeartbeat();
   }
 
-  var HEARTBEAT_MS = Math.min(60000, Math.max(2000, (TIMEOUT_SECONDS * 1000) / 4));
+  // The heartbeat doubles as the progress report: if the tab is closed mid-review, the
+  // server returns the comments from the last one (see review.run_review) instead of
+  // losing them. Typing reports on its own after a short pause, so a closed tab loses
+  // at most the last moment of typing, not up to HEARTBEAT_MS of it.
+  var HEARTBEAT_MS = 15000;
   var heartbeatTimer = null;
-  function heartbeat() {
-    if (document.visibilityState === 'visible') send('probe', {});
+  var progressTimer = null;
+  function heartbeat() { if (!frozen) send('progress', collect()); }
+  function reportSoon() {
+    clearTimeout(progressTimer);
+    progressTimer = setTimeout(heartbeat, 400);
   }
   function startHeartbeat() {
     stopHeartbeat();
@@ -2381,10 +2377,14 @@ __CONTENT__
       clearInterval(heartbeatTimer);
       heartbeatTimer = null;
     }
+    clearTimeout(progressTimer);
   }
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') heartbeat();
   });
+  overallNote.addEventListener('input', reportSoon);
+  Array.prototype.slice.call(document.querySelectorAll('.pp-review-comment-box textarea'))
+    .forEach(function (t) { t.addEventListener('input', reportSoon); });
 
   function fallback(payload, reason, title) {
     var box = document.getElementById('pp-fallback');
@@ -2423,14 +2423,14 @@ __CONTENT__
         body: JSON.stringify(payload)
       });
       if (!res.ok) {
-        if (kind !== 'probe') {
+        if (kind !== 'probe' && kind !== 'progress') {
           fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
         }
         return false;
       }
       return true;
     } catch (err) {
-      if (kind !== 'probe') {
+      if (kind !== 'probe' && kind !== 'progress') {
         fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
       }
       return false;
@@ -2622,7 +2622,6 @@ def build_review_page(
     *,
     pages: list[dict[str, object]],
     submit_url: str,
-    timeout_seconds: float,
     header: str | None = None,
     title: str = "Claude Code",
     accent: str | None = None,
@@ -2644,7 +2643,7 @@ def build_review_page(
     shape as Submit, comments and overall note included, rather than discarding them —
     see `review.run_review`'s docstring and ADR 0002.
 
-    `submit_url`/`timeout_seconds`/`status_url`/`generation` mirror `build_page`'s — see
+    `submit_url`/`status_url`/`generation` mirror `build_page`'s — see
     there.
     """
     css = _load_base_css() + _ACTIONS_CSS + _REVIEW_ADDENDUM
@@ -2668,7 +2667,6 @@ def build_review_page(
         .replace("__DECK_SCRIPT__", _review_deck_script(len(pages) > 1))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html, header_html)))
         .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
     )
@@ -3003,7 +3001,6 @@ def build_page(
     allow_free_text: bool,
     free_text_prefill: str = "",
     submit_url: str,
-    timeout_seconds: float,
     allow_defer: bool = False,
     title: str = "Claude Code is asking",
     accent: str | None = None,
@@ -3012,10 +3009,6 @@ def build_page(
     generation: int = 0,
 ) -> str:
     """Return the complete HTML document for one `ask` call.
-
-    `timeout_seconds` must match the value the listener was actually given: it only
-    paces the page's own idle-avoiding heartbeat (see the inline script), which sends
-    faster for a short timeout so it still lands comfortably inside the window.
 
     `accent` is a `#rrggbb` hex colour overriding the built-in green, or None to use it
     as-is. Raises `InvalidAccent` if set and unparseable — callers reading it from
@@ -3076,7 +3069,6 @@ def build_page(
         .replace("__FREE_TEXT__", free_text)
         .replace("__HINT__", html.escape(hint, quote=True))
         .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(question_html, options_html)))
@@ -3185,7 +3177,6 @@ def build_multi_page(
     questions: list[dict[str, object]],
     submit_url: str,
     header: str = "",
-    timeout_seconds: float,
     title: str = "Claude Code is asking",
     accent: str | None = None,
     theme: str | None = None,
@@ -3243,7 +3234,6 @@ def build_multi_page(
         .replace("__SEGMENTS__", segments_html)
         .replace("__INITIAL_NEXT_LABEL__", initial_next)
         .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__TIMEOUT_SECONDS__", _js_string(timeout_seconds))
         .replace("__STEP_COUNT__", str(total))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))

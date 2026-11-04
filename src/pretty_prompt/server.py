@@ -79,11 +79,12 @@ choice in `caveat`.
 
 Returns one of:
   {"selected":[...], "free_text":"...", "expanded":[...]}   answered
-  {"cancelled": true} / {"timed_out": true} / {"not_delivered": true}
+  {"cancelled": true} / {"abandoned": true} / {"not_delivered": true}
 
 `selected` and `free_text` are additive. `expanded`: option ids whose body was ever
-opened. `not_delivered` (~30s): the user never saw it; ask again. A cancelled or
-timed-out ask carries `resume` when answers were entered: pass it back as `resume` to
+opened. `not_delivered` (~30s): the user never saw it; ask again. `abandoned`: the
+tab was closed with no answer; there is no deadline while it stays open. A cancelled or
+abandoned ask carries `resume` when answers were entered: pass it back as `resume` to
 reopen the ask prefilled.
 
 `interrupted: true` on an answer: the user stopped the ask there for you to read now.
@@ -117,7 +118,7 @@ so the report stays up. Before asking about the report, check `show_status` or s
 Two buttons, both on by default (`save_button`, `acknowledge_button`):
   - Save report: downloads Markdown or HTML, client-side only.
   - Acknowledge: marks it seen. `wait_for_acknowledge` blocks on it like `ask`,
-    returning `{"acknowledged": true}` or `{"timed_out": true}`.
+    returning `{"acknowledged": true}` or, if the tab is closed, `{"abandoned": true}`.
 
 Otherwise returns `{"opened": true, "path": "..."}` (`path` only for a one-off tab).
 `{"not_delivered": true}`: the page never loaded.
@@ -125,7 +126,7 @@ Otherwise returns `{"opened": true, "path": "..."}` (`path` only for a one-off t
 `slides` shows a deck instead of `content`; see its parameter."""
 
 _REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page, one file per page;
-blocks until submit, cancel, or timeout. For a reaction that reduces to a choice, use
+blocks until submit, cancel, or the tab is closed. For a reaction that reduces to a choice, use
 `ask`.
 
 Source, one of:
@@ -141,7 +142,8 @@ is `{"path", "side", "line", "text", "context"}`: `side` "old" or "new", `line` 
 side's 1-based line number in the file (not its position in the diff text),
 `context` that line's text. Cancel returns the same shape plus `"cancelled": true`,
 keeping what was entered, since a cancel may be deliberate after a partial pass.
-`{"timed_out": true}`: nothing arrived in time. `{"not_delivered": true}`: the page
+The same shape plus `"abandoned": true`: the tab was closed first; comments are
+those entered so far. `{"not_delivered": true}`: the page
 never loaded."""
 
 
@@ -173,18 +175,6 @@ def accent_config_problem() -> str | None:
     return None
 
 
-_QUESTIONS_TIMEOUT_SECONDS = 1800.0
-
-
-def _ask_timeout(
-    given: float | None, questions: list[Question] | None, resume: str | None
-) -> float:
-    if given is not None:
-        return given
-    long_page = questions is not None or resume is not None
-    return _QUESTIONS_TIMEOUT_SECONDS if long_page else 300.0
-
-
 @server.tool(name="ask", description=_ASK_DESCRIPTION)
 async def ask(
     question: Annotated[
@@ -202,15 +192,6 @@ async def ask(
         bool, Field(description="Show a free-text box alongside the options.")
     ] = True,
     allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False,
-    timeout_seconds: Annotated[
-        float | None,
-        Field(
-            description="Give up after this many seconds without hearing from the page. "
-            "The visible page keeps the call alive however long the user reads, so this "
-            "only runs down while the tab is hidden or closed. Default 300; 1800 with "
-            "questions or resume."
-        ),
-    ] = None,
     questions: Annotated[
         list[Question] | None,
         Field(
@@ -231,9 +212,9 @@ async def ask(
     resume: Annotated[
         str | None,
         Field(
-            description="The `resume` id a cancelled, timed-out or interrupted ask "
-            "returned: reopens that ask with the user's earlier answers prefilled. Only "
-            "timeout_seconds applies. Used once."
+            description="The `resume` id a cancelled, abandoned or interrupted ask "
+            "returned: reopens that ask with the user's earlier answers prefilled. "
+            "Takes no other argument. Used once."
         ),
     ] = None,
 ) -> dict[str, Any]:
@@ -243,7 +224,6 @@ async def ask(
         multi_select=multi_select,
         allow_free_text=allow_free_text,
         allow_defer=allow_defer,
-        timeout_seconds=_ask_timeout(timeout_seconds, questions, resume),
         questions=questions,
         header=header,
         resume=resume,
@@ -293,10 +273,6 @@ async def show(
             "acknowledge_button. Left false, check the click later with show_status."
         ),
     ] = False,
-    timeout_seconds: Annotated[
-        float,
-        Field(description="With wait_for_acknowledge, give up after this many idle seconds."),
-    ] = 300.0,
 ) -> dict[str, Any]:
     request = ShowRequest(
         content=content,
@@ -307,7 +283,6 @@ async def show(
         save_button=save_button,
         acknowledge_button=acknowledge_button,
         wait_for_acknowledge=wait_for_acknowledge,
-        timeout_seconds=timeout_seconds,
     )
     try:
         request.validated()
@@ -366,14 +341,6 @@ async def review(
     ] = 3,
     header: Annotated[str | None, Field(description="Markdown shown above every page.")] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
-    timeout_seconds: Annotated[
-        float,
-        Field(
-            description="Give up after this many seconds without hearing from the "
-            "page. The visible page keeps the call alive however long the review takes, "
-            "so this only runs down while the tab is hidden or closed."
-        ),
-    ] = 300.0,
 ) -> dict[str, Any]:
     if repo is None and (git_range is not None or paths):
         raise ToolError("git_range and paths need repo")
@@ -393,7 +360,6 @@ async def review(
         pages=pages or [],
         header=header,
         title=title,
-        timeout_seconds=timeout_seconds,
     )
     try:
         request.validated()

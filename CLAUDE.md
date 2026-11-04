@@ -15,7 +15,7 @@ without publishing anything externally (no Artifact tool — see memory
    /path/to/repo/.venv/bin/python -c "
    import sys; sys.path.insert(0, 'src')
    from pretty_prompt.page import build_page, build_multi_page
-   html = build_multi_page(questions=[...], submit_url='http://127.0.0.1:1/submit', timeout_seconds=300)
+   html = build_multi_page(questions=[...], submit_url='http://127.0.0.1:1/submit')
    open('/tmp/.../check.html', 'w').write(html)
    "
    ```

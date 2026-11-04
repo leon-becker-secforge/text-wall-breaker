@@ -16,7 +16,7 @@ Two ways a call gets its tab, tried in that order:
      calls safe: the second one can't wait for the first to free the shared tab, so it
      gets its own instead of blocking or colliding with it.
 
-A cancelled or timed-out ask that had answers entered returns a `resume` id: the pages
+A cancelled or abandoned ask that had answers entered returns a `resume` id: the pages
 report every change as they go, the server keeps the last report as a draft, and a call
 with `resume` reopens the same questions with those answers prefilled.
 
@@ -70,7 +70,7 @@ __all__ = [
 SHARE_INTERACTION_SIGNALS = True
 
 # The page never loaded, so nobody saw the question: the agent should fall back at once,
-# not treat it like an unanswered `timed_out`. See listener.DELIVERY_SECONDS.
+# not treat it like an `abandoned` one. See listener.DELIVERY_SECONDS.
 NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
 
 
@@ -222,14 +222,11 @@ class AskRequest(BaseModel):
     allow_defer: bool = False
     questions: list[Question] | None = None
     header: str = ""
-    timeout_seconds: float = 300.0
     resume: str | None = None
     free_text: str | None = None  # prefill of the single-question shorthand; set by resume only
 
     def validated(self) -> AskRequest:
         """Return self, or raise `InvalidAsk` if the page would be unanswerable."""
-        if self.timeout_seconds <= 0:
-            raise InvalidAsk("timeout_seconds must be positive")
         if self.resume is not None:
             if (
                 self.question.strip()
@@ -237,7 +234,7 @@ class AskRequest(BaseModel):
                 or self.questions is not None
                 or self.header.strip()
             ):
-                raise InvalidAsk("resume reopens an earlier ask; only timeout_seconds applies")
+                raise InvalidAsk("resume reopens an earlier ask and takes nothing else")
             return self
         if self.header.strip() and self.questions is None:
             raise InvalidAsk(
@@ -381,7 +378,6 @@ def _build_html(
             allow_defer=step.allow_defer,
             free_text_prefill=step.free_text or "",
             submit_url=submit_url,
-            timeout_seconds=request.timeout_seconds,
             accent=_resolve_accent(),
             theme=read_saved_theme(),
             status_url=status_url,
@@ -401,7 +397,6 @@ def _build_html(
         ],
         header=request.header,
         submit_url=submit_url,
-        timeout_seconds=request.timeout_seconds,
         accent=_resolve_accent(),
         theme=read_saved_theme(),
         status_url=status_url,
@@ -496,9 +491,7 @@ def _resumed_request(request: AskRequest) -> AskRequest:
             )
         )
     if draft.multi:
-        return AskRequest(
-            questions=steps, header=draft.header, timeout_seconds=request.timeout_seconds
-        )
+        return AskRequest(questions=steps, header=draft.header)
     only = steps[0]
     return AskRequest(
         question=only.question,
@@ -507,7 +500,6 @@ def _resumed_request(request: AskRequest) -> AskRequest:
         allow_free_text=only.allow_free_text,
         allow_defer=only.allow_defer,
         free_text=only.free_text,
-        timeout_seconds=request.timeout_seconds,
     )
 
 
@@ -519,7 +511,7 @@ def _unanswered(
     multi: bool,
     progress: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """`result` (cancelled or timed out), plus a `resume` id if there is a draft to resume."""
+    """`result` (cancelled or abandoned), plus a `resume` id if there is a draft to resume."""
     draft_id = _save_draft(steps, header, multi=multi, progress=progress)
     return {**result, "resume": draft_id} if draft_id else result
 
@@ -563,7 +555,7 @@ def _answer_from_submission(
     progress: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if submission is None:
-        return _unanswered({"timed_out": True}, steps, header, multi=multi, progress=progress)
+        return _unanswered({"abandoned": True}, steps, header, multi=multi, progress=progress)
     if submission.kind == "cancel":
         return _unanswered({"cancelled": True}, steps, header, multi=multi, progress=progress)
     if submission.kind == "interrupt":
@@ -591,7 +583,7 @@ def _run_ask_reusing_tab(
         return NOT_DELIVERED
 
     try:
-        submission = session.wait_for_answer(request.timeout_seconds)
+        submission = session.wait_for_answer()
     finally:
         session.end_question()
     return _answer_from_submission(
@@ -620,7 +612,7 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
             page = directory / "ask.html"
             page.write_text(html, encoding="utf-8")
             open_in_browser(page)
-            submission = listener.wait(request.timeout_seconds)
+            submission = listener.wait()
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
@@ -637,9 +629,9 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
 
 
 def _run_ask(request: AskRequest) -> dict[str, Any]:
-    """Open the page for `request` and block until it is answered, cancelled or idle.
+    """Open the page for `request` and block until it is answered, cancelled or abandoned.
 
-    Returns `{"cancelled": True}` or `{"timed_out": True}` either way, or
+    Returns `{"cancelled": True}` or `{"abandoned": True}` (the tab was closed) either way, or
     `{"not_delivered": True}` if the page never loaded in a browser at all. Otherwise, for a
     single question (the `question` shorthand), `{"selected", "free_text", "expanded"}`;
     for `questions`, `{"answers": [{"selected", "free_text", "expanded"}, ...]}`, one

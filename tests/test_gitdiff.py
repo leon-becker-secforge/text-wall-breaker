@@ -5,7 +5,6 @@ import pytest
 
 from pretty_prompt.gitdiff import GitDiffError, pages_from_git
 from pretty_prompt.review import Page
-from pretty_prompt.server import _ask_timeout
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -63,10 +62,3 @@ def test_empty_diff_and_missing_repo_are_refused(repo, tmp_path):
         pages_from_git(str(repo), "HEAD", None, 3)
     with pytest.raises(GitDiffError, match="not a directory"):
         pages_from_git(str(tmp_path / "missing"), None, None, 3)
-
-
-def test_ask_timeout_defaults():
-    assert _ask_timeout(None, None, None) == 300.0
-    assert _ask_timeout(None, [], None) == 1800.0
-    assert _ask_timeout(None, None, "r") == 1800.0
-    assert _ask_timeout(42.0, [], None) == 42.0

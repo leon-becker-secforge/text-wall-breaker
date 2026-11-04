@@ -96,8 +96,7 @@ above — surfaced once at launch rather than as a page that silently ignored it
     {"id": "sqlite", "label": "SQLite"}
   ],
   "multi_select": false,
-  "allow_free_text": true,
-  "timeout_seconds": 300
+  "allow_free_text": true
 }
 ```
 
@@ -168,26 +167,27 @@ Exactly one of:
 {"selected": ["pg"], "free_text": "", "expanded": []}
 {"answers": [{"selected": ["pg"], "free_text": "", "expanded": []}, ...]}
 {"cancelled": true}
-{"timed_out": true}
+{"abandoned": true}
 {"not_delivered": true}
 ```
 
 The first shape answers `question`; the second, one entry per question in order,
 answers `questions`. Cancel is a control of its own on the page, so an answer the user
-declined to give is distinguishable from one that never arrived. `timeout_seconds` is an
-*idle* timeout, refreshed by any traffic from the page — including the probe it sends on
-load — so the window starts when the page renders rather than when the browser was
-launched. While the tab is visible the page sends a heartbeat, so however long the user
-reads, the call stays alive; the timeout only runs while the tab is hidden or closed, and
-a long page needs no larger value than a short one. When `timeout_seconds` is not given
-it is 1800 for `questions` and `resume` calls and 300 otherwise.
+declined to give is distinguishable from one that never arrived.
+
+There is no deadline for an answer. An open page sends a heartbeat every 15 seconds,
+hidden or not, and the call waits as long as it keeps coming. `abandoned` means the
+page went silent for 3 minutes: the tab was closed, the browser quit or the machine
+slept. Browsers slow a background tab's timers to about once a minute, which is why the
+window is that long. An abandoned `ask` returns `resume` like a cancelled one, when
+answers were entered.
 
 ### Long waits and background tasks
 
 Claude Code moves an MCP call still running after 120 s to a background task. The
 answer then arrives as a task notification marked "NOT USER INPUT", which an agent must
 not treat as the user's answer or approval, so it asks the user to repeat it in chat.
-The limit belongs to Claude Code, not to `timeout_seconds`. Per the
+The limit belongs to Claude Code, not to pretty-prompt. Per the
 [Claude Code MCP docs](https://code.claude.com/docs/en/mcp.md):
 
 - `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` sets the threshold (default `120000`) for all
@@ -201,9 +201,9 @@ The limit belongs to Claude Code, not to `timeout_seconds`. Per the
   the Agent SDK.
 
 `not_delivered` means the page never loaded in a browser, so the user never saw the
-question. It comes back within about 30 seconds of opening the tab, not after the whole
-timeout, so the agent can fall back to asking in the terminal. A page that loaded and was
-then left alone still ends in `timed_out`.
+question. It comes back within about 30 seconds of opening the tab, so the agent can
+fall back to asking in the terminal. A page that loaded and was then closed ends in
+`abandoned`.
 
 `expanded` is the ids of options whose collapsed body was opened at any point before the
 answer was sent. It stays set even if the drawer was closed again afterwards, so an id
@@ -233,8 +233,7 @@ the order they were first picked: what the user considered and gave up. In the
   "title": "Review: auth middleware",
   "save_button": true,
   "acknowledge_button": true,
-  "wait_for_acknowledge": false,
-  "timeout_seconds": 300
+  "wait_for_acknowledge": false
 }
 ```
 
@@ -275,13 +274,13 @@ apart.
 ```json
 {"opened": true, "path": "..."}
 {"acknowledged": true}
-{"timed_out": true}
+{"abandoned": true}
 {"not_delivered": true}
 ```
 
 Without `wait_for_acknowledge`, always `{"opened": true}`, plus `path` when the call
 didn't reuse an already-open tab (see below). With it, `{"acknowledged": true}` once
-Acknowledge is clicked, or `{"timed_out": true}` after `timeout_seconds` idle. Either
+Acknowledge is clicked, or `{"abandoned": true}` if the tab is closed first. Either
 way, `{"not_delivered": true}` means the page never loaded (see `ask`'s Result). A
 one-off page without `wait_for_acknowledge` has no listener to tell, so it always
 reports `opened`.
@@ -294,14 +293,14 @@ reports `opened`.
     {"path": "src/foo.py", "diff": "--- a/src/foo.py\n+++ b/src/foo.py\n@@ -1,3 +1,3 @@\n def foo():\n-    return 1\n+    return 2\n",
      "blurb": "Why this file changed."}
   ],
-  "header": "Reviewing PR #42 — focus on the error-handling path.",
-  "timeout_seconds": 300
+  "header": "Reviewing PR #42 — focus on the error-handling path."
 }
 ```
 
 Unlike `ask` and `show`, a `review` call's reaction doesn't reduce to a discrete choice
 or a plain acknowledgement — it attaches to specific lines of a diff. It blocks the same
-way `ask` does, waiting for the user to submit, cancel, or the idle timeout to elapse.
+way `ask` does, with no deadline: it waits for the user to submit or cancel, or for the
+tab to be closed.
 
 Each entry of `pages` is one file's diff, raw unified diff text (e.g. straight `git diff`
 output) — a `@@ -a,b +c,d @@` hunk header is required so a line's coordinate can be
@@ -333,7 +332,7 @@ input.
 {"comments": [{"path": "src/foo.py", "side": "new", "line": 2, "text": "why 2?", "context": "    return 2"}],
  "overall_note": "Looks fine overall."}
 {"cancelled": true, "comments": [...], "overall_note": null}
-{"timed_out": true}
+{"abandoned": true, "comments": [...], "overall_note": null}
 {"not_delivered": true}
 ```
 
@@ -348,6 +347,10 @@ Cancel returns the same shape as Submit, plus `"cancelled": true` — whatever c
 overall note already existed are kept, not discarded, since the user may cancel
 deliberately after a partial pass, intending the agent to act on what's already flagged.
 This is the one deliberate difference from `ask`'s all-or-nothing cancel.
+
+Abandoned (the tab was closed) returns the same shape plus `"abandoned": true`. The
+page reports its comments with every heartbeat and shortly after typing, so the result
+holds what was entered up to the last report, not an empty review.
 
 ## Markdown
 
@@ -416,7 +419,7 @@ action from the user.
 2. The page is written to a per-call temp directory and handed to the platform's opener
    (see above).
 3. The call blocks on that socket until the token-matched POST arrives, a cancel arrives,
-   or the idle timeout elapses. The temp directory is removed on every exit path.
+   or the page goes silent (abandoned). The temp directory is removed on every exit path.
 
 A one-off `show` call that isn't waiting for Acknowledge skips step 1 and 3 entirely: no
 socket, no token, nothing to block on — just a static page, written and opened. Its

@@ -96,10 +96,10 @@ def test_ask_schema_matches_the_agreed_shape():
         "multi_select",
         "allow_free_text",
         "allow_defer",
-        "timeout_seconds",
         "questions",
         "header",
     }
+    assert "timeout_seconds" not in properties
     option = schema["$defs"]["Option"]["properties"]
     assert set(option) == {"id", "label", "caveat", "body", "selected", "recommended"}
     question = schema["$defs"]["Question"]["properties"]
