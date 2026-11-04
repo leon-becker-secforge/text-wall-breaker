@@ -2221,7 +2221,8 @@ body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
 .pp-review-row.add .pp-review-gutter { background: var(--pp-add-gut); color: var(--pp-add); }
 .pp-review-row.del .pp-review-gutter { background: var(--pp-del-gut); color: var(--pp-del); }
 .pp-review-row.add .pp-review-text::before { content: "+ "; color: var(--pp-add); }
-.pp-review-row.del .pp-review-text::before { content: "\\2212  "; color: var(--pp-del); }  /* two spaces: the first ends the escape */
+.pp-review-row.del .pp-review-text::before { content: "\\2212  ";
+  color: var(--pp-del); }  /* two spaces: the first ends the escape */
 .pp-review-row.ctx .pp-review-text::before { content: "  "; }
 .pp-review-row-wrap:hover .pp-review-row,
 .pp-review-row-wrap:focus-within .pp-review-row { background: var(--ntw-border); }
