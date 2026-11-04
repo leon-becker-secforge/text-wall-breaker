@@ -44,6 +44,15 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Changed
 
+- `review`: one button language. The comment box's Comment and Clear take `ask`'s size,
+  corners, type and hover; the gap pill is a 6px rectangle with `ask`'s type. Edit, Delete
+  and Reply are quiet text (Delete turns red on hover) instead of outlined buttons. The
+  Diff | Rendered switch and the notes' Hide all | Show all are labelled two-segment
+  switches with a sliding green indicator; with some notes folded the notes switch shows
+  neither side lit. The space above the bottom controls matches `show`'s 22px.
+- `review`: small motion where the page used to jump, in `ask`'s 0.12 to 0.2s ease: a
+  note, a comment, the comment box, revealed lines and a switched pane fade in from 4px
+  above, and hover and selection colours ease. Nothing moves with reduced motion set.
 - `review`: softer diff rows. An added or deleted row is tinted across, its line numbers
   sit on a stronger tint, and a `+` or `−` mark stands before the text, so the change no
   longer rests on colour alone. The numbers are wider, rows have more line height, the

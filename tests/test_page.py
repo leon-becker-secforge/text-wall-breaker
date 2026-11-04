@@ -759,6 +759,25 @@ def test_agent_notes_render_open_under_their_last_row_with_a_chip_on_the_first()
     assert "1 note from the agent" in html
 
 
+def test_the_notes_bar_and_the_view_switch_are_labelled_two_segment_switches():
+    diff = "@@ -1,1 +1,2 @@\n a\n+b\n"
+    notes = [{"side": "new", "line": 2, "text": "why"}]
+    html = build_review_page(
+        pages=[{"path": "a.md", "diff": diff, "notes": notes, "rendered": "<p>x</p>"}],
+        submit_url="http://x/submit",
+    )
+    assert '<div class="pp-notes-bar" data-state="shown">' in html
+    assert (
+        '<span class="pp-switch"><button type="button" data-all="0">Hide all</button>'
+        '<button type="button" data-all="1">Show all</button></span>'
+    ) in html
+    assert (
+        '<span class="pp-switch-label">View</span><span class="pp-switch">'
+        '<button type="button" data-show="diff">Diff</button>'
+        '<button type="button" data-show="rendered">Rendered</button></span>'
+    ) in html
+
+
 def test_a_page_without_notes_has_no_note_markup():
     html = _review("a.py")
     assert '<div class="pp-notes-bar">' not in html

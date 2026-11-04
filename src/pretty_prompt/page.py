@@ -2177,10 +2177,12 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
 .pp-review-gap::before { content: ""; position: absolute; left: 0; right: 0; top: 50%;
   border-top: 1px dashed var(--ntw-border); }
 .pp-gap-pill { position: relative; display: inline-flex; align-items: stretch;
-  border: 1px solid var(--ntw-border); border-radius: 999px; background: var(--ntw-bg-elevated);
+  border: 1px solid var(--ntw-fg-muted); border-radius: 6px; background: var(--ntw-bg-elevated);
   overflow: hidden; }
-.pp-gap-pill button { border: 0; background: none; font: inherit; color: var(--ntw-fg-muted);
-  padding: 3px 12px; cursor: pointer; }
+.pp-gap-pill button { border: 0; background: none; font-family: var(--pp-font-mono);
+  font-size: inherit; font-weight: 500; color: var(--ntw-fg-muted); height: 26px;
+  padding: 0 12px; cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease; }
 .pp-gap-pill .pp-gap-all { color: var(--ntw-fg); }
 .pp-gap-pill .pp-gap-step { display: none; color: var(--ntw-accent);
   border-inline: 1px solid var(--ntw-border); }
@@ -2253,12 +2255,32 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
 .pp-review-row-wrap.is-sel.sel-first.sel-last .pp-review-row {
   box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
 /* Rendered view: beside the diff on a wide screen, a Diff | Rendered switch below that. */
-.pp-views-toggle { display: none; gap: 8px; margin: 0.6em 0 0; font: 13px system-ui, sans-serif; }
-.pp-views-toggle button { border: 1px solid var(--ntw-border); background: none; cursor: pointer;
-  padding: 3px 12px; border-radius: 999px; color: var(--ntw-fg); font: inherit; }
-.pp-views[data-show="diff"] [data-show="diff"],
-.pp-views[data-show="rendered"] [data-show="rendered"] { background: var(--ntw-accent);
-  color: var(--ntw-accent-contrast); border-color: var(--ntw-accent); }
+.pp-views-toggle { display: none; align-items: center; gap: 10px; margin: 0.6em 0 0; }
+/* A labelled two-state switch (picked over one flip button and a track-and-thumb switch in
+   a three-variant prototype): ask's button language, the active side a filled slider that
+   moves to the other segment. State is on the container: `.pp-views[data-show]` for the view,
+   `.pp-notes-bar[data-state]` (shown, hidden, or mixed with neither lit) for the notes. */
+.pp-switch-label { font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500;
+  color: var(--ntw-fg-muted); }
+.pp-switch { position: relative; display: inline-grid; grid-auto-flow: column;
+  grid-auto-columns: 1fr; border: 1px solid var(--ntw-fg-muted); border-radius: 6px;
+  overflow: hidden; }
+.pp-switch::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 50%;
+  background: var(--ntw-accent); transition: transform 0.2s ease, opacity 0.2s ease; }
+.pp-switch button { position: relative; height: 28px; padding: 0 12px; border: 0;
+  border-radius: 0; background: none; color: var(--ntw-fg); cursor: pointer;
+  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; white-space: nowrap;
+  transition: color 0.18s ease; }
+.pp-switch button:hover { background: var(--pp-btn-tint); }
+.pp-switch button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
+.pp-views[data-show="rendered"] .pp-switch::before,
+.pp-notes-bar[data-state="shown"] .pp-switch::before { transform: translateX(100%); }
+.pp-notes-bar[data-state="mixed"] .pp-switch::before { opacity: 0; }
+.pp-views[data-show="diff"] .pp-switch [data-show="diff"],
+.pp-views[data-show="rendered"] .pp-switch [data-show="rendered"],
+.pp-notes-bar[data-state="hidden"] .pp-switch [data-all="0"],
+.pp-notes-bar[data-state="shown"] .pp-switch [data-all="1"] {
+  color: var(--ntw-accent-contrast); background: none; }
 .pp-views-diff, .pp-rendered { min-width: 0; }
 .pp-rendered { margin: 0.6em 0; padding: 4px 18px 14px; border: 1px solid var(--ntw-border);
   border-radius: 10px; background: var(--ntw-bg-elevated); line-height: 1.55;
@@ -2310,10 +2332,15 @@ body.pp-review-frozen .pp-rendered [data-first] { cursor: default; }
 .pp-note.is-open { display: block; }
 .pp-note-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
 .pp-note-label { font-size: 0.8em; font-weight: 600; color: var(--ntw-fg-muted); }
-.pp-note-reply { margin-inline-start: auto; border: 1px solid var(--ntw-border);
-  background: var(--ntw-bg-elevated); color: var(--ntw-fg); border-radius: 6px;
-  padding: 1px 9px; cursor: pointer; font: inherit; font-size: 0.85em; }
-.pp-note-reply:hover { border-color: var(--ntw-accent); color: var(--ntw-accent); }
+/* Edit, Delete and Reply are quiet text, not buttons: they sit inside the content. */
+.pp-note-reply, .pp-comment-actions button { border: 0; background: none; cursor: pointer;
+  color: var(--ntw-accent); font: 600 13px -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+  sans-serif; padding: 2px 6px; border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease; }
+.pp-note-reply { margin-inline-start: auto; }
+.pp-note-reply:hover, .pp-comment-actions button:hover { background: var(--ntw-border); }
+.pp-comment-actions button[data-act="delete"] { color: var(--ntw-fg-muted); }
+.pp-comment-actions button[data-act="delete"]:hover { color: var(--pp-del); }
 body.pp-review-frozen .pp-note-reply { display: none; }
 .pp-note-body p { margin: 6px 0 0; }
 .pp-note-body p:first-child { margin-top: 0; }
@@ -2325,11 +2352,7 @@ body.pp-review-frozen .pp-note-reply { display: none; }
 .pp-note-mark ~ .pp-note-mark { right: 92px; }
 .pp-note-mark:hover, .pp-note-mark.is-open { background: var(--ntw-accent);
   color: var(--ntw-accent-contrast); border-color: var(--ntw-accent); }
-.pp-notes-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px;
-  font: 13px system-ui, sans-serif; color: var(--ntw-fg-muted); }
-.pp-notes-bar button { border: 0; background: none; cursor: pointer; font: inherit;
-  color: var(--ntw-accent); padding: 1px 6px; border-radius: 4px; }
-.pp-notes-bar button:hover { background: var(--ntw-border); }
+.pp-notes-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
 .pp-comment, #pp-dock { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
   sans-serif; }
 .pp-comment { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px;
@@ -2338,10 +2361,6 @@ body.pp-review-frozen .pp-note-reply { display: none; }
 .pp-comment-head { display: flex; align-items: center; gap: 10px; }
 .pp-comment-head b { font-family: var(--pp-font-mono); font-size: 0.9em; }
 .pp-comment-actions { margin-inline-start: auto; display: flex; gap: 6px; }
-.pp-comment-actions button { border: 1px solid var(--ntw-border);
-  background: var(--ntw-bg-elevated); color: var(--ntw-fg); border-radius: 6px;
-  padding: 1px 9px; cursor: pointer; font: inherit; font-size: 0.85em; }
-.pp-comment-actions button:hover { border-color: var(--ntw-accent); }
 body.pp-review-frozen .pp-comment-actions { display: none; }
 .pp-comment-quote, .pp-dock-quote { font-family: var(--pp-font-mono); font-size: 0.85em;
   background: var(--ntw-code-bg); border-radius: 4px; padding: 1px 8px; }
@@ -2370,11 +2389,37 @@ body.pp-review-frozen .pp-comment-actions { display: none; }
 .pp-dock-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   margin-top: 12px; }
 .pp-dock-hint { margin-inline-end: auto; font-size: 0.85em; color: var(--ntw-fg-muted); }
-.pp-dock-row button { font: inherit; font-weight: 600; padding: 8px 20px; border-radius: 8px;
-  cursor: pointer; border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
-  color: var(--ntw-accent-contrast); }
+/* The comment box's buttons are ask's: same height, corners, type and hover. */
+.pp-dock-row button { height: 34px; padding: 0 14px; border-radius: 6px; cursor: pointer;
+  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; white-space: nowrap;
+  border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast);
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease,
+    filter 0.18s ease; }
+.pp-dock-row button:not(.ghost):not(:disabled):hover { filter: brightness(0.9); }
 .pp-dock-row button.ghost { background: transparent; color: var(--ntw-fg);
-  border-color: var(--ntw-border); }
+  border-color: var(--ntw-fg-muted); }
+.pp-dock-row button.ghost:hover { background: var(--pp-btn-tint); }
+/* Tiny motion for what would otherwise jump (ask's 0.12 to 0.2s ease): a note, a comment, the
+   comment box, revealed lines and a switched pane fade in from 4px above; hover and
+   selection colours ease. Nothing moves for a reader who asks for reduced motion. */
+@keyframes pp-pop { from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; } }
+.pp-review-row { transition: background-color 0.12s ease; }
+.pp-rendered [data-first] { transition: background-color 0.12s ease, outline-color 0.12s ease; }
+.pp-note-mark { transition: background-color 0.15s ease, color 0.15s ease,
+  border-color 0.15s ease; }
+@media (prefers-reduced-motion: no-preference) {
+  .pp-note.is-open, .pp-comment, #pp-dock.is-open, .pp-review-row-wrap.is-revealed,
+  .pp-views-diff, .pp-rendered { animation: pp-pop 0.16s ease; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pp-review-row, .pp-rendered [data-first], .pp-note-mark, .pp-switch::before,
+  .pp-switch button, .pp-gap-pill button, .pp-dock-row button, .pp-note-reply,
+  .pp-comment-actions button { transition: none; }
+}
+.pp-dock-row button:disabled { background: transparent; color: var(--ntw-fg-muted);
+  border: 1px dashed var(--ntw-border); cursor: not-allowed; }
 
 #pp-overall-note-label, .pp-page-note-label { font-size: 0.8em; color: var(--ntw-fg-muted);
   display: block; margin: 18px 0 4px; }
@@ -2911,6 +2956,13 @@ __CONTENT__
     note.classList.toggle('is-open', open);
     var mark = noteMark(note);
     if (mark) { mark.classList.toggle('is-open', open); mark.setAttribute('aria-expanded', open); }
+    // The bar above the diff says whether all, none or some of its notes are showing.
+    var bar = note.parentNode.previousElementSibling;
+    if (bar && bar.classList.contains('pp-notes-bar')) {
+      var all = note.parentNode.querySelectorAll('.pp-note').length;
+      var shown = note.parentNode.querySelectorAll('.pp-note.is-open').length;
+      bar.dataset.state = shown === all ? 'shown' : shown === 0 ? 'hidden' : 'mixed';
+    }
   }
   document.addEventListener('click', function (event) {
     var mark = event.target.closest('.pp-note-mark');
@@ -2950,7 +3002,7 @@ __CONTENT__
   var GAP_STEP = 10;
   function makeRow(path, oldNo, newNo, text) {
     var wrap = document.createElement('div');
-    wrap.className = 'pp-review-row-wrap';
+    wrap.className = 'pp-review-row-wrap is-revealed';
     wrap.dataset.path = path;
     wrap.dataset.side = 'new';
     wrap.dataset.line = newNo;
@@ -3341,9 +3393,11 @@ def _render_review_diff(
         count = len(notes)
         parts.insert(
             0,
-            f'<div class="pp-notes-bar"><span>&#10022; {count} note{"" if count == 1 else "s"} '
-            'from the agent</span><button type="button" data-all="0">Hide all</button>'
-            '<button type="button" data-all="1">Show all</button></div>',
+            '<div class="pp-notes-bar" data-state="shown">'
+            f'<span class="pp-switch-label">&#10022; {count} note{"" if count == 1 else "s"} '
+            'from the agent</span><span class="pp-switch">'
+            '<button type="button" data-all="0">Hide all</button>'
+            '<button type="button" data-all="1">Show all</button></span></div>',
         )
     return "".join(parts)
 
@@ -3382,9 +3436,10 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
             show = "rendered" if page.get("rendered_first") else "diff"
             diff_html = (
                 f'<div class="pp-views" data-show="{show}">'
-                '<div class="pp-views-toggle">'
+                '<div class="pp-views-toggle"><span class="pp-switch-label">View</span>'
+                '<span class="pp-switch">'
                 '<button type="button" data-show="diff">Diff</button>'
-                '<button type="button" data-show="rendered">Rendered</button></div>'
+                '<button type="button" data-show="rendered">Rendered</button></span></div>'
                 f'<div class="pp-views-diff">{diff_html}</div>'
                 f'<div class="pp-rendered" aria-label="Rendered file">{rendered}</div></div>'
             )
