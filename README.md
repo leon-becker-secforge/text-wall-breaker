@@ -328,12 +328,14 @@ hunks, when it is over 512 KB, past 4 MB over all files, binary or not UTF-8, a 
 or not the text the diff was made from. `pages` has no file to read, so it never expands.
 
 A `repo` page for a `.md`, `.markdown`, `.adoc` or `.asciidoc` file also gets a rendered
-view of its new side. From 1000px wide it sits beside the diff; below that a `Diff |
-Rendered` switch shows one at a time, and a newly added file opens on the rendered one.
-Clicking a block (shift-click extends over several) selects the source lines it stands
-for, lights them up in the diff, and opens the comment box; the result is the usual range
-comment on new-side lines, so `context` is the source text. Lines that are still hidden
-are shown first. Dragging over text in the rendered view selects the blocks it touches and
+view of its new side. The page is cut into chunks, one per rendered block: the source rows
+of the block on the left (every line of the file, with its diff marks) and the block
+rendered on the right. Below 1000px wide a chunk stacks, rows above block. Blocks the diff
+does not touch fold into a "N unchanged blocks" bar, except those next to a changed one
+and those with an agent note; the bar opens them. Clicking a block (shift-click extends
+over several) selects the source lines it stands for, lights them up in the diff, and
+opens the comment box; the result is the usual range comment on new-side lines, so
+`context` is the source text. Dragging over text in the rendered view selects the blocks it touches and
 records the text as the comment's `quote`, marked in the diff row as well. The quote is
 kept only if it reads the same in the source; a selection across formatting (`**bold**`,
 a link) comments on the blocks with no quote.

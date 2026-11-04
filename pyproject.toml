@@ -11,6 +11,8 @@ dependencies = [
     "pydantic>=2.7",
     # The rendered view of a Markdown file; its block source lines (token.map) place comments.
     "markdown-it-py>=3",
+    # Token spans for the code rows of a review diff.
+    "pygments>=2.15",
 ]
 
 [project.scripts]

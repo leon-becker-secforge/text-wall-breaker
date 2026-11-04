@@ -5,6 +5,24 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `review`: syntax coloring of the diff rows by file extension, with Pygments (new
+  dependency). Old and new side of a hunk are lexed apart; a file type without a lexer
+  stays plain.
+
+- `review`: from 8 files on, the file list has a filter box and an "only with comments or
+  a note" toggle; the list scrolls the current file into view.
+
+### Changed
+
+- `review`: diff rows wrap long lines (hanging under the text) and the page is up to
+  1760px wide.
+- `review`: the rendered view of a Markdown or AsciiDoc page is cut into chunks, one per
+  block, with the block's source rows beside it. Blocks the diff does not touch fold behind
+  an "N unchanged blocks" bar (neighbours of a change and blocks with a note stay open).
+  The Diff | Rendered switch and the gap bars on such pages are gone.
+
 ## [0.14.0] - 2026-11-04
 
 ### Added

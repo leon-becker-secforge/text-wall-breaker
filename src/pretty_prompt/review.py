@@ -220,7 +220,6 @@ def _build_html(
                 "lines": lines,
                 "notes": notes.get(page.path),
                 "rendered": rendered,
-                "rendered_first": _is_new_file(page.diff),
             }
         )
     return build_review_page(
@@ -233,12 +232,6 @@ def _build_html(
         status_url=status_url,
         generation=generation,
     )
-
-
-def _is_new_file(diff: str) -> bool:
-    """Whether the diff has nothing but added lines: a new file's diff is a wall of green."""
-    rows = [row for row in parse_unified_diff(diff) if row.kind != "hunk"]
-    return bool(rows) and all(row.kind == "add" for row in rows)
 
 
 _MARKERS = {"add": "+", "del": "-", "ctx": " "}

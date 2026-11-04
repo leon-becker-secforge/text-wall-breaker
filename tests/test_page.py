@@ -127,6 +127,12 @@ def test_review_file_list_escapes_paths():
     assert '<span class="pp-file-name">&lt;b&gt;&quot;c&quot;.py</span>' in html
 
 
+def test_a_long_file_list_gets_a_filter_and_a_short_one_does_not():
+    assert 'id="pp-files-filter"' in _review(*[f"d/f{n}.py" for n in range(8)])
+    assert 'id="pp-files-marked"' in _review(*[f"d/f{n}.py" for n in range(8)])
+    assert 'id="pp-files-filter"' not in _review(*[f"d/f{n}.py" for n in range(7)])
+
+
 def test_review_with_one_file_has_no_file_list():
     html = _review("only.py")
     assert 'id="pp-files"' not in html
@@ -759,7 +765,7 @@ def test_agent_notes_render_open_under_their_last_row_with_a_chip_on_the_first()
     assert "1 note from the agent" in html
 
 
-def test_the_notes_bar_and_the_view_switch_are_labelled_two_segment_switches():
+def test_the_notes_bar_is_a_labelled_two_segment_switch():
     diff = "@@ -1,1 +1,2 @@\n a\n+b\n"
     notes = [{"side": "new", "line": 2, "text": "why"}]
     html = build_review_page(
@@ -770,11 +776,6 @@ def test_the_notes_bar_and_the_view_switch_are_labelled_two_segment_switches():
     assert (
         '<span class="pp-switch"><button type="button" data-all="0">Hide all</button>'
         '<button type="button" data-all="1">Show all</button></span>'
-    ) in html
-    assert (
-        '<span class="pp-switch-label">View</span><span class="pp-switch">'
-        '<button type="button" data-show="diff">Diff</button>'
-        '<button type="button" data-show="rendered">Rendered</button></span>'
     ) in html
 
 

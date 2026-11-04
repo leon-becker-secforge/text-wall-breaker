@@ -25,11 +25,13 @@ import html
 import json
 import os
 import re
+from bisect import bisect_right
 from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
 
 from .diff import DiffLine, Gap, gaps_of, parse_unified_diff
+from .highlight import highlight_rows
 from .markdown import (
     LONG_QUESTION_CHARS,
     bold_lead,
@@ -37,6 +39,7 @@ from .markdown import (
     render_inline,
     render_markdown,
 )
+from .render import Block, split_blocks
 
 __all__ = [
     "ACCENT_ENV_VAR",
@@ -2143,10 +2146,10 @@ html { font-size: 18px; }
 body { margin: 0; padding: 20px 8px 40px; }
 /* A fixed 760px (_ADDENDUM/_SHOW_ADDENDUM's shape) left most of a normal window unused
    while a diff line still hit .pp-review-diff's horizontal scroll — the real ceiling was
-   this, not the body padding above. min(1200px, 96vw) instead: still capped so it
+   this, not the body padding above. min(1760px, 98vw) instead: still capped so it
    doesn't stretch unreadably wide on an ultrawide monitor, but scales with the window on
    anything smaller instead of a fixed number picked for prose width. */
-main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
+main { max-width: min(1760px, 98vw); margin: 0 auto; position: relative; }
 
 #pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
   background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
@@ -2239,8 +2242,26 @@ body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
 :root[data-theme="dark"] { --pp-add: #3fb97a; --pp-del: #f0716a;
   --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
   --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24); }
+/* Syntax tokens (highlight.py): Pygments short class names behind `tk-`. */
+:root { --tk-kw: #cf222e; --tk-str: #0a3069; --tk-com: #57606a; --tk-num: #0550ae;
+  --tk-fn: #8250df; --tk-ty: #953800; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --tk-kw: #ff7b72; --tk-str: #a5d6ff; --tk-com: #8b949e;
+    --tk-num: #79c0ff; --tk-fn: #d2a8ff; --tk-ty: #ffa657; }
+}
+:root[data-theme="dark"] { --tk-kw: #ff7b72; --tk-str: #a5d6ff; --tk-com: #8b949e;
+  --tk-num: #79c0ff; --tk-fn: #d2a8ff; --tk-ty: #ffa657; }
+.pp-review-text [class^="tk-k"] { color: var(--tk-kw); }
+.pp-review-text [class^="tk-s"] { color: var(--tk-str); }
+.pp-review-text [class^="tk-c"] { color: var(--tk-com); font-style: italic; }
+.pp-review-text [class^="tk-m"] { color: var(--tk-num); }
+.pp-review-text .tk-nf, .pp-review-text .tk-fm, .pp-review-text .tk-nd { color: var(--tk-fn); }
+.pp-review-text .tk-nc, .pp-review-text .tk-nb, .pp-review-text .tk-ne,
+.pp-review-text .tk-nn { color: var(--tk-ty); }
+/* Long lines wrap; a wrapped line hangs under the text, not under the +/- mark. */
 .pp-review-row { display: flex; align-items: flex-start; padding: 1px 12px 1px 0;
-  white-space: pre; position: relative; }
+  white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
+.pp-review-text { flex: 1 1 0; min-width: 0; padding-left: 2ch; text-indent: -2ch; }
 .pp-review-row.add { background: var(--pp-add-bg); }
 .pp-review-row.del { background: var(--pp-del-bg); }
 .pp-review-row.add .pp-review-gutter { background: var(--pp-add-gut); color: var(--pp-add); }
@@ -2277,11 +2298,9 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   box-shadow: inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
 .pp-review-row-wrap.is-sel.sel-first.sel-last .pp-review-row {
   box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
-/* Rendered view: beside the diff on a wide screen, a Diff | Rendered switch below that. */
-.pp-views-toggle { display: none; align-items: center; gap: 10px; margin: 0.6em 0 0; }
 /* A labelled two-state switch (picked over one flip button and a track-and-thumb switch in
    a three-variant prototype): ask's button language, the active side a filled slider that
-   moves to the other segment. State is on the container: `.pp-views[data-show]` for the view,
+   moves to the other segment. State is on the container:
    `.pp-notes-bar[data-state]` (shown, hidden, or mixed with neither lit) for the notes. */
 .pp-switch-label { font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500;
   color: var(--ntw-fg-muted); }
@@ -2296,19 +2315,33 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
   transition: color 0.18s ease; }
 .pp-switch button:hover { background: var(--pp-btn-tint); }
 .pp-switch button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
-.pp-views[data-show="rendered"] .pp-switch::before,
 .pp-notes-bar[data-state="shown"] .pp-switch::before { transform: translateX(100%); }
 .pp-notes-bar[data-state="mixed"] .pp-switch::before { opacity: 0; }
-.pp-views[data-show="diff"] .pp-switch [data-show="diff"],
-.pp-views[data-show="rendered"] .pp-switch [data-show="rendered"],
 .pp-notes-bar[data-state="hidden"] .pp-switch [data-all="0"],
 .pp-notes-bar[data-state="shown"] .pp-switch [data-all="1"] {
   color: var(--ntw-accent-contrast); background: none; }
-.pp-views-diff, .pp-rendered { min-width: 0; }
-.pp-rendered { margin: 0.6em 0; padding: 4px 18px 14px; border: 1px solid var(--ntw-border);
-  border-radius: 10px; background: var(--ntw-bg-elevated); line-height: 1.55;
+/* Rendered view, chunk by chunk (see _render_review_chunks): the rows of a block's source
+   lines on the left, the block rendered on the right, a divider between chunks. The font
+   size undoes .pp-review-diff's 0.85em, which is meant for code. */
+.pp-chunk { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+.pp-chunk + .pp-chunk, .pp-fold-body > .pp-chunk:first-child {
+  border-top: 1px solid var(--ntw-border); }
+.pp-chunk-diff { min-width: 0; border-right: 1px solid var(--ntw-border); }
+.pp-rendered { min-width: 0; padding: 6px 18px; font-size: 1.18em; line-height: 1.55;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  overflow-wrap: anywhere; }
+  overflow-wrap: anywhere; background: var(--ntw-bg-elevated); }
+.pp-rendered > :first-child { margin-top: 0; }
+.pp-rendered > :last-child { margin-bottom: 0; }
+.pp-fold { display: block; width: 100%; padding: 6px 12px; border: 0;
+  border-block: 1px dashed var(--ntw-border); background: var(--ntw-code-bg);
+  color: var(--ntw-fg-muted); font: inherit; cursor: pointer; }
+.pp-fold:hover { color: var(--ntw-fg); }
+.pp-fold:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
+.pp-fold-body[hidden] { display: none; }
+@media (max-width: 999px) {
+  .pp-chunk { grid-template-columns: minmax(0, 1fr); }
+  .pp-chunk-diff { border-right: 0; border-bottom: 1px solid var(--ntw-border); }
+}
 .pp-rendered h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; }
 .pp-rendered h2 { font-size: 1.25em; margin: 1em 0 0.3em; }
 .pp-rendered h3, .pp-rendered h4 { font-size: 1.05em; margin: 1em 0 0.3em; }
@@ -2331,23 +2364,6 @@ body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { backgrou
 .pp-rendered .has-comment { box-shadow: -4px 0 0 var(--ntw-accent); }
 ::highlight(pp-quote) { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
 body.pp-review-frozen .pp-rendered [data-first] { cursor: default; }
-@media (min-width: 1000px) {
-  .pp-views { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px;
-    align-items: start; }
-  .pp-rendered { position: sticky; top: 8px; max-height: calc(100vh - 16px); overflow: auto; }
-}
-@media (min-width: 1000px) and (max-width: 1249px) {
-  body.pp-has-files .pp-views { display: block; }
-  body.pp-has-files .pp-views-toggle { display: flex; }
-  body.pp-has-files .pp-rendered { position: static; max-height: none; }
-  body.pp-has-files .pp-views[data-show="rendered"] .pp-views-diff,
-  body.pp-has-files .pp-views[data-show="diff"] .pp-rendered { display: none; }
-}
-@media (max-width: 999px) {
-  .pp-views-toggle { display: flex; }
-  .pp-views[data-show="rendered"] .pp-views-diff, .pp-views[data-show="diff"] .pp-rendered
-    { display: none; }
-}
 .pp-note { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px; display: none;
   border: 1px dashed var(--ntw-fg-muted); background: var(--ntw-bg-elevated);
   font: 0.95em/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -2461,6 +2477,15 @@ body.pp-has-files { padding-left: 296px; }
 .pp-files-head { margin: 0 6px 10px; font-size: 0.92em; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--ntw-fg-muted); font-weight: 600; }
 .pp-files-head span { float: right; text-transform: none; letter-spacing: 0; }
+/* Filter and "with comments" toggle, only for a long list (_FILTER_FROM files). */
+.pp-files-tools { margin: 0 6px 8px; }
+.pp-files-tools input[type="search"] { width: 100%; box-sizing: border-box; padding: 6px 8px;
+  border: 1px solid var(--ntw-border); border-radius: 6px; background: var(--ntw-bg);
+  color: var(--ntw-fg); font: inherit; }
+.pp-files-tools label { display: block; margin-top: 6px; color: var(--ntw-fg-muted);
+  cursor: pointer; }
+.pp-file[hidden] { display: none; }
+#pp-files-empty { margin: 8px 6px; color: var(--ntw-fg-muted); }
 .pp-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px;
   border-radius: 8px; cursor: pointer; border: 0; background: none; color: var(--ntw-fg);
   text-align: left; font: inherit; }
@@ -2775,9 +2800,15 @@ __CONTENT__
     if (!sel || !sel.quote) return;
     var covered = span(sel), texts = [], joined = '';
     for (var i = covered.from; i <= covered.to; i++) {
-      var node = covered.ws[i].querySelector('.pp-review-text').firstChild;
-      if (node) texts.push({ node: node, start: joined.length });
-      joined += (node ? node.textContent : '') + '\\n';
+      // Token spans split a row's text into several text nodes.
+      var walker = document.createTreeWalker(
+        covered.ws[i].querySelector('.pp-review-text'), NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        texts.push({ node: node, start: joined.length });
+        joined += node.textContent;
+      }
+      joined += '\\n';
     }
     var at = joined.indexOf(sel.quote);
     if (at < 0) return;
@@ -2794,12 +2825,14 @@ __CONTENT__
     range.setEnd(b[0], Math.min(b[1], b[0].length));
     CSS.highlights.set('pp-quote', new Highlight(range));
   }
+  // A run of unchanged blocks behind one bar (see _render_review_chunks): the bar opens it
+  // and goes, so what was folded cannot be folded again.
   document.addEventListener('click', function (event) {
-    var button = event.target.closest('.pp-views-toggle [data-show]');
-    if (button) {
-      button.closest('.pp-views').dataset.show = button.dataset.show;
-      if (sel) placeDock();
-    }
+    var bar = event.target.closest('.pp-fold');
+    if (!bar) return;
+    bar.nextElementSibling.hidden = false;
+    bar.remove();
+    if (sel) placeDock();
   });
 
   function renderSel() {
@@ -3339,14 +3372,144 @@ def _render_review_note(index: int, note: dict[str, object], asset_base_url: str
     )
 
 
+def _context_rows(gap: Gap, lines: list[str]) -> list[DiffLine]:
+    """The unchanged lines of `gap` as context rows, old line numbers from the gap's delta."""
+    return [
+        DiffLine("ctx", lines[n - 1], n + gap.delta, n)
+        for n in range(gap.new_first, gap.new_last + 1)
+    ]
+
+
+def _render_review_row(
+    escaped_path: str,
+    row: DiffLine,
+    text_html: str,
+    marks: dict[tuple[str, int], list[int]],
+    closings: dict[tuple[str, int], list[int]],
+    notes: list[dict[str, object]] | None,
+    asset_base_url: str | None,
+) -> str:
+    """One addressable row, with the note chips on it and the notes that end on it."""
+    old = str(row.old_line) if row.old_line is not None else ""
+    new = str(row.new_line) if row.new_line is not None else ""
+    side = row.side or "new"
+    line = row.line if row.line is not None else 0
+    return (
+        f'<div class="pp-review-row-wrap" data-path="{escaped_path}" '
+        f'data-side="{side}" data-line="{line}">'
+        f'<div class="pp-review-row {row.kind}" role="button" tabindex="0" '
+        'aria-label="Select this line to comment">'
+        f'<span class="pp-review-gutter">{old}</span>'
+        f'<span class="pp-review-gutter">{new}</span>'
+        f'<span class="pp-review-text">{text_html}</span>'
+        '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span>'
+        "</div>"
+        + "".join(
+            f'<button type="button" class="pp-note-mark is-open" data-note="{i}" '
+            'aria-expanded="true">&#10022; note</button>'
+            for i in marks.get((side, line), [])
+        )
+        + "</div>"
+        + "".join(
+            _render_review_note(i, (notes or [])[i], asset_base_url)
+            for i in closings.get((side, line), [])
+        )
+    )
+
+
+def _render_review_chunks(
+    escaped_path: str,
+    rows: list[DiffLine],
+    blocks: list[Block],
+    marks: dict[tuple[str, int], list[int]],
+    closings: dict[tuple[str, int], list[int]],
+    notes: list[dict[str, object]] | None,
+    asset_base_url: str | None,
+    path: str,
+) -> str:
+    """The rows of a whole file next to the rendered blocks they belong to, chunk by chunk.
+
+    A chunk is one block of the rendered view, with the rows of its source lines on the
+    left. A line outside every block (a blank line) goes with the block before it, a
+    deleted row with the block of the line that follows it. A chunk the diff does not
+    touch stays folded, in a run of its kind behind one bar, unless it is next to a
+    changed one or carries an agent note; the rows are all in the page either way.
+    """
+    firsts = [block.first for block in blocks]
+    anchors: list[int] = []
+    following = 1
+    for row in reversed(rows):
+        following = row.new_line if row.new_line is not None else following
+        anchors.append(following)
+    anchors.reverse()
+    chunk_rows: list[list[int]] = [[] for _ in blocks]
+    for index, anchor in enumerate(anchors):
+        chunk_rows[max(bisect_right(firsts, anchor) - 1, 0)].append(index)
+    colored = highlight_rows(path, rows)
+    touched = [
+        any(
+            rows[i].kind != "ctx"
+            or (rows[i].side, rows[i].line) in marks
+            or (rows[i].side, rows[i].line) in closings
+            for i in members
+        )
+        for members in chunk_rows
+    ]
+    shown = [
+        touched[i] or (i > 0 and touched[i - 1]) or (i + 1 < len(touched) and touched[i + 1])
+        for i in range(len(blocks))
+    ]
+
+    def chunk(i: int) -> str:
+        body = "".join(
+            _render_review_row(
+                escaped_path,
+                rows[j],
+                colored.get(j) or html.escape(rows[j].text) or "&nbsp;",
+                marks,
+                closings,
+                notes,
+                asset_base_url,
+            )
+            for j in chunk_rows[i]
+        )
+        return (
+            f'<div class="pp-chunk"><div class="pp-chunk-diff">{body}</div>'
+            f'<div class="pp-rendered">{blocks[i].html}</div></div>'
+        )
+
+    parts: list[str] = []
+    i = 0
+    while i < len(blocks):
+        if shown[i]:
+            parts.append(chunk(i))
+            i += 1
+            continue
+        end = i
+        while end < len(blocks) and not shown[end]:
+            end += 1
+        count = end - i
+        parts.append(
+            f'<button type="button" class="pp-fold" aria-expanded="false">'
+            f"{count} unchanged block{'' if count == 1 else 's'}</button>"
+            f'<div class="pp-fold-body" hidden>{"".join(chunk(k) for k in range(i, end))}</div>'
+        )
+        i = end
+    return "".join(parts)
+
+
 def _render_review_diff(
     path: str,
     diff: str,
     lines: list[str] | None = None,
     notes: list[dict[str, object]] | None = None,
     asset_base_url: str | None = None,
+    rendered: str | None = None,
 ) -> str:
     """One page's diff as `.pp-review-row` rows, each wrapped in `.pp-review-row-wrap`.
+
+    With `rendered` (a Markdown or AsciiDoc page whose file text is known) the page is cut
+    into chunks instead, see `_render_review_chunks`.
 
     `parse_unified_diff` is what turns raw diff text into the (side, line) coordinate a
     comment on that row addresses — see `diff.DiffLine.side`/`.line`. A "hunk" row (the
@@ -3377,47 +3540,52 @@ def _render_review_diff(
         marks.setdefault(start, []).append(index)
         closings.setdefault(end, []).append(index)
     parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
-    hunk = -1
-    for row in rows:
-        text_html = html.escape(row.text) or "&nbsp;"
-        if row.kind == "hunk":
-            hunk += 1
-            if hunk in gap_before:
-                parts.append(_render_review_gap(gap_before[hunk]))
-            parts.append(f'<div class="pp-review-row hunk">{text_html}</div>')
-            continue
-        old = str(row.old_line) if row.old_line is not None else ""
-        new = str(row.new_line) if row.new_line is not None else ""
-        side = row.side or "new"
-        line = row.line if row.line is not None else 0
+    blocks = split_blocks(rendered) if rendered and lines is not None else []
+    if blocks and lines is not None:
+        # Every line of the file gets a row, so the gap bars have nothing left to hide.
+        whole: list[DiffLine] = []
+        hunk = -1
+        for row in rows:
+            if row.kind == "hunk":
+                hunk += 1
+                if hunk in gap_before:
+                    whole.extend(_context_rows(gap_before[hunk], lines))
+            else:
+                whole.append(row)
+        for gap in gaps:
+            if gap.position == "end":
+                whole.extend(_context_rows(gap, lines))
         parts.append(
-            f'<div class="pp-review-row-wrap" data-path="{escaped_path}" '
-            f'data-side="{side}" data-line="{line}">'
-            f'<div class="pp-review-row {row.kind}" role="button" tabindex="0" '
-            'aria-label="Select this line to comment">'
-            f'<span class="pp-review-gutter">{old}</span>'
-            f'<span class="pp-review-gutter">{new}</span>'
-            f'<span class="pp-review-text">{text_html}</span>'
-            '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span>'
-            "</div>"
-            + "".join(
-                f'<button type="button" class="pp-note-mark is-open" data-note="{i}" '
-                'aria-expanded="true">&#10022; note</button>'
-                for i in marks.get((side, line), [])
+            _render_review_chunks(
+                escaped_path, whole, blocks, marks, closings, notes, asset_base_url, path
             )
-            + "</div>"
         )
-        parts.extend(
-            _render_review_note(i, (notes or [])[i], asset_base_url)
-            for i in closings.get((side, line), [])
-        )
-    parts.extend(_render_review_gap(gap) for gap in gaps if gap.position == "end")
-    if gaps and lines is not None:
-        # `<` is escaped so a file containing `</script>` cannot end the element early.
-        payload = json.dumps([lines[gap.new_first - 1 : gap.new_last] for gap in gaps])
-        escaped = payload.replace("<", "\\u003c")
-        parts.append(f'<script type="application/json" class="pp-review-lines">{escaped}</script>')
-    parts.append("</div>")
+        parts.append("</div>")
+    else:
+        hunk = -1
+        colored = highlight_rows(path, rows)
+        for index, row in enumerate(rows):
+            text_html = colored.get(index) or html.escape(row.text) or "&nbsp;"
+            if row.kind == "hunk":
+                hunk += 1
+                if hunk in gap_before:
+                    parts.append(_render_review_gap(gap_before[hunk]))
+                parts.append(f'<div class="pp-review-row hunk">{text_html}</div>')
+                continue
+            parts.append(
+                _render_review_row(
+                    escaped_path, row, text_html, marks, closings, notes, asset_base_url
+                )
+            )
+        parts.extend(_render_review_gap(gap) for gap in gaps if gap.position == "end")
+        if gaps and lines is not None:
+            # `<` is escaped so a file containing `</script>` cannot end the element early.
+            payload = json.dumps([lines[gap.new_first - 1 : gap.new_last] for gap in gaps])
+            escaped = payload.replace("<", "\\u003c")
+            parts.append(
+                f'<script type="application/json" class="pp-review-lines">{escaped}</script>'
+            )
+        parts.append("</div>")
     if notes:
         count = len(notes)
         parts.insert(
@@ -3502,27 +3670,17 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         )
         page_lines = page.get("lines")
         page_notes = page.get("notes")
+        rendered = page.get("rendered")
         diff_html = _render_review_diff(
             path,
             str(page["diff"]),
             page_lines if isinstance(page_lines, list) else None,
             page_notes if isinstance(page_notes, list) else None,
             asset_base_url,
+            rendered if isinstance(rendered, str) else None,
         )
-        rendered = page.get("rendered")
-        if isinstance(rendered, str) and rendered:
-            # Beside the diff on a wide screen; below that one view at a time, a new file
-            # opening on the rendered one since its diff is only added lines.
-            show = "rendered" if page.get("rendered_first") else "diff"
-            diff_html = (
-                f'<div class="pp-views" data-show="{show}">'
-                '<div class="pp-views-toggle"><span class="pp-switch-label">View</span>'
-                '<span class="pp-switch">'
-                '<button type="button" data-show="diff">Diff</button>'
-                '<button type="button" data-show="rendered">Rendered</button></span></div>'
-                f'<div class="pp-views-diff">{diff_html}</div>'
-                f'<div class="pp-rendered" aria-label="Rendered file">{rendered}</div></div>'
-            )
+        if 'class="pp-chunk"' in diff_html:
+            diff_html = f'<div class="pp-views">{diff_html}</div>'
         note_id = f"pp-page-note-{index}"
         slide_parts.append(
             f'<section class="deck-slide card{active}">'
@@ -3538,6 +3696,10 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
             "</section>"
         )
     return files_html + "\n".join(slide_parts)
+
+
+# From this many files on the list gets a filter; below it the list fits the screen anyway.
+_FILTER_FROM = 8
 
 
 def _render_review_files(pages: list[dict[str, object]]) -> str:
@@ -3565,9 +3727,20 @@ def _render_review_files(pages: list[dict[str, object]]) -> str:
             '<span class="pp-file-count is-zero" title="0 comments">0</span>'
             "</button>"
         )
+    tools = (
+        '<div class="pp-files-tools">'
+        '<input type="search" id="pp-files-filter" aria-label="Filter files" '
+        'placeholder="Filter files&hellip;">'
+        '<label><input type="checkbox" id="pp-files-marked"> only with comments or a note'
+        "</label></div>"
+        '<div id="pp-files-empty" hidden>No file matches.</div>'
+        if len(pages) >= _FILTER_FROM
+        else ""
+    )
     return (
         '<nav id="pp-files" aria-label="Files">'
         '<h3 class="pp-files-head">Files <span id="pp-files-total">0 comments</span></h3>'
+        + tools
         + "".join(rows)
         + "</nav>"
         '<div id="pp-files-backdrop" hidden></div>'
@@ -3601,6 +3774,9 @@ def _review_files_script(needed: bool) -> str:
   var barName = document.getElementById('pp-filebar-name');
   var barPos = document.getElementById('pp-filebar-pos');
   var total = document.getElementById('pp-files-total');
+  var filter = document.getElementById('pp-files-filter');
+  var onlyMarked = document.getElementById('pp-files-marked');
+  var empty = document.getElementById('pp-files-empty');
   var index = 0;
 
   function plural(n) { return n + (n === 1 ? ' comment' : ' comments'); }
@@ -3618,6 +3794,22 @@ def _review_files_script(needed: bool) -> str:
         slide.querySelector('.pp-page-note').value.trim() === '';
     });
     total.textContent = plural(sum);
+    applyFilter();
+  }
+
+  // The filter only hides rows of the list; stepping with the arrows still visits every file.
+  function applyFilter() {
+    if (!filter) return;
+    var needle = filter.value.trim().toLowerCase(), shown = 0;
+    files.forEach(function (row) {
+      var marked = row.querySelector('.pp-file-count').textContent !== '0' ||
+        !row.querySelector('.pp-file-note').hidden;
+      var ok = (!needle || row.title.toLowerCase().indexOf(needle) >= 0) &&
+        (!onlyMarked.checked || marked || row.classList.contains('is-current'));
+      row.hidden = !ok;
+      if (ok) shown++;
+    });
+    empty.hidden = shown > 0;
   }
 
   function setOpen(open) {
@@ -3637,6 +3829,8 @@ def _review_files_script(needed: bool) -> str:
     barName.textContent = files[index].querySelector('.pp-file-name').textContent;
     barPos.textContent = (index + 1) + ' of ' + slides.length;
     if (scroll) window.scrollTo(0, 0);
+    // A long list keeps the current file in sight.
+    files[index].scrollIntoView({ block: 'nearest' });
   }
 
   files.forEach(function (row, i) {
@@ -3650,6 +3844,7 @@ def _review_files_script(needed: bool) -> str:
   toggle.addEventListener('click', function () { setOpen(!nav.classList.contains('is-open')); });
   backdrop.addEventListener('click', function () { setOpen(false); });
   document.addEventListener('input', refresh);
+  if (filter) onlyMarked.addEventListener('change', applyFilter);
   document.addEventListener('pp-comments', refresh);
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') { setOpen(false); return; }

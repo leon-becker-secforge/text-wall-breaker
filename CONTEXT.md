@@ -106,8 +106,8 @@ their own. Distinct from a blurb, which explains the whole page.
 _Avoid_: annotation, reasoning, explanation
 
 **Rendered view**:
-The new side of a changed Markdown or AsciiDoc page shown as formatted text beside its
-diff. Each block of it stands for source lines, so a comment on a block is an ordinary
-comment on those new-side lines. Only for a page whose file text is known (a `repo`
+The new side of a changed Markdown or AsciiDoc page shown as formatted text, chunk by
+chunk, each block beside the source rows it stands for. A comment on a block is an
+ordinary comment on those new-side lines. Only for a page whose file text is known (a `repo`
 source); other pages have the diff alone.
 _Avoid_: preview (reads as a preview of the result before Submit)

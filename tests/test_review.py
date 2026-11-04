@@ -12,7 +12,6 @@ from pretty_prompt.review import (
     Page,
     ReviewRequest,
     _build_html,
-    _is_new_file,
     _result_from_submission,
 )
 
@@ -300,7 +299,8 @@ def test_a_markdown_page_with_its_file_gets_a_rendered_view():
     html = _md_html("docs/a.md", {"docs/a.md": "\n".join(MD_NEW) + "\n"})
     assert '<div class="pp-rendered"' in html
     assert '<p data-first="3" data-last="3">one!</p>' in html
-    assert '<div class="pp-views" data-show="diff">' in html
+    assert '<div class="pp-views">' in html
+    assert '<div class="pp-chunk">' in html
 
 
 def test_a_page_without_its_file_or_of_another_kind_has_none():
@@ -309,7 +309,28 @@ def test_a_page_without_its_file_or_of_another_kind_has_none():
     assert '<div class="pp-rendered"' not in _md_html("docs/a.py", text)
 
 
-def test_a_new_file_opens_on_the_rendered_view_and_a_changed_one_on_the_diff():
-    assert _is_new_file(_unified([], ["# T", "", "x"]))
-    assert not _is_new_file(_unified(MD_OLD, MD_NEW))
-    assert not _is_new_file("@@ -1,1 +1,1 @@\n-a\n+b\n")
+def _long_doc() -> tuple[list[str], list[str]]:
+    old = [line for n in range(12) for line in (f"para {n}", "")]
+    new = list(old)
+    new[10] = "para 5 changed"
+    return old, new
+
+
+def test_a_long_document_is_chunked_and_unchanged_runs_fold_behind_a_bar():
+    old, new = _long_doc()
+    request = ReviewRequest(
+        pages=[Page(path="d.md", diff=_unified(old, new))],
+        files={"d.md": "\n".join(new) + "\n"},
+        root=None,
+    )
+    html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
+    # Block 5 changed: it and its two neighbours show; the 4 blocks before and 5 after fold.
+    assert html.count('<div class="pp-chunk">') == 12
+    assert ">4 unchanged blocks</button>" in html
+    assert ">5 unchanged blocks</button>" in html
+    # Folded rows are still in the page, so every line stays addressable.
+    for line in range(1, len(new) + 1):
+        assert f'data-side="new" data-line="{line}"' in html
+    # The deleted line sits in the chunk of the line that replaces it.
+    chunk = html[html.index('<div class="pp-chunk">', html.index("para 4")) :]
+    assert chunk.index('data-side="old" data-line="11"') < chunk.index("para 5 changed")

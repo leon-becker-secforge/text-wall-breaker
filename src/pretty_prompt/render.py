@@ -17,13 +17,14 @@ import subprocess
 from html import escape
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
+from typing import NamedTuple
 
 from markdown_it import MarkdownIt
 from markdown_it.token import Token
 
 from .markdown import _image_src
 
-__all__ = ["is_renderable", "rendered_view"]
+__all__ = ["Block", "is_renderable", "rendered_view", "split_blocks"]
 
 _MARKDOWN = {".md", ".markdown"}
 _ASCIIDOC = {".adoc", ".asciidoc"}
@@ -252,3 +253,92 @@ def _asciidoc(
     cleaner.feed(done.stdout)
     cleaner.close()
     return cleaner.result()
+
+
+class Block(NamedTuple):
+    """One outermost marked element of a rendered view, and the lines it stands for."""
+
+    first: int
+    last: int
+    html: str
+
+
+class _Splitter(HTMLParser):
+    """Cuts `rendered_view` output into its outermost `data-first` elements.
+
+    Wrapper elements without the mark (AsciiDoc sections) are looked through, and dropped
+    with whatever sits between the blocks: the output is already sanitised, so what is
+    copied here is exactly what `rendered_view` wrote. A `<pre>` is the exception: a fence
+    carries its mark on the `<code>` inside, so the `<pre>` opens the block and its range
+    is that of the first marked element within.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=False)
+        self.blocks: list[Block] = []
+        self._parts: list[str] = []
+        self._depth = 0
+        self._range: tuple[int, int] | None = None
+
+    @staticmethod
+    def _lines(attrs: list[tuple[str, str | None]]) -> tuple[int, int] | None:
+        marks = dict(attrs)
+        first, last = marks.get("data-first"), marks.get("data-last")
+        if not (first and first.isdigit()):
+            return None
+        return int(first), int(last) if last and last.isdigit() else int(first)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        raw = self.get_starttag_text() or ""
+        marked = self._lines(attrs)
+        if self._depth == 0:
+            if marked is None and tag != "pre":
+                return
+            self._range = marked
+        elif self._range is None:
+            self._range = marked
+        if tag in _VOID:
+            if self._depth:
+                self._parts.append(raw)
+            else:
+                self._close([raw])
+            return
+        self._depth += 1
+        self._parts.append(raw)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self._depth or tag in _VOID:
+            return
+        self._parts.append(f"</{tag}>")
+        self._depth -= 1
+        if self._depth == 0:
+            self._close(self._parts)
+
+    def _close(self, parts: list[str]) -> None:
+        if self._range is not None:
+            self.blocks.append(Block(self._range[0], self._range[1], "".join(parts)))
+        self._parts = []
+        self._range = None
+
+    def handle_data(self, data: str) -> None:
+        if self._depth:
+            self._parts.append(data)
+
+    def handle_entityref(self, name: str) -> None:
+        if self._depth:
+            self._parts.append(f"&{name};")
+
+    def handle_charref(self, name: str) -> None:
+        if self._depth:
+            self._parts.append(f"&#{name};")
+
+
+def split_blocks(rendered: str) -> list[Block]:
+    """The outermost marked blocks of `rendered_view` output, in document order."""
+    splitter = _Splitter()
+    splitter.feed(rendered)
+    splitter.close()
+    return sorted(splitter.blocks, key=lambda block: block.first)
