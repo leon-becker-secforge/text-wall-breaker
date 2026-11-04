@@ -315,6 +315,18 @@ the agent's context and pasted back. `git_range` is what `git diff` takes (`main
 `context_lines` is `-U` (default 3). Binary files and pure mode changes have no line to
 comment on and are skipped; a rename shows as a delete plus an add.
 
+A `repo` page also carries the file's text, so the user can show the lines the diff leaves
+out. Each hidden stretch (before the first hunk, between hunks, after the last) is a dashed
+bar with a pill: the middle shows the whole stretch, and `↓ 10` / `↑ 10` show ten lines
+below the hunk above or above the hunk below (touch screens show the steps always, others
+on hover or focus). Revealed lines are ordinary rows: they can be selected and commented,
+with the old and new numbers a diff would give them. A selection cannot span a stretch that
+is still hidden; the dock says so and offers no Comment until those lines are shown. The
+file comes from the working tree when the diff is against it, and from the end of the range
+(`B` in `A..B`, `X` in `X^!`) otherwise. It is left out, and that file shows only its
+hunks, when it is over 512 KB, past 4 MB over all files, binary or not UTF-8, a symlink,
+or not the text the diff was made from. `pages` has no file to read, so it never expands.
+
 With more than one page, a file list stays in view on the left: one row per file with its
 directory, the current file marked, a comment count, and a pencil where the file has a
 note. A click, the arrow keys or `j`/`k` switch files. Below 900px wide the list becomes a

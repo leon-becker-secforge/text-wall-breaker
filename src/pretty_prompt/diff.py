@@ -11,9 +11,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-__all__ = ["DiffLine", "InvalidDiff", "parse_unified_diff"]
+__all__ = [
+    "DiffLine",
+    "Gap",
+    "InvalidDiff",
+    "expansion_lines",
+    "gaps_of",
+    "parse_unified_diff",
+    "rows_with_context",
+    "split_lines",
+]
 
 _HUNK_HEADER = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@")
+_HUNK_COUNTS = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
 class InvalidDiff(ValueError):
@@ -99,4 +109,126 @@ def parse_unified_diff(diff: str) -> list[DiffLine]:
 
     if not any(row.kind == "hunk" for row in rows):
         raise InvalidDiff("no @@ hunk header found; is this a unified diff?")
+    return rows
+
+
+@dataclass(frozen=True)
+class Gap:
+    """A stretch of unchanged lines a diff does not show.
+
+    `new_first`..`new_last` are its 1-based line numbers in the new file; an old line
+    number is the new one plus `delta`. `position` is "top" (before the first hunk),
+    "between" or "end" (after the last); `hunk` is the index of the hunk it precedes, or
+    the number of hunks for "end".
+    """
+
+    new_first: int
+    new_last: int
+    delta: int
+    position: str
+    hunk: int
+
+    @property
+    def size(self) -> int:
+        return self.new_last - self.new_first + 1
+
+
+def split_lines(text: str) -> list[str]:
+    """The lines of a file as the diff shows them: split on `\\n` only, no line ending."""
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [line[:-1] if line.endswith("\r") else line for line in lines]
+
+
+def _hunk_spans(diff: str) -> list[tuple[int, int, int, int]]:
+    """Per hunk, (old_first, old_next, new_first, new_next) in diff order.
+
+    `*_first` is the first line the hunk covers and `*_next` the line after its last. A
+    side with a zero count (a pure addition or deletion) covers nothing; its start then
+    names the line *before* the change, so its first line is the one after.
+    """
+    spans = []
+    for raw in diff.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        match = _HUNK_COUNTS.match(raw)
+        if match is None:
+            continue
+        old_start, new_start = int(match.group(1)), int(match.group(3))
+        old_count = 1 if match.group(2) is None else int(match.group(2))
+        new_count = 1 if match.group(4) is None else int(match.group(4))
+        old_first = old_start if old_count else old_start + 1
+        new_first = new_start if new_count else new_start + 1
+        spans.append((old_first, old_first + old_count, new_first, new_first + new_count))
+    return spans
+
+
+def gaps_of(diff: str, line_count: int) -> list[Gap]:
+    """The unchanged stretches `diff` leaves out of a new file of `line_count` lines.
+
+    Empty if the hunks do not fit that file, so a file that changed since the diff was
+    taken is never expanded.
+    """
+    spans = _hunk_spans(diff)
+    if not spans or spans[-1][3] - 1 > line_count:
+        return []
+    gaps: list[Gap] = []
+    old_first, _, new_first, _ = spans[0]
+    if new_first > 1:
+        gaps.append(Gap(1, new_first - 1, old_first - new_first, "top", 0))
+    for index in range(len(spans) - 1):
+        _, old_next, _, new_next = spans[index]
+        new_first_after = spans[index + 1][2]
+        if new_first_after > new_next:
+            gaps.append(
+                Gap(new_next, new_first_after - 1, old_next - new_next, "between", index + 1)
+            )
+    _, old_next, _, new_next = spans[-1]
+    if new_next <= line_count:
+        gaps.append(Gap(new_next, line_count, old_next - new_next, "end", len(spans)))
+    return gaps
+
+
+def expansion_lines(diff: str, text: str) -> list[str] | None:
+    """`text` as lines if it is the new side `diff` was made from, else None.
+
+    Every new-side row of the diff must equal the file's line at its number, which is
+    what makes the hidden lines between the hunks safe to show and to number. A diff
+    with no new-side row (a deleted file) proves nothing, so it is never expanded.
+    """
+    lines = split_lines(text)
+    checked = 0
+    for row in parse_unified_diff(diff):
+        if row.kind == "hunk" or row.new_line is None:
+            continue
+        if row.new_line > len(lines) or lines[row.new_line - 1] != row.text:
+            return None
+        checked += 1
+    return lines if checked else None
+
+
+def rows_with_context(diff: str, lines: list[str]) -> list[DiffLine]:
+    """The addressable rows of `diff` with every hidden stretch filled in from `lines`.
+
+    In display order, which is what a comment's range is measured in. The hunk header
+    rows are left out, as they are not addressable.
+    """
+    gaps = gaps_of(diff, len(lines))
+    before: dict[int, Gap] = {gap.hunk: gap for gap in gaps if gap.position != "end"}
+
+    def gap_rows(gap: Gap) -> list[DiffLine]:
+        return [
+            DiffLine("ctx", lines[number - 1], number + gap.delta, number)
+            for number in range(gap.new_first, gap.new_last + 1)
+        ]
+
+    rows: list[DiffLine] = []
+    hunk = -1
+    for row in parse_unified_diff(diff):
+        if row.kind == "hunk":
+            hunk += 1
+            if hunk in before:
+                rows.extend(gap_rows(before[hunk]))
+            continue
+        rows.append(row)
+    rows.extend(row for gap in gaps if gap.position == "end" for row in gap_rows(gap))
     return rows

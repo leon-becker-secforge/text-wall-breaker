@@ -22,7 +22,13 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from .ask import BrowserUnavailable, open_in_browser
-from .diff import DiffLine, InvalidDiff, parse_unified_diff
+from .diff import (
+    DiffLine,
+    InvalidDiff,
+    expansion_lines,
+    parse_unified_diff,
+    rows_with_context,
+)
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
     ACCENT_ENV_VAR,
@@ -79,6 +85,9 @@ class ReviewRequest(BaseModel):
     pages: list[Page] = []
     header: str | None = None
     title: str = "Claude Code"
+    # path -> the file's new-side text, set only by the `repo` source, which can read it.
+    # It lets the page show the lines between the hunks; see `expansion`.
+    files: dict[str, str] = {}
 
     def validated(self) -> ReviewRequest:
         if not self.pages:
@@ -86,6 +95,20 @@ class ReviewRequest(BaseModel):
         for index, page in enumerate(self.pages):
             page.validated(label=f"pages[{index}]")
         return self
+
+    def expansion(self) -> dict[str, list[str]]:
+        """Per path, the file's lines, for each page whose text is the diff's new side.
+
+        A text that does not match its diff is left out, so nothing is expanded from a
+        file that is not the one the diff was taken from.
+        """
+        found: dict[str, list[str]] = {}
+        for page in self.pages:
+            text = self.files.get(page.path)
+            lines = expansion_lines(page.diff, text) if text is not None else None
+            if lines is not None:
+                found[page.path] = lines
+        return found
 
 
 def _resolve_accent() -> str | None:
@@ -107,9 +130,16 @@ def _build_html(
     status_url: str | None = None,
     generation: int = 0,
 ) -> str:
+    expansion = request.expansion()
     return build_review_page(
         pages=[
-            {"path": page.path, "diff": page.diff, "blurb": page.blurb} for page in request.pages
+            {
+                "path": page.path,
+                "diff": page.diff,
+                "blurb": page.blurb,
+                "lines": expansion.get(page.path),
+            }
+            for page in request.pages
         ],
         header=request.header,
         title=request.title,
@@ -124,23 +154,31 @@ def _build_html(
 _MARKERS = {"add": "+", "del": "-", "ctx": " "}
 
 
-def _addressable_rows(pages: list[Page]) -> dict[str, list[DiffLine]]:
+def _addressable_rows(
+    pages: list[Page], expansion: dict[str, list[str]]
+) -> dict[str, list[DiffLine]]:
     """Per path, the rows of its diff a comment can address, in display order.
 
     A comment's coordinates are checked against these rather than trusted outright — the
     page is the only thing that should ever POST here, but the result is what the agent
     acts on, same reasoning as `ask._extract_answer` filtering ids against known options.
     The rows' text doubles as `context` in the returned comment, so the agent doesn't have
-    to re-parse its own diff to see what a comment was about.
+    to re-parse its own diff to see what a comment was about. A page that can expand has
+    its hidden lines addressable too, in the place they take between the hunks.
     """
-    return {
-        page.path: [
-            row
-            for row in parse_unified_diff(page.diff)
-            if row.side is not None and row.line is not None
-        ]
-        for page in pages
-    }
+    rows: dict[str, list[DiffLine]] = {}
+    for page in pages:
+        lines = expansion.get(page.path)
+        rows[page.path] = (
+            rows_with_context(page.diff, lines)
+            if lines is not None
+            else [
+                row
+                for row in parse_unified_diff(page.diff)
+                if row.side is not None and row.line is not None
+            ]
+        )
+    return rows
 
 
 def _is_line(value: object) -> bool:
@@ -169,8 +207,10 @@ def _valid_quote(raw: object, rows: list[DiffLine]) -> str | None:
     return raw.strip() if needle in haystack and needle != haystack else None
 
 
-def _extract_comments(pages: list[Page], raw: object) -> list[dict[str, Any]]:
-    rows_by_path = _addressable_rows(pages)
+def _extract_comments(
+    pages: list[Page], raw: object, expansion: dict[str, list[str]]
+) -> list[dict[str, Any]]:
+    rows_by_path = _addressable_rows(pages, expansion)
     index_by_path = {
         path: {(row.side, row.line): i for i, row in enumerate(rows)}
         for path, rows in rows_by_path.items()
@@ -232,15 +272,19 @@ def _extract_page_notes(pages: list[Page], raw: object) -> list[dict[str, str]]:
 
 
 def _result_from_submission(
-    pages: list[Page], submission: Submission | None, progress: dict[str, Any] | None
+    pages: list[Page],
+    submission: Submission | None,
+    progress: dict[str, Any] | None,
+    expansion: dict[str, list[str]] | None = None,
 ) -> dict[str, Any]:
     """Submit, cancel or abandon, all in one shape.
 
     An abandoned review (no submission) returns what the page last reported in its
-    heartbeat, the same way cancel keeps its comments (ADR 0002).
+    heartbeat, the same way cancel keeps its comments (ADR 0002). `expansion` is
+    `ReviewRequest.expansion()`: the hidden lines a comment may also address.
     """
     data = submission.data if submission is not None else (progress or {})
-    comments = _extract_comments(pages, data.get("comments"))
+    comments = _extract_comments(pages, data.get("comments"), expansion or {})
     note = data.get("overall_note")
     result: dict[str, Any] = {
         "comments": comments,
@@ -271,7 +315,9 @@ def _run_review_reusing_tab(request: ReviewRequest, session: SessionListener) ->
         submission = session.wait_for_answer()
     finally:
         session.end_question()
-    return _result_from_submission(request.pages, submission, session.progress())
+    return _result_from_submission(
+        request.pages, submission, session.progress(), request.expansion()
+    )
 
 
 def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
@@ -294,7 +340,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
             return NOT_DELIVERED
         progress = listener.progress()
 
-    return _result_from_submission(request.pages, submission, progress)
+    return _result_from_submission(request.pages, submission, progress, request.expansion())
 
 
 def run_review(request: ReviewRequest) -> dict[str, Any]:

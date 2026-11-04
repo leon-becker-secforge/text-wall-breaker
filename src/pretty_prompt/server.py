@@ -132,7 +132,8 @@ blocks until submit, cancel, or the tab is closed. For a reaction that reduces t
 Source, one of:
   - `repo` (+ optional `git_range`, `paths`, `context_lines`): the server runs
     `git diff` itself. Prefer it for anything in git: passing the diff as arguments
-    puts a second copy of it in your context.
+    puts a second copy of it in your context. The user can also show the hidden lines
+    between hunks and comment on them; `pages` cannot do that.
   - `pages`: a diff you already hold, one entry per file.
 
 The user comments on a line or a run of lines, can select text inside them, and can
@@ -349,22 +350,23 @@ async def review(
 ) -> dict[str, Any]:
     if repo is None and (git_range is not None or paths):
         raise ToolError("git_range and paths need repo")
+    files: dict[str, str] = {}
     if repo is not None:
         if pages:
             raise ToolError("set either pages or repo, not both")
         try:
-            pages = [
-                Page(**entry)
-                for entry in await anyio.to_thread.run_sync(
-                    pages_from_git, repo, git_range, paths, context_lines
-                )
-            ]
+            entries = await anyio.to_thread.run_sync(
+                pages_from_git, repo, git_range, paths, context_lines
+            )
         except GitDiffError as exc:
             raise ToolError(str(exc)) from exc
+        pages = [Page(path=entry["path"], diff=entry["diff"]) for entry in entries]
+        files = {entry["path"]: entry["text"] for entry in entries if "text" in entry}
     request = ReviewRequest(
         pages=pages or [],
         header=header,
         title=title,
+        files=files,
     )
     try:
         request.validated()

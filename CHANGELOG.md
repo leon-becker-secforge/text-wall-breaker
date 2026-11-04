@@ -7,6 +7,13 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review`: hidden context can be expanded when the source is `repo`. Each stretch the
+  diff leaves out (before, between and after the hunks) is a dashed bar with a pill: the
+  middle shows it all, `↓ 10` and `↑ 10` show ten lines at a time from the hunk above or
+  below. Revealed lines can be selected and commented with their real old and new numbers;
+  a selection across a still-hidden stretch is refused. The page carries the file text
+  (working tree, or the end of the range), up to 512 KB per file and 4 MB per call, and
+  skips a file that is binary, not UTF-8, a symlink, or not what the diff was made from.
 - `review`: comments on a run of lines and on selected text. Click a row, shift-click to
   extend, or select text; the rest of the diff dims and a box under the last selected row
   takes the comment (Ctrl+Enter adds, Esc clears). Comments show under their rows with
@@ -35,6 +42,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   cancel. The page reports them with each heartbeat and 0.4 s after typing; before, a
   timeout returned nothing.
 - `ask`: an abandoned call returns `resume` like a cancelled one, as `timed_out` did.
+
+### Fixed
+
+- `review` with `repo` no longer fails on a file that is not valid UTF-8: `git diff` output
+  is decoded with replacement characters instead of raising.
 
 ### Removed
 

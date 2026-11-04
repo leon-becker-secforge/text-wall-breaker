@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import difflib
+
 import pytest
 
 from pretty_prompt.listener import Submission
-from pretty_prompt.review import Page, _result_from_submission
+from pretty_prompt.review import Page, ReviewRequest, _result_from_submission
 
 DIFF = "@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"
 PAGES = [Page(path="a.py", diff=DIFF)]
@@ -156,3 +158,63 @@ def test_a_quote_compares_whitespace_loosely():
 def test_a_bad_or_whole_quote_is_dropped_but_the_comment_stays(quote):
     [comment] = _comments({**ADDED, "quote": quote})
     assert "quote" not in comment
+
+
+# A file where the diff shows lines 2-8 and 28-34 of 40; lines 1 and 9-27 and 35-40 are hidden.
+LONG_OLD = [f"line {k}" for k in range(1, 41)]
+LONG_NEW = list(LONG_OLD)
+LONG_NEW[4] = "line 5 changed"
+LONG_NEW[30] = "line 31 changed"
+LONG_DIFF = "".join(
+    difflib.unified_diff(
+        [line + "\n" for line in LONG_OLD], [line + "\n" for line in LONG_NEW], n=3
+    )
+)
+LONG_PAGES = [Page(path="long.py", diff=LONG_DIFF)]
+
+
+def _long_request(files):
+    return ReviewRequest(pages=LONG_PAGES, files=files)
+
+
+def _long_comments(request, *entries):
+    data = {"comments": [{"path": "long.py", "text": "t", **entry} for entry in entries]}
+    submission = Submission(kind="submit", data=data)
+    return _result_from_submission(request.pages, submission, None, request.expansion())["comments"]
+
+
+def test_a_hidden_line_is_not_addressable_without_the_file():
+    request = _long_request({})
+    assert _long_comments(request, {"side": "new", "line": 15}) == []
+
+
+def test_a_hidden_line_can_be_commented_once_the_page_could_expand_it():
+    request = _long_request({"long.py": "\n".join(LONG_NEW) + "\n"})
+    [comment] = _long_comments(request, {"side": "new", "line": 15})
+    assert comment["context"] == "line 15"
+
+
+def test_a_range_across_expanded_lines_includes_every_row_between_its_ends():
+    request = _long_request({"long.py": "\n".join(LONG_NEW) + "\n"})
+    [comment] = _long_comments(
+        request, {"side": "new", "line": 8, "end_side": "new", "end_line": 11}
+    )
+    assert comment["context"] == "\n".join(f" line {k}" for k in range(8, 12))
+
+
+def test_hidden_lines_keep_their_old_numbers_after_a_shift():
+    old = [f"line {k}" for k in range(1, 21)]
+    new = ["inserted", *old]  # everything below moves down by one
+    diff = "".join(difflib.unified_diff([x + "\n" for x in old], [x + "\n" for x in new], n=1))
+    page = Page(path="s.py", diff=diff)
+    request = ReviewRequest(pages=[page], files={"s.py": "\n".join(new) + "\n"})
+    data = {"comments": [{"path": "s.py", "side": "new", "line": 15, "text": "t"}]}
+    [comment] = _result_from_submission(
+        request.pages, Submission(kind="submit", data=data), None, request.expansion()
+    )["comments"]
+    assert comment["context"] == "line 14"  # new 15 is old 14
+
+
+def test_a_file_that_does_not_match_its_diff_expands_nothing():
+    request = _long_request({"long.py": "completely different\n"})
+    assert request.expansion() == {}

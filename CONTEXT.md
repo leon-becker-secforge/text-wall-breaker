@@ -67,6 +67,14 @@ Optional Markdown at the top of a single page, explaining that file's change. Di
 from `header`, which spans every page of the call.
 _Avoid_: description, intro, page context
 
+**Gap**:
+A stretch of unchanged lines a page's diff leaves out: before the first hunk, between two
+hunks, or after the last. Shown as a bar the operator opens, whole or ten lines at a time.
+Only a page whose file text is known has gaps, which means only the `repo` source; a
+revealed line is an ordinary row a comment can address, but a comment never spans a gap
+that is still closed.
+_Avoid_: fold, collapsed section, hidden hunk
+
 **Comment**:
 A remark anchored to one line or a run of lines of a page's diff, addressed by path, side
 (old/new), and line number in that file — not by its position in the diff text. A run

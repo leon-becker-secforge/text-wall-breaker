@@ -28,7 +28,7 @@ from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .diff import DiffLine, parse_unified_diff
+from .diff import DiffLine, Gap, gaps_of, parse_unified_diff
 from .markdown import (
     LONG_QUESTION_CHARS,
     bold_lead,
@@ -2168,6 +2168,27 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
   border: 1px solid var(--ntw-border); border-radius: 6px; overflow: hidden; overflow-x: auto; }
 .pp-review-row.hunk { color: var(--ntw-fg-muted); padding: 2px 10px;
   background: var(--ntw-code-bg); }
+/* Hidden lines between hunks: a dashed divider with a pill (see _render_review_gap). The
+   step buttons show on hover or focus, and always where there is no hover. */
+.pp-review-gap { position: relative; display: flex; justify-content: center; align-items: center;
+  height: 30px; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 0.85em; color: var(--ntw-fg-muted); user-select: none; }
+.pp-review-gap::before { content: ""; position: absolute; left: 0; right: 0; top: 50%;
+  border-top: 1px dashed var(--ntw-border); }
+.pp-gap-pill { position: relative; display: inline-flex; align-items: stretch;
+  border: 1px solid var(--ntw-border); border-radius: 999px; background: var(--ntw-bg-elevated);
+  overflow: hidden; }
+.pp-gap-pill button { border: 0; background: none; font: inherit; color: var(--ntw-fg-muted);
+  padding: 3px 12px; cursor: pointer; }
+.pp-gap-pill .pp-gap-all { color: var(--ntw-fg); }
+.pp-gap-pill .pp-gap-step { display: none; color: var(--ntw-accent);
+  border-inline: 1px solid var(--ntw-border); }
+.pp-review-gap:hover .pp-gap-step, .pp-review-gap:focus-within .pp-gap-step {
+  display: inline-block; }
+@media (hover: none) { .pp-gap-pill .pp-gap-step { display: inline-block; } }
+.pp-gap-pill .pp-gap-step[hidden] { display: none; }
+.pp-gap-pill button:hover { background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
+.pp-gap-pill button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
 /* Whole row is the click/keyboard target — chosen over a separate gutter button in a
    three-variant review (see pretty-prompt's CLAUDE.md): nothing small to aim for, and the
    bubble glyph below is purely decorative, not itself a click target
@@ -2371,7 +2392,7 @@ __CONTENT__
   </div>
   <textarea id="pp-dock-text" placeholder="Comment on the highlighted lines"></textarea>
   <div class="pp-dock-row">
-    <span class="pp-dock-hint">Ctrl+Enter adds &middot; Esc clears</span>
+    <span class="pp-dock-hint" id="pp-dock-hint">Ctrl+Enter adds &middot; Esc clears</span>
     <button type="button" class="ghost" id="pp-dock-clear">Clear</button>
     <button type="button" id="pp-dock-add">Comment</button>
   </div>
@@ -2411,12 +2432,16 @@ __CONTENT__
   // once Submit/Cancel has been sent) stops any further change: editing then would
   // silently go nowhere, the comments having already left.
   var frozen = false;
-  var comments = [];   // {diff, from, to, quote, text, el}: rows are indexes into the diff
-  var sel = null;      // {diff, from, to, quote, editing}
-  var anchor = null;   // {diff, index} of the last plain click, for shift-click
+  // Rows are tracked as elements, never as positions: revealing hidden lines inserts rows
+  // and would shift every index after them.
+  var comments = [];   // {diff, first, last, quote, text, el}: first/last are row wraps
+  var sel = null;      // {diff, first, last, quote, editing}
+  var anchor = null;   // {diff, wrap} of the last plain click, for shift-click
   var dock = document.getElementById('pp-dock');
   var dockText = document.getElementById('pp-dock-text');
   var dockAdd = document.getElementById('pp-dock-add');
+  var dockHint = document.getElementById('pp-dock-hint');
+  var DOCK_HINT = dockHint.textContent;
   var slideEls = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
 
   function wrapsOf(diff) {
@@ -2429,9 +2454,14 @@ __CONTENT__
   function coord(wrap) {
     return { side: wrap.dataset.side, line: parseInt(wrap.dataset.line, 10) };
   }
-  function rowLabel(ws, from, to) {
-    var a = coord(ws[from]), b = coord(ws[to]);
-    if (from === to) return a.side + ' ' + a.line;
+  // The rows a comment or selection covers: its wraps and their positions right now.
+  function span(o) {
+    var ws = wrapsOf(o.diff);
+    return { ws: ws, from: ws.indexOf(o.first), to: ws.indexOf(o.last) };
+  }
+  function rowLabel(o) {
+    var a = coord(o.first), b = coord(o.last);
+    if (o.first === o.last) return a.side + ' ' + a.line;
     if (a.side === b.side) return a.side + ' ' + a.line + '\\u2013' + b.line;
     return a.side + ' ' + a.line + ' \\u2192 ' + b.side + ' ' + b.line;
   }
@@ -2442,9 +2472,26 @@ __CONTENT__
   }
   function plain(text) { return text.replace(/\\u00a0/g, ' ').replace(/\\s+$/, ''); }
 
-  function placeDock(ws) {
+  // Hidden lines between the ends: the comment would cover rows nobody saw.
+  function spansHiddenLines(o) {
+    if (o.first === o.last) return false;
+    for (var el = o.first.nextElementSibling; el && el !== o.last; el = el.nextElementSibling) {
+      if (el.classList.contains('pp-review-gap')) return true;
+    }
+    return false;
+  }
+  function updateDockState() {
+    if (!sel) return;
+    var hidden = spansHiddenLines(sel);
+    dockAdd.disabled = hidden;
+    dockHint.textContent = hidden
+      ? 'This spans hidden lines: show them or select fewer rows.' : DOCK_HINT;
+    placeDock();
+  }
+
+  function placeDock() {
     var diffBox = sel.diff.getBoundingClientRect();
-    var after = ws[sel.to];
+    var after = sel.last;
     // Under the last selected row and any comment already shown there, not over it.
     while (after.nextElementSibling && after.nextElementSibling.classList.contains('pp-comment')) {
       after = after.nextElementSibling;
@@ -2462,20 +2509,20 @@ __CONTENT__
       e.classList.remove('is-sel', 'sel-first', 'sel-last');
     });
     if (!sel) { dock.classList.remove('is-open'); return; }
-    var ws = wrapsOf(sel.diff);
+    var covered = span(sel), ws = covered.ws;
     sel.diff.classList.add('has-sel');
-    for (var i = sel.from; i <= sel.to; i++) ws[i].classList.add('is-sel');
-    ws[sel.from].classList.add('sel-first');
-    ws[sel.to].classList.add('sel-last');
-    document.getElementById('pp-dock-label').textContent = rowLabel(ws, sel.from, sel.to);
-    var count = sel.to - sel.from + 1;
+    for (var i = covered.from; i <= covered.to; i++) ws[i].classList.add('is-sel');
+    sel.first.classList.add('sel-first');
+    sel.last.classList.add('sel-last');
+    document.getElementById('pp-dock-label').textContent = rowLabel(sel);
+    var count = covered.to - covered.from + 1;
     document.getElementById('pp-dock-count').textContent = count + (count === 1 ? ' row' : ' rows');
     var quote = document.getElementById('pp-dock-quote');
     quote.hidden = !sel.quote;
     quote.textContent = sel.quote || '';
     dockText.value = sel.editing ? sel.editing.text : '';
     dockAdd.textContent = sel.editing ? 'Update' : 'Comment';
-    placeDock(ws);
+    updateDockState();
     dock.classList.add('is-open');
     dock.scrollIntoView({
       block: 'nearest',
@@ -2490,15 +2537,16 @@ __CONTENT__
     renderSel();
   }
 
-  function selectRow(diff, index, extend) {
-    var from = index, to = index;
-    if (extend && anchor && anchor.diff === diff) {
-      from = Math.min(anchor.index, index);
-      to = Math.max(anchor.index, index);
+  function selectRow(diff, wrap, extend) {
+    var first = wrap, last = wrap;
+    if (extend && anchor && anchor.diff === diff && anchor.wrap.isConnected) {
+      var ws = wrapsOf(diff), a = ws.indexOf(anchor.wrap), b = ws.indexOf(wrap);
+      first = ws[Math.min(a, b)];
+      last = ws[Math.max(a, b)];
     } else {
-      anchor = { diff: diff, index: index };
+      anchor = { diff: diff, wrap: wrap };
     }
-    setSel({ diff: diff, from: from, to: to, quote: '', editing: null });
+    setSel({ diff: diff, first: first, last: last, quote: '', editing: null });
   }
 
   document.addEventListener('mouseup', function (event) {
@@ -2521,17 +2569,16 @@ __CONTENT__
       if (to > from && r.startContainer.nodeType === 3 &&
           r.startOffset >= r.startContainer.length) from += 1;
       var quote = plain(s.toString());
-      anchor = { diff: diff, index: from };
+      anchor = { diff: diff, wrap: ws[from] };
       setSel({
-        diff: diff, from: from, to: to, editing: null,
+        diff: diff, first: ws[from], last: ws[to], editing: null,
         quote: quote === plain(rowsText(ws, from, to)) ? '' : quote.slice(0, 2000)
       });
       return;
     }
     var wrap = event.target.closest('.pp-review-row-wrap');
     if (wrap) {
-      var d = wrap.closest('.pp-review-diff');
-      selectRow(d, wrapsOf(d).indexOf(wrap), event.shiftKey);
+      selectRow(wrap.closest('.pp-review-diff'), wrap, event.shiftKey);
     } else if (sel && dockText.value.trim() === '') {
       clearSel();
     }
@@ -2543,35 +2590,34 @@ __CONTENT__
       ? event.target : null;
     if (row && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      var wrap = row.closest('.pp-review-row-wrap'), d = wrap.closest('.pp-review-diff');
-      selectRow(d, wrapsOf(d).indexOf(wrap), event.shiftKey);
+      var wrap = row.closest('.pp-review-row-wrap');
+      selectRow(wrap.closest('.pp-review-diff'), wrap, event.shiftKey);
     }
   });
-  window.addEventListener('resize', function () { if (sel) placeDock(wrapsOf(sel.diff)); });
+  window.addEventListener('resize', function () { if (sel) placeDock(); });
 
   function markRows() {
     Array.prototype.forEach.call(document.querySelectorAll('.has-comment'), function (e) {
       e.classList.remove('has-comment');
     });
     comments.forEach(function (c) {
-      var ws = wrapsOf(c.diff);
-      for (var i = c.from; i <= c.to; i++) ws[i].classList.add('has-comment');
+      var covered = span(c);
+      for (var i = covered.from; i <= covered.to; i++) covered.ws[i].classList.add('has-comment');
     });
   }
   function renderComment(c) {
-    var ws = wrapsOf(c.diff);
     var el = c.el || document.createElement('div');
     el.className = 'pp-comment';
     el.innerHTML = '<div class="pp-comment-head"><b></b><span class="pp-comment-actions">' +
       '<button type="button" data-act="edit">Edit</button>' +
       '<button type="button" data-act="delete">Delete</button></span></div>' +
       '<span class="pp-comment-quote" hidden></span><div class="pp-comment-text"></div>';
-    el.querySelector('b').textContent = rowLabel(ws, c.from, c.to);
+    el.querySelector('b').textContent = rowLabel(c);
     var quote = el.querySelector('.pp-comment-quote');
     quote.hidden = !c.quote;
     quote.textContent = c.quote || '';
     el.querySelector('.pp-comment-text').textContent = c.text;
-    ws[c.to].after(el);
+    c.last.after(el);
     c.el = el;
   }
   function commentsChanged() {
@@ -2581,13 +2627,13 @@ __CONTENT__
   }
   function addComment() {
     var text = dockText.value.trim();
-    if (!text || !sel || frozen) return;
+    if (!text || !sel || frozen || spansHiddenLines(sel)) return;
     if (sel.editing) {
       sel.editing.text = text;
       renderComment(sel.editing);
     } else {
       var c = {
-        diff: sel.diff, from: sel.from, to: sel.to, quote: sel.quote, text: text, el: null
+        diff: sel.diff, first: sel.first, last: sel.last, quote: sel.quote, text: text, el: null
       };
       comments.push(c);
       renderComment(c);
@@ -2614,22 +2660,105 @@ __CONTENT__
       comments.splice(comments.indexOf(c), 1);
       commentsChanged();
     } else {
-      setSel({ diff: c.diff, from: c.from, to: c.to, quote: c.quote, editing: c });
+      setSel({ diff: c.diff, first: c.first, last: c.last, quote: c.quote, editing: c });
+    }
+  });
+
+  // Hidden lines between hunks, shown ten at a time or all at once from the gap bar (see
+  // _render_review_gap). The text of each gap sits in a JSON element of its diff, in the
+  // order of the bars.
+  var GAP_STEP = 10;
+  function makeRow(path, oldNo, newNo, text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'pp-review-row-wrap';
+    wrap.dataset.path = path;
+    wrap.dataset.side = 'new';
+    wrap.dataset.line = newNo;
+    wrap.innerHTML = '<div class="pp-review-row ctx" role="button" tabindex="0" ' +
+      'aria-label="Select this line to comment">' +
+      '<span class="pp-review-gutter"></span><span class="pp-review-gutter"></span>' +
+      '<span class="pp-review-text"></span>' +
+      '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span></div>';
+    var gutters = wrap.querySelectorAll('.pp-review-gutter');
+    gutters[0].textContent = oldNo;
+    gutters[1].textContent = newNo;
+    wrap.querySelector('.pp-review-text').textContent = text || '\\u00a0';
+    return wrap;
+  }
+  function updateGap(g) {
+    var left = g.size - g.top - g.bottom;
+    if (left <= 0) { g.el.remove(); return; }
+    var all = g.el.querySelector('.pp-gap-all');
+    all.textContent = left + ' hidden line' + (left === 1 ? '' : 's');
+    all.setAttribute('aria-label', 'Show all ' + left + ' hidden lines');
+    Array.prototype.forEach.call(g.el.querySelectorAll('.pp-gap-step'), function (b) {
+      var n = Math.min(GAP_STEP, left), down = b.dataset.step === 'down';
+      b.hidden = left <= GAP_STEP;
+      b.textContent = (down ? '\\u2193 ' : '\\u2191 ') + n;
+      b.setAttribute('aria-label',
+        'Show ' + n + ' lines ' + (down ? 'below the hunk above' : 'above the hunk below'));
+    });
+  }
+  function revealGap(g, count, direction) {
+    var n = Math.min(count, g.size - g.top - g.bottom);
+    if (n <= 0) return;
+    var first, last;
+    if (direction === 'down') {
+      first = g.first + g.top; last = first + n - 1; g.top += n;
+    } else {
+      last = g.last - g.bottom; first = last - n + 1; g.bottom += n;
+    }
+    // On screen: rows revealed downward, the bar, rows revealed upward, the next hunk.
+    var before = direction === 'down' ? g.el : (g.bottomFirst || g.anchor);
+    var path = g.diff.dataset.path, firstRow = null;
+    for (var k = first; k <= last; k++) {
+      var row = makeRow(path, k + g.delta, k, g.lines[k - g.first]);
+      g.diff.insertBefore(row, before);
+      firstRow = firstRow || row;
+    }
+    if (direction === 'up') g.bottomFirst = firstRow;
+    updateGap(g);
+    updateDockState();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.pp-review-diff'), function (diff) {
+    var data = diff.querySelector('script.pp-review-lines');
+    if (!data) return;
+    var texts = JSON.parse(data.textContent);
+    Array.prototype.forEach.call(diff.querySelectorAll('.pp-review-gap'), function (el, i) {
+      var first = parseInt(el.dataset.first, 10), last = parseInt(el.dataset.last, 10);
+      el._gap = {
+        diff: diff, el: el, lines: texts[i], first: first, last: last, size: last - first + 1,
+        delta: parseInt(el.dataset.delta, 10), position: el.dataset.position,
+        top: 0, bottom: 0, bottomFirst: null, anchor: el.nextElementSibling
+      };
+    });
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.pp-gap-all, .pp-gap-step');
+    var g = button && button.closest('.pp-review-gap')._gap;
+    if (!g) return;
+    if (button.classList.contains('pp-gap-step')) {
+      revealGap(g, GAP_STEP, button.dataset.step);
+    } else {
+      revealGap(g, g.size, g.position === 'end' ? 'down' : 'up');
     }
   });
 
   function collectComments() {
+    function order(c) {
+      var covered = span(c);
+      return [slideEls.indexOf(c.diff.closest('.deck-slide')), covered.from, covered.to];
+    }
     return comments
       .slice()
       .sort(function (a, b) {
-        var sa = slideEls.indexOf(a.diff.closest('.deck-slide'));
-        var sb = slideEls.indexOf(b.diff.closest('.deck-slide'));
-        return sa - sb || a.from - b.from || a.to - b.to;
+        var x = order(a), y = order(b);
+        return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
       })
       .map(function (c) {
-        var ws = wrapsOf(c.diff), start = coord(ws[c.from]), end = coord(ws[c.to]);
+        var start = coord(c.first), end = coord(c.last);
         var out = { path: c.diff.dataset.path, side: start.side, line: start.line };
-        if (c.to !== c.from) { out.end_side = end.side; out.end_line = end.line; }
+        if (c.last !== c.first) { out.end_side = end.side; out.end_line = end.line; }
         if (c.quote) out.quote = c.quote;
         out.text = c.text;
         return out;
@@ -2794,7 +2923,42 @@ __MERMAID__
 """
 
 
-def _render_review_diff(path: str, diff: str) -> str:
+_GAP_STEP = 10
+
+
+def _render_review_gap(gap: Gap) -> str:
+    """The bar standing for a hidden stretch of unchanged lines, expanded by the script.
+
+    A divider with a pill: the middle shows the whole stretch, the step buttons ten lines
+    from the hunk above (down) or below (up) — picked over a hunk-style bar and a fold in
+    a three-variant prototype. A top gap has no hunk above and an end gap none below, so
+    each has only the step that makes sense; a stretch of ten or fewer lines has no steps
+    since the middle does the same.
+    """
+    size = gap.size
+    many = "" if size > _GAP_STEP else " hidden"
+    down = (
+        f'<button type="button" class="pp-gap-step" data-step="down"{many} '
+        f'aria-label="Show {_GAP_STEP} lines below the hunk above">&darr; {_GAP_STEP}</button>'
+        if gap.position != "top"
+        else ""
+    )
+    up = (
+        f'<button type="button" class="pp-gap-step" data-step="up"{many} '
+        f'aria-label="Show {_GAP_STEP} lines above the hunk below">&uarr; {_GAP_STEP}</button>'
+        if gap.position != "end"
+        else ""
+    )
+    label = f"{size} hidden line{'' if size == 1 else 's'}"
+    return (
+        f'<div class="pp-review-gap" data-position="{gap.position}" '
+        f'data-first="{gap.new_first}" data-last="{gap.new_last}" data-delta="{gap.delta}">'
+        f'<span class="pp-gap-pill">{down}<button type="button" class="pp-gap-all" '
+        f'aria-label="Show all {size} hidden lines">{label}</button>{up}</span></div>'
+    )
+
+
+def _render_review_diff(path: str, diff: str, lines: list[str] | None = None) -> str:
     """One page's diff as `.pp-review-row` rows, each wrapped in `.pp-review-row-wrap`.
 
     `parse_unified_diff` is what turns raw diff text into the (side, line) coordinate a
@@ -2804,13 +2968,23 @@ def _render_review_diff(path: str, diff: str) -> str:
     The whole row is the click/keyboard target for selecting it (`role`, `tabindex`; the
     wiring is in `_REVIEW_TEMPLATE`'s script, which also places a comment's note after its
     last row) — the bubble glyph is a hover affordance only, not a click target itself.
+
+    With `lines` (the whole new-side file, only known for a `repo` source) the stretches
+    the diff leaves out get a gap bar, and the text of each travels in one JSON script
+    element, in gap order, for the script to turn into rows when the bar is clicked.
     """
     escaped_path = html.escape(path, quote=True)
     rows: list[DiffLine] = parse_unified_diff(diff)
+    gaps = gaps_of(diff, len(lines)) if lines is not None else []
+    gap_before = {gap.hunk: gap for gap in gaps if gap.position != "end"}
     parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
+    hunk = -1
     for row in rows:
         text_html = html.escape(row.text) or "&nbsp;"
         if row.kind == "hunk":
+            hunk += 1
+            if hunk in gap_before:
+                parts.append(_render_review_gap(gap_before[hunk]))
             parts.append(f'<div class="pp-review-row hunk">{text_html}</div>')
             continue
         old = str(row.old_line) if row.old_line is not None else ""
@@ -2829,6 +3003,12 @@ def _render_review_diff(path: str, diff: str) -> str:
             "</div>"
             "</div>"
         )
+    parts.extend(_render_review_gap(gap) for gap in gaps if gap.position == "end")
+    if gaps and lines is not None:
+        # `<` is escaped so a file containing `</script>` cannot end the element early.
+        payload = json.dumps([lines[gap.new_first - 1 : gap.new_last] for gap in gaps])
+        escaped = payload.replace("<", "\\u003c")
+        parts.append(f'<script type="application/json" class="pp-review-lines">{escaped}</script>')
     parts.append("</div>")
     return "".join(parts)
 
@@ -2851,7 +3031,10 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         path = str(page["path"])
         blurb = page.get("blurb")
         blurb_html = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
-        diff_html = _render_review_diff(path, str(page["diff"]))
+        page_lines = page.get("lines")
+        diff_html = _render_review_diff(
+            path, str(page["diff"]), page_lines if isinstance(page_lines, list) else None
+        )
         note_id = f"pp-page-note-{index}"
         slide_parts.append(
             f'<section class="deck-slide card{active}">'

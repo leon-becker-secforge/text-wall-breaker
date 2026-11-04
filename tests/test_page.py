@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import difflib
+import json
 import re
 
 import pytest
@@ -151,6 +153,99 @@ def test_review_collects_ranges_with_an_end_and_a_quote():
     html = _review("a.py")
     assert "out.end_side = end.side; out.end_line = end.line;" in html
     assert "if (c.quote) out.quote = c.quote;" in html
+
+
+_OLD = [f"line {k}" for k in range(1, 101)]
+_NEW = list(_OLD)
+_NEW[4] = "line 5 changed"
+_NEW[44] = "line 45 changed"
+_NEW[90] = "line 91 changed"
+
+
+def _expandable(lines=_NEW, diff_new=_NEW):
+    diff = "".join(
+        difflib.unified_diff(
+            [x + "\n" for x in _OLD], [x + "\n" for x in diff_new], "a/f", "b/f", n=3
+        )
+    )
+    return build_review_page(
+        pages=[{"path": "f.py", "diff": diff, "lines": lines}],
+        submit_url="http://127.0.0.1:1/submit",
+    )
+
+
+def _gaps(html):
+    return re.findall(
+        r'<div class="pp-review-gap" data-position="(\w+)" data-first="(\d+)" '
+        r'data-last="(\d+)" data-delta="(-?\d+)">',
+        html,
+    )
+
+
+def test_review_without_the_file_has_no_gap_bars_and_no_lines_payload():
+    html = _review("a.py")
+    assert 'class="pp-review-gap"' not in html
+    assert '<script type="application/json"' not in html
+
+
+def test_review_shows_a_bar_for_every_hidden_stretch():
+    assert _gaps(_expandable()) == [
+        ("top", "1", "1", "0"),
+        ("between", "9", "41", "0"),
+        ("between", "49", "87", "0"),
+        ("end", "95", "100", "0"),
+    ]
+
+
+def test_a_gap_bar_sits_directly_before_the_hunk_it_precedes():
+    html = _expandable()
+    assert re.search(
+        r'data-last="1" data-delta="0">.*?</div>\s*<div class="pp-review-row hunk">', html
+    )
+    assert html.index('data-position="between" data-first="9"') < html.index("@@ -42")
+
+
+def test_only_the_steps_that_make_sense_are_offered_and_short_gaps_have_none_visible():
+    html = _expandable()
+    top = html.split('data-position="top"', 1)[1].split("</div>", 1)[0]
+    end = html.split('data-position="end"', 1)[1].split("</div>", 1)[0]
+    between = html.split('data-position="between" data-first="9"', 1)[1].split("</div>", 1)[0]
+    assert 'data-step="up"' in top
+    assert 'data-step="down"' not in top
+    assert 'data-step="down"' in end
+    assert 'data-step="up"' not in end
+    assert 'data-step="down" hidden' in end  # 6 lines: the middle shows them all
+    assert 'data-step="down"' in between
+    assert 'data-step="down" hidden' not in between  # 33 lines
+
+
+def test_the_hidden_lines_travel_in_one_json_element_in_gap_order():
+    html = _expandable()
+    [payload] = re.findall(
+        r'<script type="application/json" class="pp-review-lines">(.*?)</script>', html
+    )
+    gaps = json.loads(payload)
+    assert gaps[0] == ["line 1"]
+    assert gaps[1] == _NEW[8:41]
+    assert len(gaps) == 4
+    assert gaps[3] == _NEW[94:100]
+
+
+def test_a_file_containing_a_closing_script_tag_cannot_end_the_lines_element():
+    nasty = [*_NEW]
+    nasty[20] = "</script><script>alert(1)</script>"
+    html = _expandable(lines=nasty, diff_new=_NEW)
+    # the diff's own rows are escaped by html.escape; the JSON payload by \u003c
+    assert "<script>alert(1)" not in html
+    assert "\\u003c/script>" in html
+
+
+def test_review_script_tracks_rows_as_elements_and_blocks_a_comment_over_hidden_lines():
+    html = _expandable()
+    assert "function spansHiddenLines" in html
+    assert "if (o.first === o.last) return false;" in html
+    assert "var GAP_STEP = 10;" in html
+    assert "first: sel.first, last: sel.last" in html
 
 
 def test_invalid_accent_raises_from_build_page():

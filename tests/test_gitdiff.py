@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from pretty_prompt.gitdiff import GitDiffError, pages_from_git
+from pretty_prompt import gitdiff
+from pretty_prompt.gitdiff import GitDiffError, _end_revision, pages_from_git
 from pretty_prompt.review import Page
 
 
@@ -62,3 +63,74 @@ def test_empty_diff_and_missing_repo_are_refused(repo, tmp_path):
         pages_from_git(str(repo), "HEAD", None, 3)
     with pytest.raises(GitDiffError, match="not a directory"):
         pages_from_git(str(tmp_path / "missing"), None, None, 3)
+
+
+@pytest.mark.parametrize(
+    ("revision", "end"),
+    [
+        ("HEAD~1..HEAD", "HEAD"),
+        ("main...feature", "feature"),
+        ("abc..", "HEAD"),
+        ("abc^!", "abc"),
+        ("HEAD", None),
+        ("v1.0", None),
+    ],
+)
+def test_the_new_side_of_a_range_is_its_end(revision, end):
+    assert _end_revision(revision) == end
+
+
+def _by_path(pages):
+    return {page["path"]: page for page in pages}
+
+
+def test_a_range_carries_the_end_revisions_file_not_the_working_tree(repo):
+    (repo / "a.txt").write_text("uncommitted\n")
+    pages = _by_path(pages_from_git(str(repo), "HEAD~1..HEAD", None, 3))
+    assert pages["a.txt"]["text"] == "one\nTWO\nthree\n"
+
+
+def test_the_working_tree_diff_carries_the_working_tree_file(repo):
+    (repo / "a.txt").write_text("one\ntwo\nthree\nfour\n")
+    [page] = pages_from_git(str(repo), None, None, 3)
+    assert page["text"] == "one\ntwo\nthree\nfour\n"
+
+
+def test_a_deleted_file_has_no_text_to_expand(repo):
+    pages = _by_path(pages_from_git(str(repo), "HEAD~1..HEAD", None, 3))
+    assert "text" not in pages["gone.txt"]
+
+
+def test_a_file_over_the_size_cap_is_not_expandable(repo, monkeypatch):
+    monkeypatch.setattr(gitdiff, "MAX_FILE_BYTES", 5)
+    pages = pages_from_git(str(repo), "HEAD~1..HEAD", None, 3)
+    assert all("text" not in page for page in pages)
+
+
+def test_files_past_the_total_budget_are_not_expandable(repo, monkeypatch):
+    # a.txt (14 bytes) fits, the next file no longer does
+    monkeypatch.setattr(gitdiff, "MAX_TOTAL_BYTES", 14)
+    pages = pages_from_git(str(repo), "HEAD~1..HEAD", None, 3)
+    assert [page["path"] for page in pages if "text" in page] == ["a.txt"]
+
+
+def test_a_file_that_is_not_utf8_is_not_expandable(repo):
+    (repo / "a.txt").write_bytes(b"one\nT\xffO\nthree\n")
+    [page] = pages_from_git(str(repo), None, None, 3)
+    assert "text" not in page
+
+
+def test_a_symlink_is_never_followed_out_of_the_repo(repo, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("outside") / "secret.txt"
+    outside.write_text("one\nTWO\nthree\nsecret\n")
+    (repo / "a.txt").unlink()
+    (repo / "a.txt").symlink_to(outside)
+    pages = pages_from_git(str(repo), None, None, 3)
+    assert pages
+    assert all("text" not in page for page in pages)
+
+
+def test_a_file_that_changed_since_the_diff_is_not_expandable(repo, monkeypatch):
+    monkeypatch.setattr(gitdiff, "_read_new_side", lambda d, r, p: b"something else entirely\n")
+    pages = pages_from_git(str(repo), "HEAD~1..HEAD", None, 3)
+    assert all("text" not in page for page in pages)
