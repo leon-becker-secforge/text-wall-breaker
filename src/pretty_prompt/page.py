@@ -2434,7 +2434,7 @@ body.pp-has-files { padding-left: 296px; }
   #pp-files { transition: none; }
 }
 
-.pp-actions { margin-block-start: 16px; }
+.pp-actions { margin-block-start: 22px; }
 
 #pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
   background: #fef2f2; padding: 12px 14px; margin-block-start: 12px; }
