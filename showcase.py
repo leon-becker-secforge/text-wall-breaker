@@ -17,6 +17,7 @@ the terminal.
 import asyncio
 import json
 import os
+import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -340,30 +341,135 @@ async def showcase_show(client: Client) -> None:
     await _call(client, "show_status after Acknowledge", "show_status", {})
 
 
-async def showcase_review(client: Client) -> None:
+_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478"
+    "9c6360f8cfc0000003010100c9fe92ef0000000049454e44ae426082"
+)
+
+
+def _git(repo: Path, *args: str) -> None:
+    # Signing is off: a scratch repo has no use for the operator's key.
+    subprocess.run(  # noqa: S603
+        [
+            *["git", "-C", str(repo), "-c", "user.name=showcase", "-c", "user.email=s@example.com"],
+            *["-c", "commit.gpgsign=false", *args],
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+GUIDE_OLD = (
+    ["# Deploy guide", "", "Deploy from `main` only.", "", "## Steps", ""]
+    + [f"{i}. Step {i}." for i in range(1, 6)]
+    + ["", "## Rollback", "", "Redeploy the previous tag.", ""]
+    + [f"Filler paragraph {i}.\n" for i in range(1, 16)]
+    + ["| Env | Approval |", "| --- | --- |", "| prod | one reviewer |", "", "Done."]
+)
+GUIDE_NEW = list(GUIDE_OLD)
+GUIDE_NEW[2] = "Deploy from `main` only. **Never on a Friday.** ![x](pic.png)"
+GUIDE_NEW[11] = "Redeploy the previous tag and open an incident."
+GUIDE_NEW[-3] = "| prod | two reviewers |"
+
+SERVICE_OLD = ["import os", "", "RETRIES = 3", ""] + [
+    f"def step_{i}():\n    return {i}\n" for i in range(1, 25)
+]
+SERVICE_NEW = list(SERVICE_OLD)
+SERVICE_NEW[2] = "RETRIES = 5"
+SERVICE_NEW[-2] = "    return 24 + RETRIES"
+
+ADOC_OLD = "= Architecture\n\nThe service has one queue.\n\n== Parts\n\n* queue\n* worker\n"
+ADOC_NEW = (
+    "= Architecture\n\nThe service has one queue and a dead-letter queue.\n\n== Parts\n\n"
+    "* queue\n* worker\n* dead-letter queue\n\n[source,python]\n----\nqueue.put(item)\n----\n"
+)
+
+
+def _demo_repo(root: Path) -> Path:
+    """A scratch repo whose last commit touches Markdown, AsciiDoc and Python files."""
+    repo = root / "repo"
+    (repo / "docs").mkdir(parents=True)
+    (repo / "src").mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)  # noqa: S603, S607
+    (repo / "docs" / "guide.md").write_text("\n".join(GUIDE_OLD) + "\n")
+    (repo / "docs" / "arch.adoc").write_text(ADOC_OLD)
+    (repo / "src" / "service.py").write_text("\n".join(SERVICE_OLD) + "\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "base")
+    (repo / "docs" / "guide.md").write_text("\n".join(GUIDE_NEW) + "\n")
+    (repo / "docs" / "pic.png").write_bytes(_PNG)
+    (repo / "docs" / "arch.adoc").write_text(ADOC_NEW)
+    (repo / "docs" / "new-page.md").write_text("# New page\n\nAll of it is added.\n")
+    (repo / "src" / "service.py").write_text("\n".join(SERVICE_NEW) + "\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "change")
+    return repo
+
+
+async def showcase_review(client: Client, tmp: Path) -> None:
     await _call(
         client,
-        "pages with blurbs and header",
+        "pages: header, blurb, agent notes (one on a deleted line, one on a run)",
         "review",
         {
-            "header": "Reviewing a sample change: click any line to comment.",
-            "title": "Showcase: review",
+            "header": (
+                "# Reviewing a sample change\n\nClick a line (shift-click for a run, or select "
+                "text) to comment; Reply on an agent note answers it.\n\n- the heading and chips "
+                "stay in the top row; this part folds under *Details*"
+            ),
+            "title": "Showcase: review (pages)",
             "pages": [
                 {"path": "src/app/config.py", "diff": DIFF_ASK, "blurb": "Raised the **timeout**."},
                 {"path": "README.md", "diff": DIFF_PAGE},
             ],
+            "notes": [
+                {
+                    "path": "src/app/config.py",
+                    "side": "old",
+                    "line": 3,
+                    "text": "The old value was too tight for the **batch** endpoint.",
+                },
+                {
+                    "path": "src/app/config.py",
+                    "side": "new",
+                    "line": 3,
+                    "end_side": "new",
+                    "end_line": 4,
+                    "text": "New default and a retry budget.\n\n```python\nTIMEOUT = 60\n```",
+                },
+            ],
         },
     )
+    repo = _demo_repo(tmp)
     await _call(
         client,
-        "repo mode: the last commit of this checkout",
+        "repo mode: Expand context, rendered view (Markdown, AsciiDoc), a new file, notes",
         "review",
         {
-            "repo": str(WORKSPACE),
+            "repo": str(repo),
             "git_range": "HEAD~1..HEAD",
-            "paths": ["pretty-prompt"],
-            "context_lines": 5,
-            "header": "The server ran `git diff HEAD~1..HEAD -U5 -- pretty-prompt` itself.",
+            "context_lines": 3,
+            "header": (
+                "# Repo mode\n\nThe server ran `git diff HEAD~1..HEAD` itself. Show the hidden "
+                "lines between hunks with the bars; click a block of a rendered file to comment; "
+                "`new-page.md` opens on its rendered view.\n\n"
+                "AsciiDoc renders only with `ruby` and the `asciidoctor` gem installed."
+            ),
+            "title": "Showcase: review (repo)",
+            "notes": [
+                {
+                    "path": "docs/guide.md",
+                    "side": "new",
+                    "line": 3,
+                    "text": "The Friday rule comes from the **incident review**.",
+                },
+                {
+                    "path": "src/service.py",
+                    "side": "new",
+                    "line": 3,
+                    "text": "Five tries: the third failed twice in the load test.",
+                },
+            ],
         },
     )
 
@@ -378,7 +484,7 @@ async def _run(tools: list[str], accent: str | None) -> None:
             if "show" in tools:
                 await showcase_show(client)
             if "review" in tools:
-                await showcase_review(client)
+                await showcase_review(client, Path(tmp))
 
 
 @app.command()
