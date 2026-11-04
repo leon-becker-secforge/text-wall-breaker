@@ -24,6 +24,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -2162,8 +2163,30 @@ main { max-width: min(1200px, 96vw); margin: 0 auto; position: relative; }
 .pp-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
   border-radius: 999px; transition: width .15s; }
 
-.pp-review-path { font-family: var(--pp-font-mono); font-size: 0.82em; color: var(--ntw-fg-muted);
-  margin-block-end: 8px; word-break: break-all; }
+/* The top of the page (picked over a card and a document layout in a prototype): a slim row,
+   the header folded under Details, the path as a breadcrumb, the blurb one quiet line. */
+.pp-head { margin: 0 0 12px; padding: 0 40px 8px 0; border-bottom: 1px solid var(--ntw-border); }
+.pp-head-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.pp-head-title { font-size: 1.1em; font-weight: 700; margin: 0; }
+.pp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.pp-chip { font-family: var(--pp-font-mono); font-size: 0.8em; font-weight: 500;
+  padding: 2px 10px; border-radius: 999px; border: 1px solid var(--ntw-border);
+  color: var(--ntw-fg-muted); background: var(--ntw-bg-elevated); }
+.pp-chip b { color: var(--ntw-fg); }
+.pp-head-details { margin-top: 6px; font-size: 0.92em; color: var(--ntw-fg-muted); }
+.pp-head-details summary { cursor: pointer; font-family: var(--pp-font-mono); font-size: 0.85em;
+  font-weight: 500; color: var(--ntw-accent); }
+.pp-head-details .pp-content p, .pp-head-details .pp-content ul { margin: 6px 0; }
+.pp-review-path { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0 0 4px;
+  word-break: break-all; }
+.pp-review-path::before { content: "\\203A  "; color: var(--ntw-accent); }
+.pp-path-dir { color: var(--ntw-fg-muted); }
+.pp-path-file { color: var(--ntw-fg); font-weight: 700; }
+.pp-blurb { margin: 0 0 8px; font-size: 0.92em; color: var(--ntw-fg-muted); }
+.pp-blurb > p { display: inline; margin: 0; }
+.pp-blurb > p + p::before { content: " "; }
+.pp-blurb::before { content: "\\25CF"; color: var(--ntw-accent); font-size: 0.7em;
+  vertical-align: 1px; margin-inline-end: 0.6em; }
 .pp-review-diff { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0.6em 0;
   line-height: 1.55; border: 1px solid var(--ntw-border); border-radius: 12px;
   overflow: hidden; overflow-x: auto; }
@@ -2904,6 +2927,11 @@ __CONTENT__
   }
   function commentsChanged() {
     markRows();
+    var chip = document.getElementById('pp-chip-comments');
+    if (chip) {
+      var n = comments.length;
+      chip.innerHTML = '<b>' + n + '</b> comment' + (n === 1 ? '' : 's');
+    }
     document.dispatchEvent(new CustomEvent('pp-comments'));
     reportSoon();
   }
@@ -3402,6 +3430,51 @@ def _render_review_diff(
     return "".join(parts)
 
 
+_LEADING_H1 = re.compile(r"\A\s*<h1>(.*?)</h1>(.*)\Z", re.DOTALL)
+
+
+def _plural(count: int, noun: str) -> str:
+    return f"<b>{count}</b> {noun}{'' if count == 1 else 's'}"
+
+
+def _render_review_header(
+    header: str | None, pages: list[dict[str, object]], asset_base_url: str | None
+) -> str:
+    """The top of the page: one slim row, the agent's header folded under "Details".
+
+    Picked over a card and a document layout in a three-variant prototype. The row holds the
+    header's leading heading (or "Review") and chips with the file, comment and note counts;
+    the comment count is kept live by the page script. The rest of the header is behind a
+    fold when there is a heading to stand in for it, and open when there is not, so nothing
+    is hidden without a title to say what it is.
+    """
+    body = render_markdown(header, asset_base_url=asset_base_url) if header else ""
+    lead = _LEADING_H1.match(body)
+    title = (
+        f'<h1 class="pp-head-title">{lead.group(1)}</h1>'
+        if lead
+        else ('<span class="pp-head-title">Review</span>')
+    )
+    rest = lead.group(2) if lead else body
+    notes = sum(len(n) for page in pages if isinstance(n := page.get("notes"), list))
+    chips = (
+        f'<span class="pp-chip">{_plural(len(pages), "file")}</span>'
+        f'<span class="pp-chip" id="pp-chip-comments">{_plural(0, "comment")}</span>'
+        + (f'<span class="pp-chip">{_plural(notes, "agent note")}</span>' if notes else "")
+    )
+    fold = ""
+    if rest.strip():
+        opened = "" if lead else " open"
+        fold = (
+            f'<details class="pp-head-details"{opened}><summary>Details</summary>'
+            f'<div class="pp-content">{rest}</div></details>'
+        )
+    return (
+        f'<header class="pp-head"><div class="pp-head-row">{title}'
+        f'<span class="pp-chips">{chips}</span></div>{fold}</header>'
+    )
+
+
 def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | None) -> str:
     """The deck of `.deck-slide`s for a `review` call — one per page, in order.
 
@@ -3419,7 +3492,13 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         active = " is-active" if index == 0 else ""
         path = str(page["path"])
         blurb = page.get("blurb")
-        blurb_html = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
+        blurb_md = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
+        blurb_html = f'<div class="pp-blurb">{blurb_md}</div>' if blurb else ""
+        folder, _, name = path.rpartition("/")
+        path_html = (
+            f'<span class="pp-path-dir">{html.escape(folder + "/" if folder else "")}</span>'
+            f'<span class="pp-path-file">{html.escape(name)}</span>'
+        )
         page_lines = page.get("lines")
         page_notes = page.get("notes")
         diff_html = _render_review_diff(
@@ -3446,7 +3525,7 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
         note_id = f"pp-page-note-{index}"
         slide_parts.append(
             f'<section class="deck-slide card{active}">'
-            f'<div class="pp-review-path">{html.escape(path)}</div>'
+            f'<div class="pp-review-path">{path_html}</div>'
             f"{blurb_html}"
             f"{diff_html}"
             f'<label class="pp-page-note-label" for="{note_id}">'
@@ -3616,11 +3695,7 @@ def build_review_page(
         css += _accent_css(accent)
 
     asset_base_url = _asset_base_url(status_url)
-    header_html = (
-        f'<div class="pp-content">{render_markdown(header, asset_base_url=asset_base_url)}</div>'
-        if header
-        else ""
-    )
+    header_html = _render_review_header(header, pages, asset_base_url)
     content_html = _render_review_pages(pages, asset_base_url)
 
     return (

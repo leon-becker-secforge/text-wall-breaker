@@ -44,6 +44,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Changed
 
+- `review`: a slimmer top of the page. One row holds the header's leading heading (or
+  "Review") and chips with the file, comment (live) and agent-note counts; the rest of the
+  header is folded under "Details" when a heading stands in for it, and open when there is
+  none. The path is a breadcrumb with a dim folder and a bold file name, and the blurb a
+  single quiet line.
 - `review`: one button language. The comment box's Comment and Clear take `ask`'s size,
   corners, type and hover; the gap pill is a 6px rectangle with `ask`'s type. Edit, Delete
   and Reply are quiet text (Delete turns red on hover) instead of outlined buttons. The

@@ -778,6 +778,40 @@ def test_the_notes_bar_and_the_view_switch_are_labelled_two_segment_switches():
     ) in html
 
 
+def _head(header, **page):
+    diff = "@@ -1,1 +1,2 @@\n a\n+b\n"
+    pages = [{"path": "src/pkg/a.py", "diff": diff, **page}]
+    return build_review_page(pages=pages, header=header, submit_url="http://x/submit")
+
+
+def test_the_header_is_a_slim_row_with_the_rest_folded_under_details():
+    html = _head("# Retry rework\n\nWhy it changed.\n\n- one\n- two")
+    assert '<h1 class="pp-head-title">Retry rework</h1>' in html
+    assert '<span class="pp-chip"><b>1</b> file</span>' in html
+    assert 'id="pp-chip-comments"><b>0</b> comments</span>' in html
+    assert '<details class="pp-head-details"><summary>Details</summary>' in html
+    assert "Why it changed." in html.split("<summary>Details</summary>", 1)[1]
+
+
+def test_a_header_without_a_heading_is_not_hidden_and_none_is_just_the_row():
+    open_html = _head("Just a paragraph.")
+    assert '<span class="pp-head-title">Review</span>' in open_html
+    assert '<details class="pp-head-details" open>' in open_html
+    bare = _head(None).split('<header class="pp-head">', 1)[1].split("</header>", 1)[0]
+    assert '<span class="pp-head-title">Review</span>' in bare
+    assert "<details" not in bare
+    assert "agent note" not in bare
+
+
+def test_the_path_is_a_dim_folder_and_a_bold_file_and_the_blurb_is_wrapped():
+    html = _head(None, blurb="The **core** change.")
+    assert (
+        '<div class="pp-review-path"><span class="pp-path-dir">src/pkg/</span>'
+        '<span class="pp-path-file">a.py</span></div>'
+    ) in html
+    assert '<div class="pp-blurb"><p>The <strong>core</strong> change.</p></div>' in html
+
+
 def test_a_page_without_notes_has_no_note_markup():
     html = _review("a.py")
     assert '<div class="pp-notes-bar">' not in html
