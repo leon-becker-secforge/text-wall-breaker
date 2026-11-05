@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-05
+
 ### Added
 
 - `review_live` and `review`'s `live` parameter: a live session. The user asks about
