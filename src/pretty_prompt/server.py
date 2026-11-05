@@ -20,7 +20,7 @@ import anyio
 import anyio.to_thread
 from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from .ask import (
     ALLOW_DEFER_DESCRIPTION,
@@ -33,9 +33,19 @@ from .ask import (
     run_ask,
 )
 from .gitdiff import GitDiffError, pages_from_git
+from .live import ATTACH_INSTRUCTION, LiveError, LiveSession, Reply, RepoSource
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
-from .review import InvalidReview, Note, Page, ReviewRequest, run_review
+from .review import (
+    LIVE_START,
+    InvalidReview,
+    Note,
+    Page,
+    ReviewRequest,
+    build_live_html,
+    run_review,
+)
+from .session import get_shared_session
 from .show import InvalidShow, ShowRequest, run_show, show_status
 
 __all__ = [
@@ -149,7 +159,28 @@ part. Cancel returns the same shape plus `"cancelled": true`,
 keeping what was entered, since a cancel may be deliberate after a partial pass.
 The same shape plus `"abandoned": true`: the tab was closed first; comments are
 those entered so far. `{"not_delivered": true}`: the page
-never loaded."""
+never loaded.
+
+`{"live": {"session": id}}`: the user started a live session (or you set `live`):
+call `review_live` now, as `instruction` says."""
+
+_REVIEW_LIVE_DESCRIPTION = """Take part in a live review session that `review` started:
+post replies and a refresh, then block until the user sends something new.
+
+Returns `{"messages": [...]}`, what the user sent since your last call:
+  - `{"thread": id, "path", "side", "line", "context", "text"}`: a new thread on lines
+    (same fields as a review comment); `{"thread": id, "text"}`: a reply in it.
+  - `{"chat": text}`: a request about the whole change.
+  - `{"resolved": id}` / `{"reopened": id}`.
+With `wait=false` it posts and returns at once: `{"posted": true, "messages": [...]}`.
+Acknowledge a request that way, do the work, then call again with `refresh=true`.
+
+The session ends only through the user. The call that sees the end returns the `review`
+result (with `cancelled`/`abandoned` as there) plus `threads`: `[{"id", "path", "side",
+"line", "resolved", "last"}]`. A comment whose lines a refresh removed comes back with
+`"outdated": true` and its old `context`. A refresh sent after the end is not applied:
+`"refresh_dropped": true`. Keep calling until that result arrives; do no other work while
+the user waits on you."""
 
 
 # Claude Code aborts a tool call whose server sends no response and no progress
@@ -402,22 +433,29 @@ async def review(
         ),
     ] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
+    live: Annotated[
+        bool,
+        Field(
+            description="Open as a live session right away: returns once the page is up, "
+            "for `review_live` calls."
+        ),
+    ] = False,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     if repo is None and (git_range is not None or paths):
         raise ToolError("git_range and paths need repo")
     files: dict[str, str] = {}
+    source: RepoSource | None = None
     if repo is not None:
         if pages:
             raise ToolError("set either pages or repo, not both")
+        source = RepoSource(
+            repo=repo, git_range=git_range, paths=paths, context_lines=context_lines
+        )
         try:
-            entries = await anyio.to_thread.run_sync(
-                pages_from_git, repo, git_range, paths, context_lines
-            )
+            pages, files = await anyio.to_thread.run_sync(_load_repo, source)
         except GitDiffError as exc:
             raise ToolError(str(exc)) from exc
-        pages = [Page(path=entry["path"], diff=entry["diff"]) for entry in entries]
-        files = {entry["path"]: entry["text"] for entry in entries if "text" in entry}
     request = ReviewRequest(
         pages=pages or [],
         notes=notes or [],
@@ -434,9 +472,94 @@ async def review(
     try:
         # run_review owns a socket and, ordinarily, a browser tab for its whole
         # duration — off the event loop for the same reason ask's run_ask is.
-        return await _blocking(ctx, partial(run_review, request))
+        result = await _blocking(ctx, partial(run_review, request, live=live))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the review page: {exc}") from exc
+    except InvalidReview as exc:
+        raise ToolError(str(exc)) from exc
+    if LIVE_START not in result:
+        return result
+    session = get_shared_session()
+    started = LiveSession(
+        session,
+        request.validated(),
+        source,
+        build_html=lambda req, generation: build_live_html(req, session, generation),
+        load_repo=_load_repo,
+        generation=result[LIVE_START],
+    )
+    return {"live": {"session": started.id}, "instruction": ATTACH_INSTRUCTION}
+
+
+def _load_repo(source: RepoSource) -> tuple[list[Page], dict[str, str]]:
+    entries = pages_from_git(source.repo, source.git_range, source.paths, source.context_lines)
+    pages = [Page(path=entry["path"], diff=entry["diff"]) for entry in entries]
+    files = {entry["path"]: entry["text"] for entry in entries if "text" in entry}
+    return pages, files
+
+
+class LiveReply(BaseModel):
+    """One message the agent posts in a live session."""
+
+    to: Annotated[str, Field(description='A thread id from the messages, or "chat" for the chat.')]
+    text: Annotated[str, Field(description="The message, as Markdown.")]
+    done: Annotated[
+        bool,
+        Field(description="Mark the thread done, a hint for the user to resolve it."),
+    ] = False
+
+
+@server.tool(name="review_live", description=_REVIEW_LIVE_DESCRIPTION)
+async def review_live(
+    session: Annotated[str, Field(description="The id `review` returned under `live`.")],
+    replies: Annotated[list[LiveReply] | None, Field(description="Messages to post.")] = None,
+    refresh: Annotated[
+        bool,
+        Field(
+            description="Diff the repository again (a session opened with `repo`) and show "
+            "the new diff. Comments follow their lines; those whose lines are gone turn "
+            "outdated."
+        ),
+    ] = False,
+    git_range: Annotated[
+        str | None, Field(description="With refresh: a new range for the repo diff.")
+    ] = None,
+    paths: Annotated[
+        list[str] | None, Field(description="With refresh: new paths for the repo diff.")
+    ] = None,
+    pages: Annotated[
+        list[Page] | None,
+        Field(description="Replacement pages by path, for a session opened with `pages`."),
+    ] = None,
+    notes: Annotated[
+        list[Note] | None,
+        Field(description="With a refresh: agent notes replacing those of their pages."),
+    ] = None,
+    wait: Annotated[
+        bool, Field(description="Block for the user's next message (false: post and return).")
+    ] = True,
+    ctx: Context | None = None,
+) -> dict[str, Any]:
+    live_session = get_shared_session().live
+    if not isinstance(live_session, LiveSession):
+        raise ToolError(f"no live session {session!r}: it ended or never existed")
+    try:
+        return await _blocking(
+            ctx,
+            partial(
+                live_session.call,
+                session_id=session,
+                replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
+                refresh=refresh,
+                git_range=git_range,
+                paths=paths,
+                pages=pages,
+                notes=notes,
+                wait=wait,
+            ),
+        )
+    except (LiveError, GitDiffError) as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def main() -> None:

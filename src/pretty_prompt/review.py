@@ -47,6 +47,10 @@ __all__ = ["BrowserUnavailable", "InvalidReview", "Note", "Page", "ReviewRequest
 # The page never loaded, so nobody saw it — same reasoning as ask.NOT_DELIVERED.
 NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
 
+# Key of `run_review`'s result when a live session starts instead of a report: its value
+# is the generation of the page on screen, and the shared tab stays claimed.
+LIVE_START = "live_start"
+
 
 class InvalidReview(ValueError):
     """The request cannot produce a reviewable page."""
@@ -204,6 +208,7 @@ def _build_html(
     submit_url: str,
     status_url: str | None = None,
     generation: int = 0,
+    live: str = "off",
 ) -> str:
     expansion = request.expansion()
     notes = request.page_notes()
@@ -236,6 +241,18 @@ def _build_html(
         submit_url=submit_url,
         status_url=status_url,
         generation=generation,
+        live=live if status_url else "off",
+    )
+
+
+def build_live_html(request: ReviewRequest, session: SessionListener, generation: int) -> str:
+    """The page of a live session's `generation`, on the shared tab."""
+    return _build_html(
+        request,
+        submit_url=f"http://127.0.0.1:{session.port}/submit?t={session.token}",
+        status_url=f"http://127.0.0.1:{session.port}/status?t={session.token}",
+        generation=generation,
+        live="on",
     )
 
 
@@ -386,23 +403,31 @@ def _result_from_submission(
     return result
 
 
-def _run_review_reusing_tab(request: ReviewRequest, session: SessionListener) -> dict[str, Any]:
+def _run_review_reusing_tab(
+    request: ReviewRequest, session: SessionListener, *, live: bool
+) -> dict[str, Any]:
     """Review `request` on `session`'s already-claimed, possibly already-open tab."""
     submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
     status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
 
     generation = session.publish(
         lambda generation: _build_html(
-            request, submit_url=submit_url, status_url=status_url, generation=generation
+            request,
+            submit_url=submit_url,
+            status_url=status_url,
+            generation=generation,
+            live="on" if live else "offer",
         )
     )
     if not session.show_in_tab(generation, open_in_browser):
         return NOT_DELIVERED
+    if live:
+        return {LIVE_START: generation}
 
-    try:
-        submission = session.wait_for_answer()
-    finally:
-        session.end_question()
+    submission = session.wait_for_answer()
+    if submission is not None and submission.kind == "live_start":
+        return {LIVE_START: generation}
+    session.end_question()
     return _result_from_submission(
         request.pages, submission, session.progress(), request.expansion()
     )
@@ -431,7 +456,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
     return _result_from_submission(request.pages, submission, progress, request.expansion())
 
 
-def run_review(request: ReviewRequest) -> dict[str, Any]:
+def run_review(request: ReviewRequest, *, live: bool = False) -> dict[str, Any]:
     """Open the page for `request` and block until it is submitted, cancelled, or abandoned.
 
     Returns `{"comments": [...], "page_notes": [{"path", "text"}], "overall_note": "..." |
@@ -453,8 +478,17 @@ def run_review(request: ReviewRequest) -> dict[str, Any]:
 
     session = get_shared_session()
     if session.try_claim():
+        result: dict[str, Any] = {}
         try:
-            return _run_review_reusing_tab(request, session)
+            result = _run_review_reusing_tab(request, session, live=live)
+            return result
         finally:
-            session.release()
+            # A live session keeps the tab claimed until it ends (see live.LiveSession).
+            if LIVE_START not in result:
+                session.release()
+    if live:
+        raise InvalidReview(
+            "live=true needs the shared browser tab, which another call is using; "
+            "try again when it is free"
+        )
     return _run_review_with_new_tab(request)

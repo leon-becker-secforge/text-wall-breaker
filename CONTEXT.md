@@ -112,3 +112,36 @@ ordinary comment on those new-side lines. Of the whole file when its text is kno
 `repo` source); otherwise of the lines the diff shows, with the lines between the hunks
 left out.
 _Avoid_: preview (reads as a preview of the result before Submit)
+
+### Live review
+
+A live session keeps one review open across many `review_live` calls, so the agent can
+answer and change code while the operator reviews; see
+[ADR 0004](./docs/adr/0004-live-review-is-a-multi-call-session-with-one-result.md).
+
+**Live session**:
+A review the operator and the agent work through together, from the attach instruction
+until the operator sends the report, cancels or closes the tab. Only the operator ends it.
+_Avoid_: live mode (the page state, not the session), conversation
+
+**Thread**:
+A comment the operator sent to the agent, with the replies under it. Anchored like any
+comment; only the operator resolves it. A comment that is not sent goes only into the
+report.
+_Avoid_: question (belongs to `ask`), query, discussion
+
+**Chat**:
+The one exchange of a live session not tied to a line, for requests about the whole
+change.
+_Avoid_: overall note (the report's remark, written once)
+
+**Reply**:
+A Markdown message the agent posts to a thread or the chat. It may carry a done mark,
+a hint for the operator to resolve the thread.
+_Avoid_: answer (belongs to `ask`), response
+
+**Refresh**:
+The agent replacing a live session's pages after changing code: the server diffs the
+repository again, or the agent sends new pages. A comment whose lines still exist moves
+with them; any other comment is marked outdated and still returned.
+_Avoid_: reload, update

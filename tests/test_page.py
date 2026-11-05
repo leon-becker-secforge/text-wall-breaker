@@ -86,6 +86,28 @@ def test_review_heartbeat_reports_the_comments_so_far():
     assert "send('progress', collect())" in html
 
 
+def test_review_placeholders_in_the_diff_text_stay_text():
+    diff = "@@ -1 +1 @@\n-__DECK_SCRIPT__\n+__LIVE_SCRIPT__ __SUBMIT_URL__\n"
+    html = build_review_page(
+        pages=[{"path": "page.py", "diff": diff}],
+        submit_url="http://127.0.0.1:1/submit",
+        status_url="http://127.0.0.1:1/status",
+        live="on",
+    )
+    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    assert sum("window.ppLive = {" in s for s in scripts) == 1
+    assert "__LIVE_SCRIPT__" in html
+
+
+def test_live_off_leaves_out_the_live_script():
+    html = build_review_page(
+        pages=[{"path": "a.py", "diff": "@@ -1 +1 @@\n-a\n+b\n"}],
+        submit_url="http://127.0.0.1:1/submit",
+    )
+    assert "window.ppLive = " not in html
+    assert 'liveMode: "off"' in html
+
+
 def test_review_gives_every_page_its_own_note_box():
     diff = "@@ -1 +1 @@\n-a\n+b\n"
     html = build_review_page(

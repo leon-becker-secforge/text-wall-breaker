@@ -28,7 +28,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 
 from .page import save_theme
@@ -91,6 +91,7 @@ def _handle_submit_payload(
     respond: Callable[[int, bytes], None],
     deliver: Callable[[Submission], None],
     progress: Callable[[dict[str, Any]], None] | None = None,
+    live: Callable[[dict[str, Any]], tuple[int, dict[str, Any]]] | None = None,
 ) -> None:
     """Parse one POST /submit body and act on it via `respond`/`deliver`.
 
@@ -133,11 +134,21 @@ def _handle_submit_payload(
             progress(data)
         respond(204, b"")
         return
+    if kind == "live":
+        # An operator event of a live session (see live.LiveSession.handle); answered
+        # with JSON and never the one submission.
+        data = payload.get("data")
+        if live is None or not isinstance(data, dict):
+            respond(409, b'{"error":"no live session"}')
+            return
+        status, body = live(data)
+        respond(status, json.dumps(body).encode("utf-8"))
+        return
     # "submit"/"cancel"/"interrupt" are ask's answer kinds; "acknowledge" is show's —
-    # see show.run_show. All are "the one submission this listener exists to collect",
-    # handled identically from here on; only the caller distinguishes them by
-    # `Submission.kind`.
-    if kind not in ("submit", "cancel", "interrupt", "acknowledge"):
+    # see show.run_show; "live_start" is review's Start live session. All are "the one
+    # submission this listener exists to collect", handled identically from here on;
+    # only the caller distinguishes them by `Submission.kind`.
+    if kind not in ("submit", "cancel", "interrupt", "acknowledge", "live_start"):
         respond(400, b'{"error":"unknown kind"}')
         return
 
@@ -333,6 +344,14 @@ class _SessionHandler(BaseHTTPRequestHandler):
             body = json.dumps(session.status()).encode("utf-8")
             self._respond(200, body)
             return
+        if parts.path == "/live":
+            restore = parse_qs(parts.query).get("restore", [""])[0] == "1"
+            live = session.live
+            if live is None:
+                self._respond(200, b'{"session":null}')
+                return
+            self._respond(200, json.dumps(live.poll(restore=restore)).encode("utf-8"))
+            return
         if parts.path == "/asset":
             path = parse_qs(parts.query).get("path", [""])[0]
             status, body, content_type = session.read_asset(path)
@@ -353,7 +372,18 @@ class _SessionHandler(BaseHTTPRequestHandler):
             self._respond(403, b'{"error":"bad token"}')
             return
 
-        _handle_submit_payload(raw, self._respond, session.deliver, session.set_progress)
+        _handle_submit_payload(
+            raw, self._respond, session.deliver, session.set_progress, session.handle_live
+        )
+
+
+class LiveHandler(Protocol):
+    """What a live review session (live.LiveSession) offers this listener."""
+
+    def poll(self, *, restore: bool) -> dict[str, Any]: ...
+    def handle(self, data: dict[str, Any]) -> tuple[int, dict[str, Any]]: ...
+    def on_progress(self, data: dict[str, Any]) -> None: ...
+    def on_submission(self, submission: Submission) -> None: ...
 
 
 class SessionListener:
@@ -397,6 +427,8 @@ class SessionListener:
         # `holds_unread_report` tells a report still on screen from one whose tab closed.
         self._report: dict[str, str] | None = None
         self._last_poll = 0.0
+        # The live review session holding this tab, if any; it holds the claim too.
+        self.live: LiveHandler | None = None
         # Port 0 lets the OS pick a free port, same reasoning as LoopbackListener.
         self._httpd = _SessionServer(("127.0.0.1", 0), _SessionHandler)
         self._httpd.session = self
@@ -420,6 +452,17 @@ class SessionListener:
     def note_activity(self) -> None:
         with self._state_lock:
             self._last_activity = time.monotonic()
+
+    def idle_seconds(self) -> float:
+        """Seconds since the tab last sent anything; a live session's abandonment clock."""
+        with self._state_lock:
+            return time.monotonic() - self._last_activity
+
+    def handle_live(self, data: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        live = self.live
+        if live is None:
+            return 409, {"error": "no live session"}
+        return live.handle(data)
 
     def try_claim(self) -> bool:
         """Claim exclusive use of this session for one call. Never blocks.
@@ -573,6 +616,9 @@ class SessionListener:
     def set_progress(self, data: dict[str, Any]) -> None:
         with self._state_lock:
             self._progress = data
+        live = self.live
+        if live is not None:
+            live.on_progress(data)
 
     def progress(self) -> dict[str, Any] | None:
         """The answers the page last reported before it ended, for resuming the ask."""
@@ -584,6 +630,9 @@ class SessionListener:
             self._submission = submission
             if submission.kind == "acknowledge" and self._report is not None:
                 self._report["state"] = "acknowledged"
+        live = self.live
+        if live is not None:
+            live.on_submission(submission)
         self._answered.set()
 
     def wait_for_answer(self) -> Submission | None:

@@ -5,18 +5,32 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
+### Added
 
-- `review`: a Markdown or AsciiDoc page from `pages` gets a rendered view of the lines
-  its diff shows. The view leaves out the lines between the hunks. Before this change,
-  only a `repo` page had a rendered view.
+- `review_live` and `review`'s `live` parameter: a live session. The user asks about
+  lines or requests changes while reviewing, and the agent answers and refreshes the diff
+  on the same page until the user sends the report (ADR 0004). The page gets a session
+  card with a chat above the file list, an "Ask the agent now" switch in the comment box,
+  threads under comments, a dot on files the agent changed and a "Since you looked" view
+  of those changes. Comments follow their lines across a refresh or fold as outdated.
 
 ### Fixed
 
 - `ask`, `review` and `show` with `wait_for_acknowledge` no longer end after 30 minutes of
   waiting. Claude Code aborts a stdio tool call that sends nothing for its idle window
   (`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, 30 minutes by default); a waiting call now sends a
-  progress notification every 60 seconds.
+  progress notification every 60 seconds. `review_live` does the same.
+- `review`: a diff containing the page template's placeholders (`__LIVE_SCRIPT__`,
+  `__DECK_SCRIPT__` and the like, as in a diff of `page.py`) no longer gets scripts
+  inserted into its rows.
+
+### Changed
+
+- `review`: a Markdown or AsciiDoc page from `pages` gets a rendered view of the lines
+  its diff shows. The view leaves out the lines between the hunks. Before this change,
+  only a `repo` page had a rendered view.
+- `review`: with the shared tab, a one-file review shows the file list too, since the
+  session card sits at its top.
 
 ## [0.14.2] - 2026-11-04
 

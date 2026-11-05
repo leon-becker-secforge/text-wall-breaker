@@ -2858,6 +2858,7 @@ __CONTENT__
     quote.textContent = sel.quote || '';
     dockText.value = sel.editing ? sel.editing.text : '';
     dockAdd.textContent = sel.editing ? 'Update' : 'Comment';
+    if (window.ppLive) window.ppLive.dockOpened();
     updateDockState();
     dock.classList.add('is-open');
     dock.scrollIntoView({
@@ -2871,6 +2872,7 @@ __CONTENT__
     sel = null;
     window.getSelection().removeAllRanges();
     renderSel();
+    if (window.ppLive) window.ppLive.dockClosed();
   }
 
   function selectRow(diff, wrap, extend) {
@@ -2958,6 +2960,7 @@ __CONTENT__
     el.querySelector('.pp-comment-text').textContent = c.text;
     c.last.after(el);
     c.el = el;
+    if (window.ppLive) window.ppLive.decorate(c);
   }
   function commentsChanged() {
     markRows();
@@ -2981,6 +2984,7 @@ __CONTENT__
       };
       comments.push(c);
       renderComment(c);
+      if (window.ppLive) window.ppLive.added(c);
     }
     clearSel();
     commentsChanged();
@@ -3149,14 +3153,35 @@ __CONTENT__
         var x = order(a), y = order(b);
         return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
       })
-      .map(function (c) {
-        var start = coord(c.first), end = coord(c.last);
-        var out = { path: c.diff.dataset.path, side: start.side, line: start.line };
-        if (c.last !== c.first) { out.end_side = end.side; out.end_line = end.line; }
-        if (c.quote) out.quote = c.quote;
-        out.text = c.text;
-        return out;
-      });
+      .map(spec);
+  }
+  function spec(c) {
+    var start = coord(c.first), end = coord(c.last);
+    var out = { path: c.diff.dataset.path, side: start.side, line: start.line };
+    if (c.last !== c.first) { out.end_side = end.side; out.end_line = end.line; }
+    if (c.quote) out.quote = c.quote;
+    out.text = c.text;
+    if (c.thread) out.thread = c.thread;
+    return out;
+  }
+  // A comment the server kept across a reload (a live session's refresh), back on its rows.
+  function restoreComment(s) {
+    var diff = document.querySelector('.pp-review-diff[data-path="' + CSS.escape(s.path) + '"]');
+    if (!diff) return;
+    function row(side, line) {
+      return diff.querySelector('.pp-review-row-wrap[data-side="' + side + '"][data-line="' +
+        line + '"]');
+    }
+    var endSide = s.end_side || s.side, endLine = s.end_line || s.line;
+    if (!row(s.side, s.line) || !row(endSide, endLine)) {
+      revealLines(diff, Math.min(s.line, endLine), Math.max(s.line, endLine));
+    }
+    var first = row(s.side, s.line), last = row(endSide, endLine);
+    if (!first || !last) return;
+    var c = { diff: diff, first: first, last: last, quote: s.quote || '', text: s.text, el: null };
+    if (s.thread) c.thread = s.thread;
+    comments.push(c);
+    renderComment(c);
   }
 
   var submitBtn = document.getElementById('pp-submit');
@@ -3175,7 +3200,8 @@ __CONTENT__
     return {
       comments: collectComments(),
       page_notes: collectPageNotes(),
-      overall_note: overallNote.value.trim()
+      overall_note: overallNote.value.trim(),
+      generation: GENERATION
     };
   }
 
@@ -3186,6 +3212,7 @@ __CONTENT__
     pageNotes.forEach(function (t) { t.readOnly = true; });
     frozen = true;
     document.body.classList.add('pp-review-frozen');
+    if (window.ppLive) window.ppLive.frozen();
     clearSel();
     status.textContent = message;
     stopHeartbeat();
@@ -3306,11 +3333,21 @@ __CONTENT__
     }
   });
 
+  window.ppReview = {
+    liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
+    generation: GENERATION, comments: comments, send: send, collect: collect, spec: spec,
+    restore: restoreComment, commentsChanged: commentsChanged, reportSoon: reportSoon,
+    overallNote: overallNote, dockText: dockText, dockAdd: dockAdd,
+    dockOpen: function () { return !!sel; },
+    editing: function () { return !!(sel && sel.editing); }
+  };
+
   send('probe', {});
   startHeartbeat();
 }());
 </script>
 __DECK_SCRIPT__
+__LIVE_SCRIPT__
 __MERMAID__
 </body>
 </html>
@@ -3646,7 +3683,9 @@ def _render_review_header(
     )
 
 
-def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | None) -> str:
+def _render_review_pages(
+    pages: list[dict[str, object]], asset_base_url: str | None, *, with_files: bool
+) -> str:
     """The deck of `.deck-slide`s for a `review` call — one per page, in order.
 
     Same free-navigation deck mechanics as `_render_deck` (`show`'s slides), reused here
@@ -3657,7 +3696,7 @@ def _render_review_pages(pages: list[dict[str, object]], asset_base_url: str | N
     # A single page has nothing to navigate between: the file list would be inert chrome
     # around the one diff, so it is skipped rather than rendered and left doing nothing
     # (caught by Operator on a one-page review).
-    files_html = _render_review_files(pages) if len(pages) > 1 else ""
+    files_html = _render_review_files(pages) if with_files else ""
     slide_parts = []
     for index, page in enumerate(pages):
         active = " is-active" if index == 0 else ""
@@ -3872,6 +3911,7 @@ def build_review_page(
     theme: str | None = None,
     status_url: str | None = None,
     generation: int = 0,
+    live: str = "off",
 ) -> str:
     """Return the complete HTML document for one `review` call.
 
@@ -3889,32 +3929,66 @@ def build_review_page(
 
     `submit_url`/`status_url`/`generation` mirror `build_page`'s — see
     there.
+
+    `live` is "off" (no live session possible: a one-off tab), "offer" (the file list
+    offers to start one) or "on" (the page belongs to a live session); see
+    `assets/live.js` and ADR 0004. Whenever it is not "off" the file list is shown even
+    for one file, since the session card lives at its top.
     """
+    with_files = len(pages) > 1 or live != "off"
     css = _load_base_css() + _ACTIONS_CSS + _REVIEW_ADDENDUM
+    if live != "off":
+        css += _load_asset("live.css")
     if accent is not None:
         css += _accent_css(accent)
 
     asset_base_url = _asset_base_url(status_url)
     header_html = _render_review_header(header, pages, asset_base_url)
-    content_html = _render_review_pages(pages, asset_base_url)
+    content_html = _render_review_pages(pages, asset_base_url, with_files=with_files)
+    live_script = (
+        "<script>\n" + _load_asset("live.js").replace("</", "<\\/") + "\n</script>"
+        if live != "off"
+        else ""
+    )
 
-    return (
-        _REVIEW_TEMPLATE.replace("__CSS__", css)
-        .replace("__THEME_ATTR__", _theme_attr(theme))
-        .replace("__TITLE__", html.escape(title, quote=True))
-        .replace("__HEADER_BLOCK__", header_html)
-        .replace("__CONTENT__", content_html)
-        .replace("__BODY_CLASS__", ' class="pp-has-files"' if len(pages) > 1 else "")
-        .replace("__DECK_SCRIPT__", _review_files_script(len(pages) > 1))
-        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html, header_html)))
-        .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__STATUS_URL__", _js_string(status_url))
-        .replace("__GENERATION__", _js_string(generation))
+    return _fill(
+        _REVIEW_TEMPLATE,
+        {
+            "__CSS__": css,
+            "__THEME_ATTR__": _theme_attr(theme),
+            "__TITLE__": html.escape(title, quote=True),
+            "__HEADER_BLOCK__": header_html,
+            "__CONTENT__": content_html,
+            "__BODY_CLASS__": ' class="pp-has-files"' if with_files else "",
+            "__DECK_SCRIPT__": _review_files_script(with_files),
+            "__LIVE_SCRIPT__": live_script,
+            "__MERMAID__": _mermaid_script(_needs_mermaid(content_html, header_html)),
+            "__SUBMIT_URL__": _js_string(submit_url),
+            "__STATUS_URL__": _js_string(status_url),
+            "__GENERATION__": _js_string(generation),
+            "__LIVE_MODE__": _js_string(live),
+        },
     )
 
 
+_PLACEHOLDER = re.compile(r"__[A-Z_]+__")
+
+
+def _fill(template: str, values: dict[str, str]) -> str:
+    """`template` with each placeholder replaced by its value, in one pass.
+
+    Chained `str.replace` calls rescan text already inserted: a diff of this very file
+    holds the placeholders as text, and got scripts injected into its rows.
+    """
+    return _PLACEHOLDER.sub(lambda m: values.get(m.group(0), m.group(0)), template)
+
+
 def _load_base_css() -> str:
-    return resources.files(__package__).joinpath("assets/base.css").read_text(encoding="utf-8")
+    return _load_asset("base.css")
+
+
+def _load_asset(name: str) -> str:
+    return resources.files(__package__).joinpath("assets", name).read_text(encoding="utf-8")
 
 
 def parse_accent(value: str) -> tuple[int, int, int]:

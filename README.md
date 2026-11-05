@@ -428,6 +428,64 @@ Abandoned (the tab was closed) returns the same shape plus `"abandoned": true`. 
 page reports its comments with every heartbeat and shortly after typing, so the result
 holds what was entered up to the last report, not an empty review.
 
+### Live session (`review_live`)
+
+A live session is a review the user and the agent work through together: the user asks
+about lines or requests changes while still reviewing, and the agent answers and shows the
+changed diff on the same page (see [ADR 0004](docs/adr/0004-live-review-is-a-multi-call-session-with-one-result.md)).
+It needs the shared browser tab, so a `review` that had to open its own tab cannot start
+one.
+
+A session starts in one of two ways:
+
+- The user presses "Start live session" in the card above the file list. The blocking
+  `review` call then returns `{"live": {"session": "ls-..."}, "instruction": "..."}`.
+- The agent passes `live: true` to `review`, which returns the same as soon as the page
+  has loaded.
+
+`session` is the id that every `review_live` call of the session passes. `instruction`
+tells the agent to start calling `review_live`.
+
+The agent then calls `review_live` in a loop. Each call posts the agent's `replies` and an
+optional refresh, then blocks until the user sends something:
+
+```json
+{"session": "ls-1a2b3c4d", "replies": [{"to": "t1", "text": "Fixed.", "done": true}],
+ "refresh": true}
+```
+
+In this example, `t1` is the thread the reply goes to (`"chat"` addresses the chat),
+`done` asks the user to resolve the thread, and `refresh` diffs the repository again. A
+session opened with `pages` sends replacement `pages` instead. `wait: false` posts and
+returns at once, for acknowledging a request before long work.
+
+A call returns what the user sent since the last one:
+
+```json
+{"messages": [
+  {"thread": "t2", "path": "src/foo.py", "side": "new", "line": 2, "text": "why 2?", "context": "    return 2"},
+  {"thread": "t1", "text": "Not quite."},
+  {"chat": "Also rename foo to bar."},
+  {"resolved": "t1"}]}
+```
+
+In this example, `t2` is a new thread with the same fields as a `review` comment. `t1`
+gets a further message from the user. The `chat` entry is a request about the whole
+change. `resolved` means the user resolved `t1`.
+
+A thread is a comment the user sent to the agent with "Ask the agent now" switched on in
+the comment box; other comments are not sent to the agent and only reach the report.
+
+On a refresh, the page reloads with the new diff. A comment moves with its lines; a
+comment whose lines are gone is shown folded as outdated. A refresh that arrives while
+the user's comment box is open waits until the box closes.
+
+Only the user ends a session. The call that receives the end returns the `review` result
+(`cancelled` and `abandoned` as above), plus `threads`, one
+`{"id", "path", "side", "line", "resolved", "last"}` per thread. Outdated comments come
+back with `"outdated": true` and their old `context`. A refresh sent after the end is not
+applied and the result contains `"refresh_dropped": true`.
+
 ## Markdown
 
 A deliberate subset: headings, paragraphs, fenced and inline code, unordered and ordered

@@ -107,9 +107,15 @@ def test_accent_config_is_refused_when_not_a_hex_colour(monkeypatch):
     assert "blue" in problem
 
 
-def test_ask_show_show_status_and_review_are_the_only_registered_tools():
+def test_ask_show_show_status_review_and_review_live_are_the_only_registered_tools():
     tools = anyio.run(server.list_tools)
-    assert [tool.name for tool in tools] == ["ask", "show", "show_status", "review"]
+    assert [tool.name for tool in tools] == [
+        "ask",
+        "show",
+        "show_status",
+        "review",
+        "review_live",
+    ]
 
 
 def test_no_tool_description_risks_truncation():
