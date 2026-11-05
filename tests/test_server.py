@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib
+import time
+
 import anyio
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
@@ -10,6 +13,47 @@ from pretty_prompt.server import (
     environment_problem,
     server,
 )
+
+# `pretty_prompt.server` the module; the package re-exports `server` the MCPServer under
+# the same name.
+server_module = importlib.import_module("pretty_prompt.server")
+
+
+class _ProgressRecorder:
+    def __init__(self):
+        self.beats: list[tuple[float, float | None, str | None]] = []
+
+    async def report_progress(
+        self, progress: float, total: float | None = None, message: str | None = None
+    ) -> None:
+        self.beats.append((progress, total, message))
+
+
+def test_a_blocking_call_reports_progress_until_it_returns(monkeypatch):
+    monkeypatch.setattr(server_module, "KEEPALIVE_SECONDS", 0.05)
+    recorder = _ProgressRecorder()
+
+    async def main():
+        return await server_module._blocking(recorder, lambda: time.sleep(0.3) or "done")
+
+    assert anyio.run(main) == "done"
+    assert len(recorder.beats) >= 3
+    assert [b[0] for b in recorder.beats] == list(range(1, len(recorder.beats) + 1))
+    count = len(recorder.beats)
+    anyio.run(anyio.sleep, 0.15)
+    assert len(recorder.beats) == count
+
+
+def test_a_blocking_call_without_a_context_just_runs():
+    async def main():
+        return await server_module._blocking(None, lambda: 7)
+
+    assert anyio.run(main) == 7
+
+
+def test_no_tool_exposes_the_context_parameter():
+    for tool in anyio.run(server.list_tools):
+        assert "ctx" not in tool.input_schema.get("properties", {})
 
 
 @pytest.fixture(autouse=True)

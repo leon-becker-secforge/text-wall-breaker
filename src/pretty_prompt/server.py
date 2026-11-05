@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Annotated, Any
+from collections.abc import Callable
+from functools import partial
+from typing import Annotated, Any, Protocol
 
+import anyio
 import anyio.to_thread
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
@@ -149,6 +152,45 @@ those entered so far. `{"not_delivered": true}`: the page
 never loaded."""
 
 
+# Claude Code aborts a tool call whose server sends no response and no progress
+# notification for its idle window: 30 minutes for a stdio server by default, 5 for a
+# network one. A call waiting on the user reports progress well inside that, so only the
+# user ends it. Progress does not extend a wall-clock limit (`MCP_TOOL_TIMEOUT`, a
+# per-server `timeout`).
+KEEPALIVE_SECONDS = 60.0
+
+
+class _ReportsProgress(Protocol):
+    async def report_progress(
+        self, progress: float, total: float | None = None, message: str | None = None
+    ) -> None: ...
+
+
+async def _blocking[T](ctx: _ReportsProgress | None, func: Callable[[], T]) -> T:
+    """Run blocking `func` off the event loop, reporting progress until it returns.
+
+    Off the loop because a call owns a socket and a browser tab until the user answers,
+    and a second call must be able to open its own tab meanwhile.
+    """
+    if ctx is None:
+        return await anyio.to_thread.run_sync(func)
+
+    async def keepalive() -> None:
+        beats = 0
+        while True:
+            await anyio.sleep(KEEPALIVE_SECONDS)
+            beats += 1
+            await ctx.report_progress(beats, message="waiting for the user")
+
+    async with anyio.create_task_group() as group:
+        group.start_soon(keepalive)
+        try:
+            result = await anyio.to_thread.run_sync(func)
+        finally:
+            group.cancel_scope.cancel()
+    return result
+
+
 def environment_problem() -> str | None:
     """Return why this host cannot show a page, or None if it can.
 
@@ -219,6 +261,7 @@ async def ask(
             "Takes no other argument. Used once."
         ),
     ] = None,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     request = AskRequest(
         question=question,
@@ -238,7 +281,7 @@ async def ask(
     try:
         # run_ask owns a socket and a browser tab for its whole duration. Off the event
         # loop, so a second ask can open its own tab while this one is still waiting.
-        return await anyio.to_thread.run_sync(run_ask, request)
+        return await _blocking(ctx, partial(run_ask, request))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the question page: {exc}") from exc
 
@@ -275,6 +318,7 @@ async def show(
             "acknowledge_button. Left false, check the click later with show_status."
         ),
     ] = False,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     request = ShowRequest(
         content=content,
@@ -294,7 +338,7 @@ async def show(
     try:
         # Writing and xdg-open are both quick, but off the event loop for the same
         # reason ask's run_ask is: nothing here should block the server's loop.
-        return await anyio.to_thread.run_sync(run_show, request)
+        return await _blocking(ctx, partial(run_show, request))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the page: {exc}") from exc
 
@@ -358,6 +402,7 @@ async def review(
         ),
     ] = None,
     title: Annotated[str, Field(description="The browser tab's title.")] = "Claude Code",
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     if repo is None and (git_range is not None or paths):
         raise ToolError("git_range and paths need repo")
@@ -389,7 +434,7 @@ async def review(
     try:
         # run_review owns a socket and, ordinarily, a browser tab for its whole
         # duration — off the event loop for the same reason ask's run_ask is.
-        return await anyio.to_thread.run_sync(run_review, request)
+        return await _blocking(ctx, partial(run_review, request))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the review page: {exc}") from exc
 

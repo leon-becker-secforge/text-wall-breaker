@@ -5,6 +5,13 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `ask`, `review` and `show` with `wait_for_acknowledge` no longer end after 30 minutes of
+  waiting. Claude Code aborts a stdio tool call that sends nothing for its idle window
+  (`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, 30 minutes by default); a waiting call now sends a
+  progress notification every 60 seconds.
+
 ## [0.14.2] - 2026-11-04
 
 ### Changed

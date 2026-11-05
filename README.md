@@ -200,6 +200,15 @@ The limit belongs to Claude Code, not to pretty-prompt. Per the
 - Not documented: the notification's exact wording, and elicitation in print mode or
   the Agent SDK.
 
+Claude Code also aborts a call whose server sends no response and no progress
+notification for an idle window: 30 minutes for a stdio server like this one
+(`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, in milliseconds). While a call waits on the user,
+pretty-prompt therefore sends a progress notification every 60 seconds, so the idle
+window never ends a call to `ask`, `review` or `show` with `wait_for_acknowledge`, even
+when the page stays open for hours. A progress notification does not extend a
+wall-clock limit: `MCP_TOOL_TIMEOUT` (default about 28 hours) or a per-server `timeout`
+in `.mcp.json` ends the call when its time elapses.
+
 `not_delivered` means the page never loaded in a browser, so the user never saw the
 question. It comes back within about 30 seconds of opening the tab, so the agent can
 fall back to asking in the terminal. A page that loaded and was then closed ends in
