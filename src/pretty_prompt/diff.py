@@ -188,6 +188,19 @@ def gaps_of(diff: str, line_count: int) -> list[Gap]:
     return gaps
 
 
+def shown_new_side(diff: str) -> list[str]:
+    """The new side as far as `diff` shows it, each line at its number.
+
+    For a page whose file text is unknown: the lines between the hunks are blank, so a
+    rendered view built from this shows the hunks' text and nothing invented. Never
+    used for expansion, since a blank here is not the file's line.
+    """
+    shown = {row.new_line: row.text for row in parse_unified_diff(diff) if row.new_line}
+    if not shown:
+        return []
+    return [shown.get(number, "") for number in range(1, max(shown) + 1)]
+
+
 def expansion_lines(diff: str, text: str) -> list[str] | None:
     """`text` as lines if it is the new side `diff` was made from, else None.
 

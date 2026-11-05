@@ -356,7 +356,9 @@ a link) comments on the blocks with no quote.
   a heading, paragraph, list, list item, table, listing and so on; a table is one block.
 - Links open in a new tab. A remote image is not loaded (the alt text shows instead), and
   a local one only if it is a file inside the repository.
-- A page from `pages` has no file text, so it has no rendered view.
+- A page from `pages` has no file text, so its rendered view covers only the lines the
+  diff shows. The rendered view leaves out the lines between the hunks, so a list or code
+  block that starts before a hunk can render differently than in the file.
 
 With more than one page, a file list stays in view on the left: one row per file with its
 directory, the current file marked, a comment count, and a pencil where the file has a

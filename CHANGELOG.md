@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `review`: a Markdown or AsciiDoc page from `pages` gets a rendered view of the lines
+  its diff shows. The view leaves out the lines between the hunks. Before this change,
+  only a `repo` page had a rendered view.
+
 ### Fixed
 
 - `ask`, `review` and `show` with `wait_for_acknowledge` no longer end after 30 minutes of

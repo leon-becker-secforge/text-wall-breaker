@@ -276,7 +276,8 @@ def test_a_note_that_cannot_be_shown_is_refused(fields):
         _request(_note(**fields)).validated()
 
 
-# Rendered view: only a Markdown/AsciiDoc page whose file text is known gets one.
+# Rendered view: a Markdown/AsciiDoc page gets one, of the whole file when its text is
+# known, else of what the diff shows.
 MD_OLD = ["# T", "", "one", "", "two"]
 MD_NEW = ["# T", "", "one!", "", "two"]
 
@@ -303,10 +304,23 @@ def test_a_markdown_page_with_its_file_gets_a_rendered_view():
     assert '<div class="pp-chunk">' in html
 
 
-def test_a_page_without_its_file_or_of_another_kind_has_none():
-    assert '<div class="pp-rendered"' not in _md_html("docs/a.md", {})
+def test_a_page_of_another_kind_has_none():
     text = {"docs/a.py": "\n".join(MD_NEW) + "\n"}
     assert '<div class="pp-rendered"' not in _md_html("docs/a.py", text)
+
+
+def test_a_markdown_page_without_its_file_renders_what_the_diff_shows():
+    old = [line for n in range(12) for line in (f"para {n}", "")]
+    new = list(old)
+    new[10] = "para 5 changed"
+    request = ReviewRequest(pages=[Page(path="d.md", diff=_unified(old, new))])
+    html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
+    assert '<p data-first="11" data-last="11">para 5 changed</p>' in html
+    # Lines outside the hunk are not invented, and there is nothing to expand.
+    assert ">para 0</p>" not in html
+    assert ">para 11</p>" not in html
+    assert 'class="pp-review-lines"' not in html
+    assert '<div class="pp-chunk">' in html
 
 
 def _long_doc() -> tuple[list[str], list[str]]:

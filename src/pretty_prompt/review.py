@@ -28,6 +28,7 @@ from .diff import (
     expansion_lines,
     parse_unified_diff,
     rows_with_context,
+    shown_new_side,
 )
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
@@ -210,10 +211,11 @@ def _build_html(
     entries: list[dict[str, Any]] = []
     for page in request.pages:
         lines = expansion.get(page.path)
-        rendered = (
-            rendered_view(page.path, lines, root=request.root, asset_base_url=asset_base_url)
-            if lines is not None
-            else None
+        rendered = rendered_view(
+            page.path,
+            lines if lines is not None else shown_new_side(page.diff),
+            root=request.root,
+            asset_base_url=asset_base_url,
         )
         entries.append(
             {

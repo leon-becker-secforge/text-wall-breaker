@@ -130,8 +130,8 @@ Source, one of:
   - `repo`: the server runs `git diff` itself. Prefer it for anything in git: passing the
     diff as arguments puts a second copy of it in your context. The user can also show
     the hidden lines between hunks and comment on them, and a changed Markdown or AsciiDoc
-    file gets a rendered view to comment on; `pages` cannot do either. `notes` work with
-    both sources.
+    file gets a rendered view of the whole file; with `pages` neither, and the rendered
+    view covers the hunks only. `notes` work with both sources.
   - `pages`: a diff you already hold.
 
 The user comments on a line or a run of lines, can select text inside them, and can

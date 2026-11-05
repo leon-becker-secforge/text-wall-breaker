@@ -3508,8 +3508,8 @@ def _render_review_diff(
 ) -> str:
     """One page's diff as `.pp-review-row` rows, each wrapped in `.pp-review-row-wrap`.
 
-    With `rendered` (a Markdown or AsciiDoc page whose file text is known) the page is cut
-    into chunks instead, see `_render_review_chunks`.
+    With `rendered` (a Markdown or AsciiDoc page) the page is cut into chunks instead, see
+    `_render_review_chunks`.
 
     `parse_unified_diff` is what turns raw diff text into the (side, line) coordinate a
     comment on that row addresses — see `diff.DiffLine.side`/`.line`. A "hunk" row (the
@@ -3540,21 +3540,23 @@ def _render_review_diff(
         marks.setdefault(start, []).append(index)
         closings.setdefault(end, []).append(index)
     parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
-    blocks = split_blocks(rendered) if rendered and lines is not None else []
-    if blocks and lines is not None:
-        # Every line of the file gets a row, so the gap bars have nothing left to hide.
+    blocks = split_blocks(rendered) if rendered else []
+    if blocks:
+        # With the file text every line gets a row, so the gap bars have nothing left to
+        # hide. Without it (a `pages` source) the rows are the hunks' only.
         whole: list[DiffLine] = []
         hunk = -1
         for row in rows:
             if row.kind == "hunk":
                 hunk += 1
-                if hunk in gap_before:
+                if lines is not None and hunk in gap_before:
                     whole.extend(_context_rows(gap_before[hunk], lines))
             else:
                 whole.append(row)
-        for gap in gaps:
-            if gap.position == "end":
-                whole.extend(_context_rows(gap, lines))
+        if lines is not None:
+            for gap in gaps:
+                if gap.position == "end":
+                    whole.extend(_context_rows(gap, lines))
         parts.append(
             _render_review_chunks(
                 escaped_path, whole, blocks, marks, closings, notes, asset_base_url, path
