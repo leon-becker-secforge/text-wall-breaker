@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-06
+
 ### Added
 
 - Live `ask` (ADR 0005): a thought bubble on each option asks the agent about it at once
