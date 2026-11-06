@@ -16,7 +16,6 @@
   var timer = null;
   var queue = [];         // messages typed before the session existed
   var ref = null;         // {question, option, label}, what the next message is about
-  var shown = 0;          // chat entries already rendered
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -76,12 +75,19 @@
     wrap.appendChild(text);
     return wrap;
   }
-  function render(chat) {
-    if (chat.length === shown) return;
+  // The list is the server's chat plus the operator's messages it has not acknowledged
+  // yet, so a sent message shows at once and the server's copy replaces it.
+  var serverChat = [];
+  var pending = [];
+  function redraw() {
     var stick = list.scrollTop + list.clientHeight >= list.scrollHeight - 8;
-    for (var i = shown; i < chat.length; i++) list.appendChild(message(chat[i]));
-    shown = chat.length;
+    list.textContent = '';
+    serverChat.concat(pending).forEach(function (m) { list.appendChild(message(m)); });
     if (stick) list.scrollTop = list.scrollHeight;
+  }
+  function render(chat) {
+    serverChat = chat;
+    redraw();
   }
 
   async function post(data) {
@@ -95,23 +101,38 @@
     } catch (e) { return false; }
   }
 
-  // The operator's own messages come back through poll(), so none is drawn locally:
-  // what shows is what the server holds.
+  // A message is drawn as soon as it is typed or pressed, then sent once the session
+  // exists; the next poll brings the server's copy, and `pending` drops this one.
+  function enqueue(text, target) {
+    var entry = {
+      from: 'operator', text: text, label: target ? target.label : null,
+      ref: target ? { question: target.question, option: target.option } : null
+    };
+    pending.push(entry);
+    queue.push(entry);
+    redraw();
+    flush();
+  }
+  var sending = false;
   function flush() {
-    if (!ready || !queue.length) return;
-    var next = queue.shift();
+    if (sending || !ready || !queue.length) return;
+    sending = true;
+    var next = queue[0];
     post({ type: 'chat', text: next.text, ref: next.ref }).then(function (ok) {
-      if (!ok) queue.unshift(next);
-      else flush();
+      sending = false;
+      if (!ok) return;
+      queue.shift();
+      pending.splice(pending.indexOf(next), 1);
+      poll();
+      flush();
     });
   }
   function submitMessage() {
     var text = box.value.trim();
     if (!text || state === 'ended') return;
-    queue.push({ text: text, ref: ref ? { question: ref.question, option: ref.option } : null });
+    enqueue(text, ref);
     box.value = '';
     clearRef();
-    flush();
   }
   sendBtn.addEventListener('click', submitMessage);
   box.addEventListener('keydown', function (e) {
@@ -177,25 +198,24 @@
   // A press on a bubble is the question: it sends one at once, so the agent answers
   // without the operator typing. What is typed afterwards is a follow-up on the same option.
   function askNow(next) {
-    queue.push({
-      text: next ? 'Tell me about this option.' : 'Tell me about this question.',
-      ref: next ? { question: next.question, option: next.option } : null
-    });
+    enqueue(next ? 'Tell me about this option.' : 'Tell me about this question.', next);
     clearRef();  // the sent message carries the "re:" chip; a second one would repeat it
-    flush();
   }
   async function begin(next) {
     if (state !== 'offer') { open(next); askNow(next); return; }
     A.liveStarted = true;
     setState('calling');
     open(next);
+    askNow(next);  // drawn now, sent once the session exists
     if (!(await A.send('live_start', A.collect()))) {
       A.liveStarted = false;
+      queue.length = 0;
+      pending.length = 0;
+      redraw();
       setState('offer');
       panel.hidden = true;
       return;
     }
-    askNow(next);
     start();
   }
   function bubble(onClick, label) {
