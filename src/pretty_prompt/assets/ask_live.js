@@ -174,8 +174,17 @@
     var text = row && row.querySelector('.pp-option-label');
     return text ? text.textContent.trim().split(':')[0] : input.dataset.optionId;
   }
+  // A press on a bubble is the question: it sends one at once, so the agent answers
+  // without the operator typing. What is typed afterwards is a follow-up on the same option.
+  function askNow(next) {
+    queue.push({
+      text: next ? 'Tell me about this option.' : 'Tell me about this question.',
+      ref: next ? { question: next.question, option: next.option } : null
+    });
+    flush();
+  }
   async function begin(next) {
-    if (state !== 'offer') { open(next); return; }
+    if (state !== 'offer') { open(next); askNow(next); return; }
     A.liveStarted = true;
     setState('calling');
     open(next);
@@ -185,6 +194,7 @@
       panel.hidden = true;
       return;
     }
+    askNow(next);
     start();
   }
   function bubble(onClick, label) {

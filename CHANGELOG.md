@@ -7,8 +7,9 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
-- Live `ask` (ADR 0005): a thought bubble on each option opens a side panel where the
-  user questions the agent while the page stays open; `ask` also takes `live`. The
+- Live `ask` (ADR 0005): a thought bubble on each option asks the agent about it at once
+  and opens a side panel for the answer and follow-ups, while the page stays open; `ask`
+  also takes `live`. The
   question stays centered, and the panel sits under the form on a viewport narrower than
   1593 px. The icon is "Thought bubble" by SeregaCthtuf, game-icons.net, CC BY 3.0.
 - A question longer than 400 characters widens the page, so context after the lead

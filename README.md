@@ -501,8 +501,10 @@ applied and the result contains `"refresh_dropped": true`.
 A live `ask` lets the user question the agent before answering, with the page kept open.
 Each option has a thought bubble, shown while the pointer is over the option or the option
 has focus (always on a touch screen). A question without options has one beside the
-question. It opens a side panel with one chat. The user still sends the answer with the
-page's own buttons.
+question. A press is the question: it opens a side panel with one chat and sends "Tell me
+about this option." (or "...this question.") at once, so the agent answers without the user
+typing. What the user types afterwards is a follow-up. The user still sends the answer with
+the page's own buttons.
 
 A session starts in one of two ways, as for a review:
 
