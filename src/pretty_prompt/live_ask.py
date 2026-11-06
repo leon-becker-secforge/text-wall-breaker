@@ -72,7 +72,7 @@ class LiveAsk:
         self._abandoned = False
         self._done = False
         session.live = self
-        detach_shared_session(session)  # type: ignore[arg-type]
+        detach_shared_session(session)
         register_live(self.id, self)
 
     # ---- the page ----

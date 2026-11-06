@@ -143,7 +143,7 @@ class LiveSession:
         self._seen: dict[str, list[str]] = {}
         self._interdiffs: dict[str, list[dict[str, Any]]] = {}
         session.live = self
-        detach_shared_session(session)  # type: ignore[arg-type]
+        detach_shared_session(session)
         register_live(self.id, self)
 
     # ---- the page ----

@@ -38,12 +38,13 @@ def get_shared_session() -> SessionListener:
         return _session
 
 
-def detach_shared_session(session: SessionListener) -> None:
+def detach_shared_session(session: object) -> None:
     """Hand `session` and its tab over to whoever holds it, for good.
 
     A live session keeps its tab for as long as it runs. After this, the next
     `get_shared_session()` binds a new listener, so later calls open their own tab and
     are no longer blocked by the live one. A no-op if `session` is not the shared one.
+    `session` is compared by identity, so a live session passes the `Tab` it was given.
     """
     global _session
     with _lock:
@@ -61,6 +62,7 @@ def forget_live(session_id: str) -> None:
         _live.pop(session_id, None)
 
 
-def live_for(session_id: str) -> Any | None:
+def live_for(session_id: str) -> Any:
+    """The live session `session_id` names (`LiveSession` or `LiveAsk`), or None."""
     with _lock:
         return _live.get(session_id)

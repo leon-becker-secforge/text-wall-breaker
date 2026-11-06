@@ -27,6 +27,9 @@ class FakeSession:
     def idle_seconds(self):
         return self.idle
 
+    def publish(self, build_html):  # noqa: ARG002
+        return 1
+
     def end_question(self):
         self.ended = True
 
