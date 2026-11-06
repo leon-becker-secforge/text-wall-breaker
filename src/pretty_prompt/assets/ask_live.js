@@ -162,6 +162,7 @@
       return;
     }
     if (!body || !body.session) return;
+    if (body.generation !== A.generation) { reloadForRefresh(); return; }
     ready = true;
     render((body.chat || []).map(function (m) {
       return m.from === 'operator' ? Object.assign({ label: labelFor(m) }, m) : m;
@@ -172,6 +173,34 @@
     else if (joinedOnce) setState('working');
     else if (body.agent.seconds > SILENT_AFTER) setState('silent');
     else setState('calling');
+  }
+  // The agent replaced the question or options: the server holds the new page. What the
+  // operator picked, typed in the answer and typed in the chat survives the reload.
+  var DRAFT_KEY = 'pp-ask-live-draft';
+  function reloadForRefresh() {
+    stop();
+    try {
+      var answer = A.collect();
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        selected: answer.selected, free_text: answer.free_text, typed: box.value
+      }));
+    } catch (e) { /* storage refused: the reload still shows the new page */ }
+    location.reload();
+  }
+  function restoreDraft() {
+    var draft = null;
+    try {
+      draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY));
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch (e) { return; }
+    if (!draft) return;
+    Array.prototype.forEach.call(document.querySelectorAll('input[data-option-id]'), function (i) {
+      var pick = draft.selected.indexOf(i.dataset.optionId) >= 0;
+      if (i.checked !== pick) { i.checked = pick; i.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+    var free = document.getElementById('pp-free-text');
+    if (free && draft.free_text) { free.value = draft.free_text; free.dispatchEvent(new Event('input', { bubbles: true })); }
+    box.value = draft.typed || '';
   }
   function labelFor(m) {
     // The server names the option by id; the page shows the option's own label.
@@ -246,6 +275,7 @@
     }
   });
 
+  restoreDraft();
   if (A.liveMode === 'on') {
     A.liveStarted = true;
     setState('calling');

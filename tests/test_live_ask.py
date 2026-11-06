@@ -207,6 +207,83 @@ def test_the_operator_starts_a_discussion_and_the_answer_comes_through_live(tab)
     assert session_module.live_for(session_id) is None
 
 
+def _start(tab, request, steps):
+    """A live ask started by the operator, after `steps` (payloads) were posted first."""
+    operator = _operator(tab, [*steps, {"kind": "live_start", "data": {}}])
+    started = run_ask(request)
+    operator.join(timeout=5)
+    return started["live"]["session"], session_module.live_for(started["live"]["session"])
+
+
+def test_the_agent_replaces_the_options_and_learns_which_picks_are_gone(tab):
+    submit = f"http://127.0.0.1:{tab.port}/submit?t={tab.token}"
+    picked = {"kind": "progress", "data": {"selected": ["a"], "free_text": ""}}
+    request = AskRequest(
+        question="Which?", options=[Option(id="a", label="A"), Option(id="b", label="B")]
+    )
+    session_id, live = _start(tab, request, [picked])
+
+    result = live.call(
+        session_id=session_id,
+        replies=[],
+        wait=False,
+        update=("Which one now?", [{"id": "b", "label": "B"}, {"id": "c", "label": "C"}]),
+    )
+    assert result == {"posted": True, "messages": [], "refreshed": {"dropped_picks": ["a"]}}
+    page, generation = tab.current_page()
+    html = page.decode()
+    assert generation == 2 and 'liveMode: "on"' in html and "Which one now?" in html
+    assert 'data-option-id="c"' in html and 'data-option-id="a"' not in html
+    assert live.poll(restore=False)["generation"] == 2
+
+    # The new option is addressable; the removed one no longer is.
+    _post(submit, {"kind": "live", "data": {"type": "chat", "text": "c?", "ref": {"option": "c"}}})
+    _post(submit, {"kind": "live", "data": {"type": "chat", "text": "a?", "ref": {"option": "a"}}})
+    assert live.call(session_id=session_id, replies=[], wait=True)["messages"] == [
+        {"chat": "c?", "option": "c"},
+        {"chat": "a?"},
+    ]
+    # The answer is read against the new options.
+    _post(submit, {"kind": "submit", "data": {"selected": ["a", "c"], "free_text": ""}})
+    assert live.call(session_id=session_id, replies=[], wait=True)["selected"] == ["c"]
+
+
+def test_a_refresh_with_nothing_to_change_publishes_nothing(tab):
+    request = AskRequest(question="Which?", options=[Option(id="a", label="A")])
+    session_id, live = _start(tab, request, [])
+    result = live.call(session_id=session_id, replies=[], wait=False, update=(None, None))
+    assert result == {"posted": True, "messages": [], "refreshed": {"dropped_picks": []}}
+    assert tab.current_page()[1] == 1
+    live._session.close()
+
+
+def test_a_refresh_that_would_leave_no_way_to_answer_is_refused(tab):
+    request = AskRequest(
+        question="Which?", options=[Option(id="a", label="A")], allow_free_text=False
+    )
+    session_id, live = _start(tab, request, [])
+    with pytest.raises(LiveError, match="no way to answer"):
+        live.call(session_id=session_id, replies=[], wait=False, update=(None, []))
+    live._session.close()
+
+
+def test_a_multi_question_ask_cannot_be_refreshed(tab):
+    questions = [Question(question="One", options=[Option(id="a", label="A")])]
+    session_id, live = _start(tab, AskRequest(questions=questions), [])
+    with pytest.raises(LiveError, match="one question"):
+        live.call(session_id=session_id, replies=[], wait=False, update=("x", None))
+    live._session.close()
+
+
+def test_a_refresh_after_the_end_is_dropped(tab):
+    submit = f"http://127.0.0.1:{tab.port}/submit?t={tab.token}"
+    request = AskRequest(question="Which?", options=[Option(id="a", label="A")])
+    session_id, live = _start(tab, request, [])
+    _post(submit, {"kind": "submit", "data": {"selected": ["a"], "free_text": ""}})
+    result = live.call(session_id=session_id, replies=[], wait=False, update=("new", None))
+    assert result["selected"] == ["a"] and result["refresh_dropped"] is True
+
+
 def test_an_agent_can_open_the_ask_live_straight_away(tab):
     operator = _operator(tab, [])
     started = run_ask(AskRequest(question="Which?", options=[Option(id="a", label="A")], live=True))

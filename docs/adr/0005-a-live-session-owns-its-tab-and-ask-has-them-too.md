@@ -21,6 +21,11 @@ The operator still sends the answer with the page's own buttons. Only the operat
 closing the tab. The `live` call that sees the end returns the result `ask` returns, plus
 the messages of the chat.
 
+An `ask` session with one question can also replace its options, and optionally its
+question, in a `live` call. The page reloads and restores the operator's pick and typed
+text where the option id survives, and the call reports the picks that were dropped. A
+review refreshes its diff the same way.
+
 Consequences:
 
 - When a live session ends, it closes its listener. The tab keeps showing its last state,
@@ -28,7 +33,7 @@ Consequences:
 - A call that had to use a one-off tab, because the shared tab was waiting on another
   call, cannot start a live session. Its page has no bubble, and `live=true` fails.
 - The page shows the discussion in a side panel in the gutter beside the question, so the
-  question stays centered. A viewport narrower than 1593 px shows it under the
+  question stays centered. A viewport narrower than 1672 px shows it under the
   form.
 
 Rejected:

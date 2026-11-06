@@ -851,7 +851,11 @@ __FREE_TEXT__
       var res = await fetch(STATUS_URL);
       if (!res.ok) return;
       var body = await res.json();
-      if (body.generation !== GENERATION) expire(false);
+      // In a live session a new generation is the agent's refresh, which ask_live.js
+      // follows by reloading; it is not a call that ended.
+      if (body.generation !== GENERATION) {
+        if (!(window.ppAsk && window.ppAsk.liveStarted)) expire(false);
+      }
       else if (!body.open) expire(true);
     } catch (e) { expire(false); }
   }
@@ -998,7 +1002,8 @@ __FREE_TEXT__
   // What assets/ask_live.js (the live discussion, ADR 0005) works through.
   window.ppAsk = {
     liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
-    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false
+    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false,
+    generation: GENERATION
   };
 }());
 </script>
@@ -1463,7 +1468,11 @@ __STEPS__
       var res = await fetch(STATUS_URL);
       if (!res.ok) return;
       var body = await res.json();
-      if (body.generation !== GENERATION) expire(false);
+      // In a live session a new generation is the agent's refresh, which ask_live.js
+      // follows by reloading; it is not a call that ended.
+      if (body.generation !== GENERATION) {
+        if (!(window.ppAsk && window.ppAsk.liveStarted)) expire(false);
+      }
       else if (!body.open) expire(true);
     } catch (e) { expire(false); }
   }
@@ -1606,7 +1615,8 @@ __STEPS__
   // What assets/ask_live.js (the live discussion, ADR 0005) works through.
   window.ppAsk = {
     liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
-    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false
+    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false,
+    generation: GENERATION
   };
 }());
 </script>

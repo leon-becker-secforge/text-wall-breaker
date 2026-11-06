@@ -9,9 +9,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 - Live `ask` (ADR 0005): a thought bubble on each option asks the agent about it at once
   and opens a side panel for the answer and follow-ups, while the page stays open; `ask`
-  also takes `live`. The
-  question stays centered, and the panel sits under the form on a viewport narrower than
-  1593 px. The icon is "Thought bubble" by SeregaCthtuf, game-icons.net, CC BY 3.0.
+  also takes `live`. The panel uses the page's text size. The question stays centered,
+  and the panel sits under the form on a viewport narrower than 1672 px. The icon is
+  "Thought bubble" by SeregaCthtuf, game-icons.net, CC BY 3.0.
+- `live` takes `options` and `question` for an `ask` session with one question: the page
+  reloads, keeps the user's pick and typed text where the option id survives, and the call
+  returns `refreshed.dropped_picks`.
 - A question longer than 400 characters widens the page, so context after the lead
   sentence does not sit in the narrow column. The limit is soft.
 

@@ -183,7 +183,10 @@ With `wait=false` it posts and returns at once: `{"posted": true, "messages": [.
 Acknowledge a request that way, do the work, then call again.
 
 Review sessions only: `refresh`, `git_range`, `paths`, `pages` and `notes` as on `review`.
-Reply to a thread id or to "chat"; an `ask` session has the chat only.
+Reply to a thread id or to "chat"; an `ask` session has the chat only. An `ask` session
+with one question can replace `question` and `options`: the page reloads, and the result
+has `"refreshed": {"dropped_picks": [...]}`, the option ids the user had picked that are
+gone.
 
 The session ends only through the user. The call that sees the end returns the result
 of `review` or `ask` (with `cancelled`/`abandoned`/`interrupted` as there), plus `threads`
@@ -552,6 +555,18 @@ async def live(
         list[Note] | None,
         Field(description="With a refresh: agent notes replacing those of their pages."),
     ] = None,
+    question: Annotated[
+        str | None,
+        Field(description="Ask session with one question: a new question text."),
+    ] = None,
+    options: Annotated[
+        list[Option] | None,
+        Field(
+            description="Ask session with one question: the new options, replacing all of "
+            "them. The page reloads; the user's pick and typed text stay where the option "
+            "id still exists."
+        ),
+    ] = None,
     wait: Annotated[
         bool, Field(description="Block for the user's next message (false: post and return).")
     ] = True,
@@ -561,6 +576,7 @@ async def live(
     if isinstance(live_session, LiveAsk):
         if refresh or git_range is not None or paths is not None or pages or notes is not None:
             raise ToolError("refresh, git_range, paths, pages and notes are for review sessions")
+        update = (question, options) if question is not None or options is not None else None
         try:
             return await _blocking(
                 ctx,
@@ -569,12 +585,15 @@ async def live(
                     session_id=session,
                     replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
                     wait=wait,
+                    update=update,
                 ),
             )
         except LiveError as exc:
             raise ToolError(str(exc)) from exc
     if not isinstance(live_session, LiveSession):
         raise ToolError(f"no live session {session!r}: it ended or never existed")
+    if question is not None or options is not None:
+        raise ToolError("question and options are for ask sessions")
     try:
         return await _blocking(
             ctx,

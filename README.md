@@ -530,8 +530,16 @@ above), plus `chat`: every message of the session, each
 `{"from": "operator" | "agent", "text"}`. A call that had to open its own tab cannot be
 live: its page has no bubble, and `live: true` fails.
 
-On a viewport 1593 px wide or more, the panel sits in the gutter beside the question and
-the question stays centered. On a narrower one, it sits under the form.
+An ask with one question can change its options while the session runs. A `live` call
+with `options` (all of them, replacing the old ones) and optionally a new `question`
+reloads the page. The user's pick and typed text stay where the option id still exists. The
+call returns `"refreshed": {"dropped_picks": ["a"]}`, in this example the option id `a`
+was picked and no longer exists. `question` and `options` fail for an ask with
+`questions`.
+
+The panel uses the page's text size. On a viewport 1672 px wide or more, it sits in the
+gutter beside the question and the question stays centered. On a narrower one, it sits
+under the form.
 
 ## License notices
 

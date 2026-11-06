@@ -15,16 +15,17 @@
 .pp-question { position: relative; }
 .pp-question .pp-live-ask { top: 0; right: -36px; }
 
-#pp-live-panel { position: fixed; right: 16px; top: 64px; bottom: 16px; width: 320px;
+/* Same text size as the page: the panel is read at the same distance as the question. */
+#pp-live-panel { position: fixed; right: 16px; top: 64px; bottom: 16px; width: 360px;
   display: flex; flex-direction: column; box-sizing: border-box;
-  font: 13px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: inherit; line-height: 1.45;
   color: var(--ntw-fg); background: var(--ntw-bg-elevated);
   border: 1px solid var(--ntw-border); border-radius: 10px; z-index: 5; }
 #pp-live-panel[hidden] { display: none; }
-/* The side gutter holds the 320px panel only on a wide viewport (the wide column is 920px
-   plus 2 x 336px); below that the panel sits in the flow under the form, so it never
+/* The side gutter holds the 360px panel only on a wide viewport (the wide column is 920px
+   plus 2 x 376px); below that the panel sits in the flow under the form, so it never
    covers the buttons. */
-@media (max-width: 1592px) {
+@media (max-width: 1671px) {
   #pp-live-panel { position: static; width: auto; margin-top: 16px; }
   .pp-live-list { max-height: 260px; }
 }
@@ -51,17 +52,17 @@
 .pp-live-text.md > :first-child { margin-top: 0; }
 .pp-live-text.md > :last-child { margin-bottom: 0; }
 .pp-live-chip { display: inline-block; margin: 0 0 3px; padding: 0 7px; border-radius: 999px;
-  font-size: 11px; border: 1px solid var(--ntw-accent); color: var(--ntw-accent); }
+  font-size: .7em; border: 1px solid var(--ntw-accent); color: var(--ntw-accent); }
 .pp-live-ref { padding: 8px 12px 0; border-top: 1px solid var(--ntw-border); }
 .pp-live-ref .pp-live-chip { cursor: pointer; }
 .pp-live-in { display: flex; gap: 6px; padding: 8px 12px 12px; }
 .pp-live-in textarea { flex: 1; font: inherit; min-height: 2.4em; padding: 6px 8px;
   border-radius: 6px; border: 1px solid var(--ntw-border); background: var(--ntw-bg);
   color: var(--ntw-fg); resize: vertical; }
-.pp-live-send { align-self: flex-end; height: 30px; padding: 0 12px; border-radius: 6px;
+.pp-live-send { align-self: flex-end; height: 2.1em; padding: 0 12px; border-radius: 6px;
   cursor: pointer; font: inherit; font-size: .85em; border: 1px solid var(--ntw-accent);
   background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
 .pp-live-send:disabled { opacity: .5; cursor: default; }
 #pp-live-panel.is-folded .pp-live-status, #pp-live-panel.is-folded .pp-live-list,
 #pp-live-panel.is-folded .pp-live-ref, #pp-live-panel.is-folded .pp-live-in { display: none; }
-@media (min-width: 1593px) { #pp-live-panel.is-folded { bottom: auto; } }
+@media (min-width: 1672px) { #pp-live-panel.is-folded { bottom: auto; } }

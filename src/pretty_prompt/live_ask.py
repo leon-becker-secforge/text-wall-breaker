@@ -31,6 +31,14 @@ ASK_ATTACH_INSTRUCTION = (
 
 _MAX_MESSAGE_CHARS = 20_000
 
+# What `LiveAsk` needs to republish the page after the agent replaced the question or its
+# options: given the new question and options (None: unchanged), it returns the page
+# builder, the new `questions` and the option ids the operator had picked that are gone.
+Refresher = Callable[
+    [str | None, list[Any] | None],
+    tuple[Callable[[int], str], list[tuple[str | None, set[str]]], list[str]],
+]
+
 
 class LiveAsk:
     """State of one live `ask`, shared by the page's requests and the agent's calls."""
@@ -42,14 +50,17 @@ class LiveAsk:
         generation: int,
         questions: list[tuple[str | None, set[str]]],
         build_result: Callable[[Submission | None], dict[str, Any]],
+        prepare_refresh: Refresher | None = None,
     ) -> None:
         """`questions` lists each question's id (if it has one) and option ids, in order;
         `build_result` makes the `ask` result from the operator's final submission (None:
-        the tab was abandoned)."""
+        the tab was abandoned). `prepare_refresh` validates a replacement of the question
+        or its options and returns what to publish; None if the ask cannot be refreshed."""
         self.id = "la-" + secrets.token_hex(4)
         self._session = session
         self._questions = questions
         self._build_result = build_result
+        self._prepare_refresh = prepare_refresh
         self._cond = threading.Condition()
         self._generation = generation
         self._chat: list[dict[str, Any]] = []
@@ -132,37 +143,67 @@ class LiveAsk:
 
     # ---- the agent ----
 
-    def call(self, *, session_id: str, replies: list[Reply], wait: bool) -> dict[str, Any]:
-        """One `live` call: post, then wait for the operator's next message."""
+    def call(
+        self,
+        *,
+        session_id: str,
+        replies: list[Reply],
+        wait: bool,
+        update: tuple[str | None, list[Any] | None] | None = None,
+    ) -> dict[str, Any]:
+        """One `live` call: post, maybe replace the question or options, then wait for the
+        operator's next message. `update` is the new question and options (None: keep)."""
         with self._cond:
             if session_id != self.id or self._done:
                 raise LiveError(f"no live session {session_id!r}: it ended or never existed")
             if self._blocking:
                 raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
-                return self._finish()
+                return self._finish(refresh_dropped=update is not None)
             for reply in replies:
                 self._post(reply)
             self._since = time.monotonic()
             self._version += 1
+        extra: dict[str, Any] = {}
+        if update is not None:
+            # Outside the lock: publishing takes the listener's lock, and the listener
+            # takes that lock before it calls into this session.
+            extra["refreshed"] = {"dropped_picks": self._refresh(*update)}
+        with self._cond:
             if not wait:
-                return {"posted": True, "messages": self._take_inbox()}
+                return {"posted": True, "messages": self._take_inbox(), **extra}
             self._blocking = True
+            self._since = time.monotonic()
             self._version += 1
             try:
                 while True:
                     if self._final is not None:
-                        return self._finish()
+                        return {**self._finish(), **extra}
                     if self._inbox:
-                        return {"messages": self._take_inbox()}
+                        return {"messages": self._take_inbox(), **extra}
                     if self._session.idle_seconds() > ABANDON_SECONDS:
                         self._abandoned = True
-                        return self._finish()
+                        return {**self._finish(), **extra}
                     self._cond.wait(POLL_SECONDS)
             finally:
                 self._blocking = False
                 self._since = time.monotonic()
                 self._version += 1
+
+    def _refresh(self, question: str | None, options: list[Any] | None) -> list[str]:
+        """Republish the page with a new question or options; the option ids picked that
+        no longer exist. The page reloads itself and keeps what survives."""
+        if self._prepare_refresh is None:
+            raise LiveError("this session cannot be refreshed")
+        if question is None and options is None:
+            return []
+        builder, questions, dropped = self._prepare_refresh(question, options)
+        generation = self._session.publish(builder)
+        with self._cond:
+            self._questions = questions
+            self._generation = generation
+            self._version += 1
+        return dropped
 
     def _post(self, reply: Reply) -> None:
         text = reply.text.strip()
@@ -176,8 +217,10 @@ class LiveAsk:
         messages, self._inbox = self._inbox, []
         return messages
 
-    def _finish(self) -> dict[str, Any]:
+    def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]:
         result = self._build_result(self._final)
+        if refresh_dropped:
+            result["refresh_dropped"] = True
         if self._chat:
             result["chat"] = [
                 {k: v for k, v in message.items() if k != "html"} for message in self._chat

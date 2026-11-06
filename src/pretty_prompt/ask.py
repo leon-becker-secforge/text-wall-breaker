@@ -34,6 +34,7 @@ import shutil
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
@@ -42,6 +43,7 @@ from pydantic import BaseModel, Field
 
 from .listener import LoopbackListener, SessionListener, Submission
 from .live_ask import ASK_ATTACH_INSTRUCTION, LiveAsk
+from .live_common import LiveError
 from .markdown import LONG_QUESTION_CHARS, first_paragraph
 from .opener import BrowserUnavailable, find_opener
 from .page import (
@@ -587,6 +589,48 @@ def _start_live(
     caller must not release it.
     """
     multi = request.questions is not None
+    submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
+    status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
+
+    def prepare_refresh(
+        question: str | None, options: list[Any] | None
+    ) -> tuple[Callable[[int], str], list[tuple[str | None, set[str]]], list[str]]:
+        if multi:
+            raise LiveError("refresh needs an ask with one question, not `questions`")
+        changes: dict[str, Any] = {}
+        if question is not None:
+            changes["question"] = question
+        if options is not None:
+            changes["options"] = [Option.model_validate(option) for option in options]
+        new = steps[0].model_copy(update=changes)
+        try:
+            new.validated(label="refresh")
+        except InvalidAsk as exc:
+            raise LiveError(str(exc)) from exc
+        ids = {option.id for option in new.options}
+        picked = (session.progress() or {}).get("selected")
+        dropped = [i for i in picked if i not in ids] if isinstance(picked, list) else []
+        steps[0] = new
+        refreshed = AskRequest(
+            question=new.question,
+            options=new.options,
+            multi_select=new.multi_select,
+            allow_free_text=new.allow_free_text,
+            allow_defer=new.allow_defer,
+        )
+        return (
+            lambda generation: _build_html(
+                refreshed,
+                [new],
+                submit_url=submit_url,
+                status_url=status_url,
+                generation=generation,
+                live="on",
+            ),
+            [(new.id, ids)],
+            dropped,
+        )
+
     live = LiveAsk(
         session,
         generation=generation,
@@ -598,6 +642,7 @@ def _start_live(
             header=request.header,
             progress=session.progress(),
         ),
+        prepare_refresh=prepare_refresh,
     )
     return {"live": {"session": live.id}, "instruction": ASK_ATTACH_INSTRUCTION}
 
