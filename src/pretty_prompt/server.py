@@ -34,6 +34,7 @@ from .ask import (
 )
 from .gitdiff import GitDiffError, pages_from_git
 from .live import ATTACH_INSTRUCTION, LiveError, LiveSession, Reply, RepoSource
+from .live_ask import LiveAsk
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .review import (
@@ -45,7 +46,7 @@ from .review import (
     build_live_html,
     run_review,
 )
-from .session import get_shared_session
+from .session import get_shared_session, live_for
 from .show import InvalidShow, ShowRequest, run_show, show_status
 
 __all__ = [
@@ -106,7 +107,10 @@ no more; its pick counts. The call returns at once; with `questions`, `answers` 
 at the last one given, plus `resume`: use it only if the rest still makes sense.
 
 With `questions`, returns `{"answers": [...]}`, one entry per question in order,
-carrying the question's `id` when it set one; match by id."""
+carrying the question's `id` when it set one; match by id.
+
+`{"live": {"session": id}}`: the user opened a discussion about an option (or you set
+`live`). Call `live` now, as `instruction` says; the answer comes through it."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
 if SHARE_INTERACTION_SIGNALS:
@@ -163,25 +167,29 @@ those entered so far. `{"not_delivered": true}`: the page
 never loaded.
 
 `{"live": {"session": id}}`: the user started a live session (or you set `live`):
-call `review_live` now, as `instruction` says."""
+call `live` now, as `instruction` says."""
 
-_REVIEW_LIVE_DESCRIPTION = """Take part in a live review session that `review` started:
-post replies and a refresh, then block until the user sends something new.
+_LIVE_DESCRIPTION = """Take part in a live session that `review` or `ask` started: post
+replies, then block until the user sends something new.
 
 Returns `{"messages": [...]}`, what the user sent since your last call:
   - `{"thread": id, "path", "side", "line", "context", "text"}`: a new thread on lines
     (same fields as a review comment); `{"thread": id, "text"}`: a reply in it.
-  - `{"chat": text}`: a request about the whole change.
+  - `{"chat": text}`: a request about the whole change; in an `ask` session also
+    `option`, and `question` (its `id`, else position from 0, with `questions`), when the
+    user asked about one option.
   - `{"resolved": id}` / `{"reopened": id}`.
 With `wait=false` it posts and returns at once: `{"posted": true, "messages": [...]}`.
-Acknowledge a request that way, do the work, then call again with `refresh=true`.
+Acknowledge a request that way, do the work, then call again.
 
-The session ends only through the user. The call that sees the end returns the `review`
-result (with `cancelled`/`abandoned` as there) plus `threads`: `[{"id", "path", "side",
-"line", "resolved", "last"}]`. A comment whose lines a refresh removed comes back with
-`"outdated": true` and its old `context`. A refresh sent after the end is not applied:
-`"refresh_dropped": true`. Keep calling until that result arrives; do no other work while
-the user waits on you."""
+Review sessions only: `refresh`, `git_range`, `paths`, `pages` and `notes` as on `review`.
+Reply to a thread id or to "chat"; an `ask` session has the chat only.
+
+The session ends only through the user. The call that sees the end returns the result
+of `review` or `ask` (with `cancelled`/`abandoned`/`interrupted` as there), plus `threads`
+for a review and `chat` (every message) for an ask. A refresh sent after the end is not
+applied: `"refresh_dropped": true`. Keep calling until that result arrives; do no other
+work while the user waits on you."""
 
 
 # Claude Code aborts a tool call whose server sends no response and no progress
@@ -293,6 +301,13 @@ async def ask(
             "Takes no other argument. Used once."
         ),
     ] = None,
+    live: Annotated[
+        bool,
+        Field(
+            description="Open as a live discussion right away: returns once the page is "
+            "up, for `live` calls."
+        ),
+    ] = False,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     request = AskRequest(
@@ -304,6 +319,7 @@ async def ask(
         questions=questions,
         header=header,
         resume=resume,
+        live=live,
     )
     try:
         request.validated()
@@ -438,7 +454,7 @@ async def review(
         bool,
         Field(
             description="Open as a live session right away: returns once the page is up, "
-            "for `review_live` calls."
+            "for `live` calls."
         ),
     ] = False,
     ctx: Context | None = None,
@@ -510,9 +526,9 @@ class LiveReply(BaseModel):
     ] = False
 
 
-@server.tool(name="review_live", description=_REVIEW_LIVE_DESCRIPTION)
-async def review_live(
-    session: Annotated[str, Field(description="The id `review` returned under `live`.")],
+@server.tool(name="live", description=_LIVE_DESCRIPTION)
+async def live(
+    session: Annotated[str, Field(description="The id `review` or `ask` returned under `live`.")],
     replies: Annotated[list[LiveReply] | None, Field(description="Messages to post.")] = None,
     refresh: Annotated[
         bool,
@@ -541,7 +557,22 @@ async def review_live(
     ] = True,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    live_session = get_shared_session().live
+    live_session = live_for(session)
+    if isinstance(live_session, LiveAsk):
+        if refresh or git_range is not None or paths is not None or pages or notes is not None:
+            raise ToolError("refresh, git_range, paths, pages and notes are for review sessions")
+        try:
+            return await _blocking(
+                ctx,
+                partial(
+                    live_session.call,
+                    session_id=session,
+                    replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
+                    wait=wait,
+                ),
+            )
+        except LiveError as exc:
+            raise ToolError(str(exc)) from exc
     if not isinstance(live_session, LiveSession):
         raise ToolError(f"no live session {session!r}: it ended or never existed")
     try:

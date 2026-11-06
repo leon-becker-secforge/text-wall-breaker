@@ -951,9 +951,10 @@ __FREE_TEXT__
   }
 
   // "You can close this tab" is only true on the ordinary one-shot page — a reused tab
-  // (STATUS_URL set) is about to reload itself for the next question instead.
+  // (STATUS_URL set) is about to reload itself for the next question instead. A tab whose
+  // discussion started has left the shared session: nothing reloads it.
   function doneMessage(base) {
-    return STATUS_URL
+    return STATUS_URL && !(window.ppAsk && window.ppAsk.liveStarted)
       ? base + ' Waiting for the next question\\u2026'
       : base + ' You can close this tab.';
   }
@@ -994,8 +995,14 @@ __FREE_TEXT__
   // the operator has spent any time answering. Never consumes the one submission.
   send('probe', {});
   startHeartbeat();
+  // What assets/ask_live.js (the live discussion, ADR 0005) works through.
+  window.ppAsk = {
+    liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
+    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false
+  };
 }());
 </script>
+__LIVE_SCRIPT__
 __MERMAID__
 </body>
 </html>
@@ -1549,9 +1556,10 @@ __STEPS__
   });
 
   // "You can close this tab" is only true on the ordinary one-shot page — a reused tab
-  // (STATUS_URL set) is about to reload itself for the next question instead.
+  // (STATUS_URL set) is about to reload itself for the next question instead. A tab whose
+  // discussion started has left the shared session: nothing reloads it.
   function doneMessage(base) {
-    return STATUS_URL
+    return STATUS_URL && !(window.ppAsk && window.ppAsk.liveStarted)
       ? base + ' Waiting for the next question\\u2026'
       : base + ' You can close this tab.';
   }
@@ -1595,8 +1603,14 @@ __STEPS__
   // the operator has spent any time answering. Never consumes the one submission.
   send('probe', {});
   startHeartbeat();
+  // What assets/ask_live.js (the live discussion, ADR 0005) works through.
+  window.ppAsk = {
+    liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
+    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false
+  };
 }());
 </script>
+__LIVE_SCRIPT__
 __MERMAID__
 </body>
 </html>
@@ -4309,6 +4323,20 @@ def _deck_script(needed: bool) -> str:
 </script>"""
 
 
+def _ask_live_assets(live: str) -> tuple[str, str]:
+    """The stylesheet and `<script>` of the live discussion, or two empty strings if "off".
+
+    The bubble icon is "Thought bubble" by SeregaCthtuf (game-icons.net, CC BY 3.0); its
+    file carries the attribution, and so does the README.
+    """
+    if live == "off":
+        return "", ""
+    script = _load_asset("ask_live.js").replace(
+        "__ICON__", json.dumps(_load_asset("thought-bubble.svg"))
+    )
+    return _load_asset("ask_live.css"), "<script>\n" + script.replace("</", "<\\/") + "\n</script>"
+
+
 def build_page(
     *,
     question: str,
@@ -4323,6 +4351,7 @@ def build_page(
     theme: str | None = None,
     status_url: str | None = None,
     generation: int = 0,
+    live: str = "off",
 ) -> str:
     """Return the complete HTML document for one `ask` call.
 
@@ -4340,8 +4369,13 @@ def build_page(
     and reloads the moment the served generation moves past `generation`, landing on the
     next question without a new tab. Leave both at their defaults for the ordinary
     one-shot, `file://`-opened page, where there is nothing to poll.
+
+    `live` is "off" (no discussion possible: a one-off tab), "offer" (the operator may
+    start one from an option) or "on" (the page belongs to a live session); see
+    `assets/ask_live.js` and ADR 0005.
     """
-    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM
+    live_css, live_script = _ask_live_assets(live)
+    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + live_css
     if accent is not None:
         css += _accent_css(accent)
 
@@ -4391,6 +4425,8 @@ def build_page(
         .replace("__SUBMIT_URL__", _js_string(submit_url))
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
+        .replace("__LIVE_MODE__", _js_string(live))
+        .replace("__LIVE_SCRIPT__", live_script)
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(question_html, options_html)))
     )
 
@@ -4502,6 +4538,7 @@ def build_multi_page(
     theme: str | None = None,
     status_url: str | None = None,
     generation: int = 0,
+    live: str = "off",
 ) -> str:
     """Return the complete HTML document for an `ask` call carrying several questions.
 
@@ -4520,9 +4557,10 @@ def build_multi_page(
     `header` is Markdown shown above the progress bar, so on every step; see
     `_render_header`.
 
-    `theme`, `status_url` and `generation` are as `build_page` takes them.
+    `theme`, `status_url`, `generation` and `live` are as `build_page` takes them.
     """
-    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + _MULTI_ADDENDUM
+    live_css, live_script = _ask_live_assets(live)
+    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + _MULTI_ADDENDUM + live_css
     if accent is not None:
         css += _accent_css(accent)
 
@@ -4562,5 +4600,7 @@ def build_multi_page(
         .replace("__STATUS_URL__", _js_string(status_url))
         .replace("__GENERATION__", _js_string(generation))
         .replace("__MERMAID_SRC__", _js_string(_MERMAID_SRC))
+        .replace("__LIVE_MODE__", _js_string(live))
+        .replace("__LIVE_SCRIPT__", live_script)
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(header_html, steps_html)))
     )

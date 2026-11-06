@@ -1,0 +1,67 @@
+/* Live ask (ADR 0005): the discussion panel and the per-option bubble. */
+:root { --pp-live-amber: #b7791f; }
+
+.pp-live-ask { position: absolute; right: 8px; top: 6px; width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ntw-accent);
+  cursor: pointer; opacity: 0; transition: opacity .12s; display: inline-flex;
+  align-items: center; justify-content: center; }
+.pp-live-ask svg { width: 1.5em; height: 1.5em; }
+.pp-live-ask:hover { background: var(--ntw-border); }
+.pp-option:hover .pp-live-ask, .pp-option:focus-within .pp-live-ask,
+.pp-live-ask:focus-visible, .pp-question:hover .pp-live-ask { opacity: 1; }
+@media (hover: none) { .pp-live-ask { opacity: 1; } }
+.pp-option { position: relative; }
+.pp-option .pp-option-select { padding-right: 40px; }
+.pp-question { position: relative; }
+.pp-question .pp-live-ask { top: 0; right: -36px; }
+
+#pp-live-panel { position: fixed; right: 16px; top: 64px; bottom: 16px; width: 320px;
+  display: flex; flex-direction: column; box-sizing: border-box;
+  font: 13px/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ntw-fg); background: var(--ntw-bg-elevated);
+  border: 1px solid var(--ntw-border); border-radius: 10px; z-index: 5; }
+#pp-live-panel[hidden] { display: none; }
+/* The side gutter holds the 320px panel only on a wide viewport (the wide column is 920px
+   plus 2 x 336px); below that the panel sits in the flow under the form, so it never
+   covers the buttons. */
+@media (max-width: 1592px) {
+  #pp-live-panel { position: static; width: auto; margin-top: 16px; }
+  .pp-live-list { max-height: 260px; }
+}
+.pp-live-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+  font-weight: 600; cursor: pointer; user-select: none; }
+.pp-live-ring { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box;
+  border: 2px solid var(--ntw-accent); animation: pp-live-pulse 1.2s ease-in-out infinite; }
+@keyframes pp-live-pulse { 50% { opacity: .25; } }
+#pp-live-panel[data-state="joined"] .pp-live-ring { animation: none; background: var(--ntw-accent); }
+#pp-live-panel[data-state="working"] .pp-live-ring { animation: none; }
+#pp-live-panel[data-state="silent"] .pp-live-ring { animation: none; border-color: var(--pp-live-amber);
+  background: var(--pp-live-amber); }
+#pp-live-panel[data-state="ended"] .pp-live-ring { animation: none; border-color: var(--ntw-fg-muted); }
+.pp-live-status { padding: 0 12px 8px; color: var(--ntw-fg-muted); font-size: .92em; }
+#pp-live-panel[data-state="silent"] .pp-live-status { color: var(--pp-live-amber); }
+.pp-live-list { flex: 1; min-height: 40px; overflow: auto; padding: 4px 12px;
+  border-top: 1px solid var(--ntw-border); }
+.pp-live-msg { padding: 7px 0; border-top: 1px solid var(--ntw-border); }
+.pp-live-msg:first-child { border-top: 0; }
+.pp-live-who { font-weight: 600; font-size: .85em; }
+.pp-live-who.agent { color: var(--ntw-accent); }
+.pp-live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.pp-live-text.md { white-space: normal; }
+.pp-live-text.md > :first-child { margin-top: 0; }
+.pp-live-text.md > :last-child { margin-bottom: 0; }
+.pp-live-chip { display: inline-block; margin: 0 0 3px; padding: 0 7px; border-radius: 999px;
+  font-size: 11px; border: 1px solid var(--ntw-accent); color: var(--ntw-accent); }
+.pp-live-ref { padding: 8px 12px 0; border-top: 1px solid var(--ntw-border); }
+.pp-live-ref .pp-live-chip { cursor: pointer; }
+.pp-live-in { display: flex; gap: 6px; padding: 8px 12px 12px; }
+.pp-live-in textarea { flex: 1; font: inherit; min-height: 2.4em; padding: 6px 8px;
+  border-radius: 6px; border: 1px solid var(--ntw-border); background: var(--ntw-bg);
+  color: var(--ntw-fg); resize: vertical; }
+.pp-live-send { align-self: flex-end; height: 30px; padding: 0 12px; border-radius: 6px;
+  cursor: pointer; font: inherit; font-size: .85em; border: 1px solid var(--ntw-accent);
+  background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
+.pp-live-send:disabled { opacity: .5; cursor: default; }
+#pp-live-panel.is-folded .pp-live-status, #pp-live-panel.is-folded .pp-live-list,
+#pp-live-panel.is-folded .pp-live-ref, #pp-live-panel.is-folded .pp-live-in { display: none; }
+@media (min-width: 1593px) { #pp-live-panel.is-folded { bottom: auto; } }

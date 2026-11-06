@@ -41,7 +41,7 @@ class FakeSession:
         self.live: LiveHandler | None = None
         self.generation = 1
         self.published = []
-        self.released = False
+        self.closed = False
         self.ended = False
         self.idle = 0.0
 
@@ -56,8 +56,8 @@ class FakeSession:
     def end_question(self):
         self.ended = True
 
-    def release(self):
-        self.released = True
+    def close(self):
+        self.closed = True
 
 
 def make(diff=DIFF):
@@ -156,7 +156,7 @@ def test_a_report_sent_while_the_agent_works_is_queued_and_a_late_refresh_droppe
     assert result["refresh_dropped"] is True
     assert result["comments"][0]["line"] == 2
     assert session.published == []
-    assert session.released and session.ended and session.live is None
+    assert session.closed and session.ended and session.live is None
     with pytest.raises(LiveError):
         call(live)
 
@@ -216,7 +216,7 @@ def test_a_closed_tab_ends_the_session_as_abandoned(monkeypatch):
     session.idle = 10_000
     result = call(live)
     assert result["abandoned"] is True
-    assert session.released
+    assert session.closed
 
 
 def test_a_stale_session_id_is_refused():

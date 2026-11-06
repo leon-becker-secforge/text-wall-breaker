@@ -41,6 +41,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field
 
 from .listener import LoopbackListener, SessionListener, Submission
+from .live_ask import ASK_ATTACH_INSTRUCTION, LiveAsk
 from .markdown import LONG_QUESTION_CHARS, first_paragraph
 from .opener import BrowserUnavailable, find_opener
 from .page import (
@@ -230,6 +231,7 @@ class AskRequest(BaseModel):
     questions: list[Question] | None = None
     header: str = ""
     resume: str | None = None
+    live: bool = False
     free_text: str | None = None  # prefill of the single-question shorthand; set by resume only
 
     def validated(self) -> AskRequest:
@@ -369,11 +371,13 @@ def _build_html(
     submit_url: str,
     status_url: str | None = None,
     generation: int = 0,
+    live: str = "off",
 ) -> str:
     """The page for `request`, single-question or multi- as it calls for.
 
-    `status_url`/`generation` are only set on the shared-session path — see
-    `_run_ask_reusing_tab` — and default to "not reused" for the one-shot path.
+    `status_url`/`generation`/`live` are only set on the shared-session path — see
+    `_run_ask_reusing_tab` — and default to "not reused, no discussion" for the one-shot
+    path. `live` is "offer" (the operator may start a discussion) or "on" (one has started).
     """
     if request.questions is None:
         step = steps[0]
@@ -389,6 +393,7 @@ def _build_html(
             theme=read_saved_theme(),
             status_url=status_url,
             generation=generation,
+            live=live,
         )
     return build_multi_page(
         questions=[
@@ -408,6 +413,7 @@ def _build_html(
         theme=read_saved_theme(),
         status_url=status_url,
         generation=generation,
+        live=live,
     )
 
 
@@ -572,6 +578,30 @@ def _answer_from_submission(
     return {"answers": _extract_answers(steps, submission.data.get("answers"))}
 
 
+def _start_live(
+    request: AskRequest, steps: list[Question], session: SessionListener, generation: int
+) -> dict[str, Any]:
+    """Turn the page `session` shows into a live session; the agent then calls `live`.
+
+    The live session takes `session` over (see `session.detach_shared_session`), so the
+    caller must not release it.
+    """
+    multi = request.questions is not None
+    live = LiveAsk(
+        session,
+        generation=generation,
+        questions=[(step.id, {option.id for option in step.options}) for step in steps],
+        build_result=lambda submission: _answer_from_submission(
+            steps,
+            submission,
+            multi=multi,
+            header=request.header,
+            progress=session.progress(),
+        ),
+    )
+    return {"live": {"session": live.id}, "instruction": ASK_ATTACH_INSTRUCTION}
+
+
 def _run_ask_reusing_tab(
     request: AskRequest, steps: list[Question], session: SessionListener
 ) -> dict[str, Any]:
@@ -581,18 +611,31 @@ def _run_ask_reusing_tab(
 
     generation = session.publish(
         lambda generation: _build_html(
-            request, steps, submit_url=submit_url, status_url=status_url, generation=generation
+            request,
+            steps,
+            submit_url=submit_url,
+            status_url=status_url,
+            generation=generation,
+            live="on" if request.live else "offer",
         )
     )
     # An already-open tab picks up the new content on its own (see page.py's
     # startReusePolling); show_in_tab only opens one if it doesn't.
     if not session.show_in_tab(generation, open_in_browser):
         return NOT_DELIVERED
+    if request.live:
+        return _start_live(request, steps, session, generation)
 
+    started = False
     try:
         submission = session.wait_for_answer()
+        started = submission is not None and submission.kind == "live_start"
     finally:
-        session.end_question()
+        # A started discussion keeps the page open for answers; see `_start_live`.
+        if not started:
+            session.end_question()
+    if started:
+        return _start_live(request, steps, session, generation)
     return _answer_from_submission(
         steps,
         submission,
@@ -663,10 +706,19 @@ def _run_ask(request: AskRequest) -> dict[str, Any]:
 
     session = get_shared_session()
     if session.try_claim():
+        result: dict[str, Any] = {}
         try:
-            return _run_ask_reusing_tab(request, steps, session)
+            result = _run_ask_reusing_tab(request, steps, session)
+            return result
         finally:
-            session.release()
+            # A live session keeps the tab and its claim until it ends.
+            if "live" not in result:
+                session.release()
+    if request.live:
+        raise InvalidAsk(
+            "live=true needs the shared browser tab, which another call is using; "
+            "try again when it is free"
+        )
     return _run_ask_with_new_tab(request, steps)
 
 

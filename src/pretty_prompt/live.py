@@ -2,7 +2,9 @@
 
 See ADR 0004 and CONTEXT.md's "Live review". The page talks to this through the shared
 `SessionListener` (`POST /submit` with kind "live", `GET /live`); the agent through
-`review_live` calls, each running `LiveSession.call` in a worker thread.
+`live` calls, each running `LiveSession.call` in a worker thread. The session runs on the
+listener it took over from the shared one (see `session.detach_shared_session`) and closes
+it when it ends.
 
 Comments live in the page and reach the server in its progress reports, each tagged with
 the generation of the page it was made on. A refresh publishes a new generation; a report
@@ -18,10 +20,11 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any
 
 from .diff import DiffLine, parse_unified_diff
-from .listener import ABANDON_SECONDS, LiveHandler, Submission
+from .listener import ABANDON_SECONDS, Submission
+from .live_common import POLL_SECONDS, LiveError, Reply, Tab
 from .markdown import render_markdown
 from .review import (
     InvalidReview,
@@ -32,36 +35,21 @@ from .review import (
     _extract_comments,
     _result_from_submission,
 )
+from .session import detach_shared_session, forget_live, register_live
 
 __all__ = ["LiveError", "LiveSession", "Reply", "RepoSource"]
 
 ATTACH_INSTRUCTION = (
-    "Live review: call review_live(session) now and keep calling it until it returns the "
+    "Live review: call live(session) now and keep calling it until it returns the "
     "report. Each call returns the operator's new messages; answer with replies, change "
     "code and pass refresh=true. Use wait=false to acknowledge before long work."
 )
 
-# How long a `review_live` wait sleeps between checks for abandonment.
-_POLL_SECONDS = 0.5
+_POLL_SECONDS = POLL_SECONDS
 
 # Older generations kept for re-anchoring a late progress report. A page reloads within
 # seconds of a refresh, so only the last few can still report.
 _KEEP_GENERATIONS = 4
-
-
-class LiveError(ValueError):
-    """A `review_live` call the session cannot accept."""
-
-
-class Tab(Protocol):
-    """What a live session uses of the shared `SessionListener`."""
-
-    live: LiveHandler | None
-
-    def publish(self, build_html: Callable[[int], str]) -> int: ...
-    def idle_seconds(self) -> float: ...
-    def end_question(self) -> None: ...
-    def release(self) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -72,13 +60,6 @@ class RepoSource:
     git_range: str | None
     paths: list[str] | None
     context_lines: int
-
-
-@dataclass(frozen=True)
-class Reply:
-    to: str
-    text: str
-    done: bool = False
 
 
 def _new_side(page: Page, files: dict[str, str]) -> list[str]:
@@ -162,6 +143,8 @@ class LiveSession:
         self._seen: dict[str, list[str]] = {}
         self._interdiffs: dict[str, list[dict[str, Any]]] = {}
         session.live = self
+        detach_shared_session(session)  # type: ignore[arg-type]
+        register_live(self.id, self)
 
     # ---- the page ----
 
@@ -364,7 +347,7 @@ class LiveSession:
             if session_id != self.id or self._done:
                 raise LiveError(f"no live session {session_id!r}: it ended or never existed")
             if self._blocking:
-                raise LiveError("another review_live call is already waiting on this session")
+                raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
                 wants_refresh = refresh or bool(pages) or notes is not None
                 return self._finish(refresh_dropped=wants_refresh)
@@ -513,7 +496,8 @@ class LiveSession:
         self._done = True
         self._session.live = None
         self._session.end_question()
-        self._session.release()
+        forget_live(self.id)
+        self._session.close()
         return result
 
     @staticmethod
