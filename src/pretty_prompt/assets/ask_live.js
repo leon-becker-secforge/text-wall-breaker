@@ -181,6 +181,7 @@
       text: next ? 'Tell me about this option.' : 'Tell me about this question.',
       ref: next ? { question: next.question, option: next.option } : null
     });
+    clearRef();  // the sent message carries the "re:" chip; a second one would repeat it
     flush();
   }
   async function begin(next) {
