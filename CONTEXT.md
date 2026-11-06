@@ -115,24 +115,27 @@ _Avoid_: preview (reads as a preview of the result before Submit)
 
 ### Live review
 
-A live session keeps one review open across many `review_live` calls, so the agent can
-answer and change code while the operator reviews; see
-[ADR 0004](./docs/adr/0004-live-review-is-a-multi-call-session-with-one-result.md).
+A live session keeps one review or one `ask` open across many `live` calls, so the agent
+can answer and change code while the operator reviews or decides; see
+[ADR 0004](./docs/adr/0004-live-review-is-a-multi-call-session-with-one-result.md) and
+[ADR 0005](./docs/adr/0005-a-live-session-owns-its-tab-and-ask-has-them-too.md).
 
 **Live session**:
-A review the operator and the agent work through together, from the attach instruction
-until the operator sends the report, cancels or closes the tab. Only the operator ends it.
+A review or an `ask` the operator and the agent work through together, from the attach
+instruction until the operator sends the report or the answer, cancels or closes the tab.
+Only the operator ends it. It owns its tab, so several can run at once.
 _Avoid_: live mode (the page state, not the session), conversation
 
 **Thread**:
 A comment the operator sent to the agent, with the replies under it. Anchored like any
 comment; only the operator resolves it. A comment that is not sent goes only into the
-report.
+report. Live reviews only; a live `ask` has the chat.
 _Avoid_: question (belongs to `ask`), query, discussion
 
 **Chat**:
 The one exchange of a live session not tied to a line, for requests about the whole
-change.
+change. In a live `ask` it is the only exchange: one per page, and a message may name the
+option it is about.
 _Avoid_: overall note (the report's remark, written once)
 
 **Reply**:

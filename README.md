@@ -140,6 +140,12 @@ it in view. A long header collapses behind a "Context" toggle, which also says h
 items it holds when it is one list. Setting `header` on a single question is rejected;
 put the context in `question` instead.
 
+The `live` parameter opens the ask as a live session right away; the user can also start
+one from an option. The session is described in [Live ask](#live-ask).
+
+A question longer than 400 characters (`WIDE_QUESTION_CHARS`) widens the page to the
+wide column. The limit is soft: nothing is rejected.
+
 ### Several questions on one page
 
 `questions` (prototype) replaces `question`/`options`/`multi_select`/`allow_free_text`
@@ -428,13 +434,16 @@ Abandoned (the tab was closed) returns the same shape plus `"abandoned": true`. 
 page reports its comments with every heartbeat and shortly after typing, so the result
 holds what was entered up to the last report, not an empty review.
 
-### Live session (`review_live`)
+### Live session (`live`)
 
-A live session is a review the user and the agent work through together: the user asks
-about lines or requests changes while still reviewing, and the agent answers and shows the
-changed diff on the same page (see [ADR 0004](docs/adr/0004-live-review-is-a-multi-call-session-with-one-result.md)).
-It needs the shared browser tab, so a `review` that had to open its own tab cannot start
-one.
+A live session is a `review` or an `ask` the user and the agent work through together. In
+a review, the user asks about lines or requests changes while still reviewing, and the
+agent answers and shows the changed diff on the same page (see [ADR 0004](docs/adr/0004-live-review-is-a-multi-call-session-with-one-result.md)).
+It needs the shared browser tab to start, so a `review` that had to open its own tab
+cannot start one. Once started, the session owns its tab and leaves the shared one free,
+so other calls open their own tab and several live sessions can run at once (see
+[ADR 0005](docs/adr/0005-a-live-session-owns-its-tab-and-ask-has-them-too.md)). `ask` has
+live sessions too, described in [Live ask](#live-ask).
 
 A session starts in one of two ways:
 
@@ -443,10 +452,11 @@ A session starts in one of two ways:
 - The agent passes `live: true` to `review`, which returns the same as soon as the page
   has loaded.
 
-`session` is the id that every `review_live` call of the session passes. `instruction`
-tells the agent to start calling `review_live`.
+`session` is the id that every `live` call of the session passes. `instruction` tells the
+agent to start calling `live`. The `review_live` tool of earlier versions is now `live`,
+without an alias.
 
-The agent then calls `review_live` in a loop. Each call posts the agent's `replies` and an
+The agent then calls `live` in a loop. Each call posts the agent's `replies` and an
 optional refresh, then blocks until the user sends something:
 
 ```json
@@ -485,6 +495,49 @@ Only the user ends a session. The call that receives the end returns the `review
 `{"id", "path", "side", "line", "resolved", "last"}` per thread. Outdated comments come
 back with `"outdated": true` and their old `context`. A refresh sent after the end is not
 applied and the result contains `"refresh_dropped": true`.
+
+### Live ask
+
+A live `ask` lets the user question the agent before answering, with the page kept open.
+Each option has a thought bubble, shown while the pointer is over the option or the option
+has focus (always on a touch screen). A question without options has one beside the
+question. It opens a side panel with one chat. The user still sends the answer with the
+page's own buttons.
+
+A session starts in one of two ways, as for a review:
+
+- The user presses a bubble. The blocking `ask` call then returns
+  `{"live": {"session": "la-..."}, "instruction": "..."}`.
+- The agent passes `live: true` to `ask`, which returns the same as soon as the page has
+  loaded.
+
+The agent then calls `live` in a loop, with `replies` addressed to `"chat"`. A call
+returns what the user sent since the last one:
+
+```json
+{"messages": [{"chat": "Does B survive a crash?", "option": "b"}]}
+```
+
+In this example, `chat` is the user's message and `option` is the option it is about.
+`option` is absent when the user writes to the chat without naming one. With `questions`, a message about an option also
+has `question`: the question's `id`, or its position from 0 when it has none.
+
+Only the user ends a session, by sending the answer, cancelling or closing the tab. The
+call that receives the end returns the `ask` result (`cancelled` and `abandoned` as
+above), plus `chat`: every message of the session, each
+`{"from": "operator" | "agent", "text"}`. A call that had to open its own tab cannot be
+live: its page has no bubble, and `live: true` fails.
+
+On a viewport 1593 px wide or more, the panel sits in the gutter beside the question and
+the question stays centered. On a narrower one, it sits under the form.
+
+## License notices
+
+The thought-bubble icon of the live `ask` is "Thought bubble" by SeregaCthtuf, from
+[game-icons.net](https://game-icons.net/1x1/seregacthtuf/thought-bubble.html), licensed
+under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The file
+`src/pretty_prompt/assets/thought-bubble.svg` carries the same notice, and so does every
+page that shows the icon.
 
 ## Markdown
 

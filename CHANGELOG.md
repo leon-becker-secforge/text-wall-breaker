@@ -5,6 +5,23 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Live `ask` (ADR 0005): a thought bubble on each option opens a side panel where the
+  user questions the agent while the page stays open; `ask` also takes `live`. The
+  question stays centered, and the panel sits under the form on a viewport narrower than
+  1593 px. The icon is "Thought bubble" by SeregaCthtuf, game-icons.net, CC BY 3.0.
+- A question longer than 400 characters widens the page, so context after the lead
+  sentence does not sit in the narrow column. The limit is soft.
+
+### Changed
+
+- `review_live` is now `live`, and serves both kinds of session. There is no alias.
+- A live session owns its tab: it no longer blocks other calls, and several can run at
+  once. When it ends, its tab is not reused for the next call.
+- The `ask` description allows context after the bold lead sentence; it said "at most 2
+  lines".
+
 ## [0.15.0] - 2026-11-05
 
 ### Added

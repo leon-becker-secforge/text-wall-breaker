@@ -11,13 +11,14 @@ open review page, which makes the blocking `review` call return with an instruct
 attach. Alternatively, the agent opens the review with `live=true`, and `review` returns
 that instruction as soon as the page has loaded.
 
-The agent then calls `review_live` in a
+The agent then calls `review_live` (since
+[ADR 0005](./0005-a-live-session-owns-its-tab-and-ask-has-them-too.md), `live`) in a
 loop. Each call posts the agent's replies and refresh, then blocks until the operator
 sends something new. With `wait=false`, a call posts and returns at once, so the agent
 can acknowledge a request before it spends minutes on it.
 
 The session ends only through the operator: Send report, Cancel (a partial result, as
-ADR 0002 specifies) or a closed tab (`abandoned`). The `review_live` call that sees the
+ADR 0002 specifies) or a closed tab (`abandoned`). The `live` call that sees the
 end returns the result `review` returns, plus a compact list of the session's threads.
 An agent that handles `review` results therefore handles a live session's result too.
 
@@ -39,3 +40,6 @@ Rejected:
 A live session holds the shared tab across many calls. At most one live session exists
 per server: a second `review(live=true)` fails while one is active, and `review_live`
 takes the session's id so that a stale id fails instead of attaching to a new session.
+
+_Superseded in part by [ADR 0005](./0005-a-live-session-owns-its-tab-and-ask-has-them-too.md):
+a live session now owns its own tab, so several can run at once. The id check stands._
