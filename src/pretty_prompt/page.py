@@ -31,7 +31,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .diff import DiffLine, Gap, gaps_of, parse_unified_diff
-from .highlight import highlight_rows
+from .intraline import decorated_rows
 from .markdown import (
     LONG_QUESTION_CHARS,
     WIDE_QUESTION_CHARS,
@@ -2258,15 +2258,18 @@ body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
    alone. */
 :root { --pp-add: #1f7a4c; --pp-del: #b3261e; --pp-add-bg: rgba(31, 122, 76, 0.12);
   --pp-del-bg: rgba(179, 38, 30, 0.10); --pp-add-gut: rgba(31, 122, 76, 0.22);
-  --pp-del-gut: rgba(179, 38, 30, 0.20); }
+  --pp-del-gut: rgba(179, 38, 30, 0.20); --pp-add-chg: rgba(31, 122, 76, 0.38);
+  --pp-del-chg: rgba(179, 38, 30, 0.34); }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) { --pp-add: #3fb97a; --pp-del: #f0716a;
     --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
-    --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24); }
+    --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24);
+    --pp-add-chg: rgba(63, 185, 122, 0.40); --pp-del-chg: rgba(240, 113, 106, 0.40); }
 }
 :root[data-theme="dark"] { --pp-add: #3fb97a; --pp-del: #f0716a;
   --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
-  --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24); }
+  --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24);
+  --pp-add-chg: rgba(63, 185, 122, 0.40); --pp-del-chg: rgba(240, 113, 106, 0.40); }
 /* Syntax tokens (highlight.py): Pygments short class names behind `tk-`. */
 :root { --tk-kw: #cf222e; --tk-str: #0a3069; --tk-com: #57606a; --tk-num: #0550ae;
   --tk-fn: #8250df; --tk-ty: #953800; }
@@ -2289,6 +2292,11 @@ body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
 .pp-review-text { flex: 1 1 0; min-width: 0; padding-left: 2ch; text-indent: -2ch; }
 .pp-review-row.add { background: var(--pp-add-bg); }
 .pp-review-row.del { background: var(--pp-del-bg); }
+/* The characters that changed inside an edited line (intraline.py): square boxes, so the
+   edge of a one-character change stays a clean rectangle. */
+.pp-review-row mark.pp-chg { color: inherit; border-radius: 0; }
+.pp-review-row.add mark.pp-chg { background: var(--pp-add-chg); }
+.pp-review-row.del mark.pp-chg { background: var(--pp-del-chg); }
 .pp-review-row.add .pp-review-gutter { background: var(--pp-add-gut); color: var(--pp-add); }
 .pp-review-row.del .pp-review-gutter { background: var(--pp-del-gut); color: var(--pp-del); }
 .pp-review-row.add .pp-review-text::before { content: "+ "; color: var(--pp-add); }
@@ -3507,7 +3515,7 @@ def _render_review_chunks(
     chunk_rows: list[list[int]] = [[] for _ in blocks]
     for index, anchor in enumerate(anchors):
         chunk_rows[max(bisect_right(firsts, anchor) - 1, 0)].append(index)
-    colored = highlight_rows(path, rows)
+    colored = decorated_rows(path, rows)
     touched = [
         any(
             rows[i].kind != "ctx"
@@ -3627,7 +3635,7 @@ def _render_review_diff(
         parts.append("</div>")
     else:
         hunk = -1
-        colored = highlight_rows(path, rows)
+        colored = decorated_rows(path, rows)
         for index, row in enumerate(rows):
             text_html = colored.get(index) or html.escape(row.text) or "&nbsp;"
             if row.kind == "hunk":

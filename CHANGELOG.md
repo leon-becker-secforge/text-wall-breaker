@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `review` marks the characters that changed inside an edited line. A deleted line and the
+  line that replaced it get the differing words in square boxes darker than the row. A
+  changed word is marked whole; lines that look nothing alike are left alone.
+
 ## [0.17.0] - 2026-11-08
 
 ### Added

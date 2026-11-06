@@ -339,6 +339,11 @@ resolved; a diff with none is rejected before anything opens. `blurb` is optiona
 Markdown shown at the top of that page only, e.g. why that file changed. `header` is one
 more Markdown block, shown above every page.
 
+When a deleted line is followed by a replacement that shares at least half of its tokens,
+the page marks the words that differ on both lines, in square boxes darker than the row
+(`mark.pp-chg`). A changed word is marked whole, and changes separated only by spaces merge
+into one box. Lines that look nothing alike, and lines over 2000 characters, get no marks.
+
 For a change in git, pass `repo` instead of `pages` (never both): the server runs
 `git diff` itself and makes one page per changed text file, so the diff is not read into
 the agent's context and pasted back. `git_range` is what `git diff` takes (`main..HEAD`,
