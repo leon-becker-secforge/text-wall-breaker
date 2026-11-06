@@ -34,6 +34,7 @@ from .diff import DiffLine, Gap, gaps_of, parse_unified_diff
 from .highlight import highlight_rows
 from .markdown import (
     LONG_QUESTION_CHARS,
+    WIDE_QUESTION_CHARS,
     bold_lead,
     first_paragraph,
     render_inline,
@@ -4366,7 +4367,11 @@ def build_page(
     options_html = _render_options(
         options, multi_select, gallery=gallery, asset_base_url=asset_base_url
     )
-    wide = gallery or _needs_wide_layout(question_html, options_html)
+    wide = (
+        gallery
+        or len(question) > WIDE_QUESTION_CHARS
+        or _needs_wide_layout(question_html, options_html)
+    )
 
     return (
         _TEMPLATE.replace("__CSS__", css)
@@ -4536,7 +4541,11 @@ def build_multi_page(
         _is_gallery(options) if isinstance(options := spec.get("options"), list) else False
         for spec in questions
     )
-    wide = any_gallery or _needs_wide_layout(steps_html, header_html)
+    wide = (
+        any_gallery
+        or any(len(str(spec.get("question", ""))) > WIDE_QUESTION_CHARS for spec in questions)
+        or _needs_wide_layout(steps_html, header_html)
+    )
 
     return (
         _MULTI_TEMPLATE.replace("__CSS__", css)

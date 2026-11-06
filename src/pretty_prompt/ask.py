@@ -671,8 +671,8 @@ def _run_ask(request: AskRequest) -> dict[str, Any]:
 
 
 _LONG_QUESTION_HINT = (
-    "{where} {chars} chars in its first paragraph. Keep the question a short "
-    "heading; put detail in lists, blockquotes or option `body`."
+    "{where} {chars} chars in its first paragraph. Open with a short lead "
+    "sentence; put the context in further paragraphs, lists or blockquotes."
 )
 
 

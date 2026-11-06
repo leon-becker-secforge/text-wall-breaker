@@ -632,6 +632,31 @@ def test_multi_page_widens_when_any_step_is_a_gallery():
     assert '<main class="pp-wide">' in html
 
 
+def test_long_question_widens_the_page():
+    from pretty_prompt.markdown import WIDE_QUESTION_CHARS
+
+    at_limit = "x" * WIDE_QUESTION_CHARS
+    over = at_limit + "x"
+
+    def single(question: str) -> str:
+        return build_page(
+            question=question,
+            options=[_option()],
+            multi_select=False,
+            allow_free_text=True,
+            submit_url="http://127.0.0.1:1/submit",
+        )
+
+    assert "pp-wide" not in _body(single(at_limit))
+    assert '<main class="pp-wide">' in single(over)
+    assert '<main class="pp-wide">' in _multi_page(
+        questions=[
+            {"question": "short", "options": [_option()]},
+            {"question": over, "options": [_option()]},
+        ]
+    )
+
+
 def test_lightbox_display_rule_is_guarded_against_the_hidden_attribute():
     # Regression: `.pp-lightbox { display: flex; ... }` alone beats the browser's own
     # `[hidden] { display: none }` (author origin outranks user-agent origin regardless

@@ -341,6 +341,9 @@ def _expand_literal_newlines(lines: list[str]) -> list[str]:
 
 # A question's first paragraph renders bold, so past this length it reads as a wall.
 LONG_QUESTION_CHARS = 240
+# Soft limit on the whole question: past it the page takes the wide column, so context
+# in a long question is not squeezed into the narrow one. Never rejects a question.
+WIDE_QUESTION_CHARS = 400
 _MAX_LEAD_CHARS = 200
 
 

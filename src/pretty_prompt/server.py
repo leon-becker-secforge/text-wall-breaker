@@ -84,8 +84,9 @@ cancelled, or timed out.
 Images in Markdown: `![alt](/abs/path)` or `file:///abs/path`.
 Paragraph breaks are real newlines, not the `\\n` escape.
 
-Keep `question` a short heading (at most 2 lines); detail goes in lists, blockquotes
-or option `body`. A `hint` in the result is formatting advice for your next ask.
+Open `question` with a short bold lead sentence; context may follow in further
+paragraphs, lists or blockquotes. Past 400 characters the page widens. A `hint` in the
+result is formatting advice for your next ask.
 
 A long `body` sits behind a Details pill users often skip: put what could flip the
 choice in `caveat`.
