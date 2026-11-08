@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-08
+
 ### Added
 
 - Glossary hints: `ask` underlines the first occurrence of each term of the nearest
