@@ -232,7 +232,7 @@ def test_a_page_that_never_loads_is_reported_undelivered(browser, monkeypatch):
     monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 0.05)
     browser(lambda page: None)
     result = run_ask(AskRequest(question="q"))
-    assert result == {"not_delivered": True}
+    assert result == ask_module.NOT_DELIVERED
 
 
 def test_a_loaded_page_that_goes_silent_is_abandoned(browser, monkeypatch):
@@ -305,9 +305,10 @@ def test_questions_and_question_together_are_rejected():
         request.validated()
 
 
-def test_header_without_questions_is_rejected():
-    with pytest.raises(InvalidAsk, match="header needs questions"):
-        AskRequest(question="q", header="settled").validated()
+def test_header_on_a_single_question_follows_the_question():
+    request = AskRequest(question="**Q?**", header="settled").validated()
+    assert request.question == "**Q?**\n\nsettled"
+    assert request.header == ""
 
 
 def test_the_header_reaches_the_multi_question_page(browser):
@@ -698,7 +699,7 @@ def test_a_closed_tab_gets_replaced_instead_of_published_into(monkeypatch):
 def test_a_shared_tab_that_never_loads_is_reported_undelivered(monkeypatch):
     opened: list[object] = []
     monkeypatch.setattr(ask_module, "open_in_browser", opened.append)
-    assert run_ask(AskRequest(question="q")) == {"not_delivered": True}
+    assert run_ask(AskRequest(question="q")) == ask_module.NOT_DELIVERED
     assert len(opened) == 1
     # Not left claimed: the next call can use the shared tab.
     assert session_module.get_shared_session().try_claim()
@@ -904,3 +905,11 @@ def test_a_bad_stop_index_marks_the_first_question(browser):
     browser(lambda page: _interrupt("x", {"free_text": "note"}))
     result = run_ask(AskRequest(questions=[_q("one"), _q("two")]))
     assert result["answers"][0]["interrupted"] is True
+
+
+def test_a_long_question_leaves_no_hint_on_an_undelivered_result(monkeypatch):
+    monkeypatch.setattr(ask_module, "open_in_browser", lambda _: None)
+    long_question = "x" * 400
+    first = run_ask(AskRequest(question=long_question))
+    assert first == ask_module.NOT_DELIVERED
+    assert "hint" not in ask_module.NOT_DELIVERED

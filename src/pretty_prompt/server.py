@@ -89,6 +89,8 @@ Open `question` with a short bold lead sentence; context may follow in further
 paragraphs, lists or blockquotes. Past 400 characters the page widens. A `hint` in the
 result is formatting advice for your next ask.
 
+Terms from the project's GLOSSARY.md (else CONTEXT.md) are defined on hover.
+
 A long `body` sits behind a Details pill users often skip: put what could flip the
 choice in `caveat`.
 
@@ -110,7 +112,8 @@ With `questions`, returns `{"answers": [...]}`, one entry per question in order,
 carrying the question's `id` when it set one; match by id.
 
 `{"live": {"session": id}}`: the user opened a discussion about an option (or you set
-`live`). Call `live` now, as `instruction` says; the answer comes through it."""
+`live`). Call `live` now, as `instruction` says; the answer comes through it. `live`
+blocks like `ask` does, so it may also run past the client's background limit."""
 
 # Only described when returned, so an agent never reads about fields it won't get.
 if SHARE_INTERACTION_SIGNALS:
@@ -292,8 +295,8 @@ async def ask(
         Field(
             description="Questions only: Markdown above every question, "
             "typically what earlier rounds settled, so the user answers with it in view. "
-            "A long one collapses behind a Context toggle. A single question carries its "
-            "context in question itself."
+            "A long one collapses behind a Context toggle. With a single question, it is "
+            "appended to that question as a further paragraph."
         ),
     ] = "",
     resume: Annotated[
@@ -311,6 +314,14 @@ async def ask(
             "up, for `live` calls."
         ),
     ] = False,
+    project: Annotated[
+        str | None,
+        Field(
+            description="Folder whose GLOSSARY.md (or CONTEXT.md) defines terms on hover. "
+            "Default: the server's working directory, walking up to the git root. Set it "
+            "when you work somewhere else, such as a git worktree."
+        ),
+    ] = None,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
     request = AskRequest(
@@ -323,6 +334,7 @@ async def ask(
         header=header,
         resume=resume,
         live=live,
+        project=project,
     )
     try:
         request.validated()

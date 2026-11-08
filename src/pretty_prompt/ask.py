@@ -39,8 +39,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from .glossary import load as load_glossary
 from .listener import LoopbackListener, SessionListener, Submission
 from .live_ask import ASK_ATTACH_INSTRUCTION, LiveAsk
 from .live_common import LiveError
@@ -74,7 +75,10 @@ SHARE_INTERACTION_SIGNALS = True
 
 # The page never loaded, so nobody saw the question: the agent should fall back at once,
 # not treat it like an `abandoned` one. See listener.DELIVERY_SECONDS.
-NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
+NOT_DELIVERED: dict[str, Any] = {
+    "not_delivered": True,
+    "reason": "the page never loaded in a browser within the delivery window",
+}
 
 
 class InvalidAsk(ValueError):
@@ -234,7 +238,17 @@ class AskRequest(BaseModel):
     header: str = ""
     resume: str | None = None
     live: bool = False
+    project: str | None = None
     free_text: str | None = None  # prefill of the single-question shorthand; set by resume only
+
+    @model_validator(mode="after")
+    def _fold_header_into_single_question(self) -> AskRequest:
+        # The question keeps the lead: its first paragraph renders bold and is judged by
+        # `_long_question_hint`, so the header follows as context.
+        if self.resume is None and self.questions is None and self.header.strip():
+            self.question = f"{self.question.rstrip()}\n\n{self.header.strip()}"
+            self.header = ""
+        return self
 
     def validated(self) -> AskRequest:
         """Return self, or raise `InvalidAsk` if the page would be unanswerable."""
@@ -247,11 +261,6 @@ class AskRequest(BaseModel):
             ):
                 raise InvalidAsk("resume reopens an earlier ask and takes nothing else")
             return self
-        if self.header.strip() and self.questions is None:
-            raise InvalidAsk(
-                "header needs questions: a single question is already Markdown, so put "
-                "the context there"
-            )
         if self.questions is not None:
             if self.question.strip() or self.options:
                 raise InvalidAsk("set either question/options or questions, not both")
@@ -381,6 +390,7 @@ def _build_html(
     `_run_ask_reusing_tab` — and default to "not reused, no discussion" for the one-shot
     path. `live` is "offer" (the operator may start a discussion) or "on" (one has started).
     """
+    glossary = load_glossary(request.project)
     if request.questions is None:
         step = steps[0]
         return build_page(
@@ -396,6 +406,7 @@ def _build_html(
             status_url=status_url,
             generation=generation,
             live=live,
+            glossary=glossary,
         )
     return build_multi_page(
         questions=[
@@ -416,6 +427,7 @@ def _build_html(
         status_url=status_url,
         generation=generation,
         live=live,
+        glossary=glossary,
     )
 
 
@@ -784,8 +796,14 @@ def _long_question_hint(steps: list[Question]) -> str | None:
 
 def run_ask(request: AskRequest) -> dict[str, Any]:
     """`_run_ask`, plus a `hint` on the result if a question's first paragraph is long."""
-    result = _run_ask(request)
-    # A resume carries no questions of its own to judge.
-    if request.resume is None and (hint := _long_question_hint(request.steps)):
+    # A copy: NOT_DELIVERED is a shared constant, and `hint` must never stick to it.
+    result = dict(_run_ask(request))
+    # A resume carries no questions of its own to judge, and a page nobody saw says
+    # nothing about its wording.
+    if (
+        request.resume is None
+        and not result.get("not_delivered")
+        and (hint := _long_question_hint(request.steps))
+    ):
         result["hint"] = hint
     return result

@@ -1,0 +1,21 @@
+.pp-term {
+  text-decoration: underline dotted var(--ntw-info);
+  text-underline-offset: 3px;
+  cursor: help;
+}
+#pp-glossary-pop {
+  position: fixed;
+  z-index: 50;
+  display: none;
+  max-width: 300px;
+  padding: 9px 12px;
+  border-radius: var(--ntw-radius);
+  background: var(--ntw-fg);
+  color: var(--ntw-bg);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+#pp-glossary-pop b { display: block; margin-bottom: 2px; }
+@media print { #pp-glossary-pop { display: none !important; } }

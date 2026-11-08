@@ -4012,6 +4012,20 @@ def _load_base_css() -> str:
     return _load_asset("base.css")
 
 
+def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
+    """The stylesheet and `<script>` defining glossary terms on hover, or two empty strings."""
+    if not glossary:
+        return "", ""
+    return (
+        _load_asset("glossary.css"),
+        "<script>\nwindow.__PP_GLOSSARY__ = "
+        + _js_string(glossary)
+        + ";\n"
+        + _load_asset("glossary.js").replace("</", "<\\/")
+        + "\n</script>",
+    )
+
+
 def _load_asset(name: str) -> str:
     return resources.files(__package__).joinpath("assets", name).read_text(encoding="utf-8")
 
@@ -4362,6 +4376,7 @@ def build_page(
     status_url: str | None = None,
     generation: int = 0,
     live: str = "off",
+    glossary: list[dict[str, str]] | None = None,
 ) -> str:
     """Return the complete HTML document for one `ask` call.
 
@@ -4385,7 +4400,9 @@ def build_page(
     `assets/ask_live.js` and ADR 0005.
     """
     live_css, live_script = _ask_live_assets(live)
-    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + live_css
+    glossary_css, glossary_script = _glossary_assets(glossary)
+    live_script += glossary_script
+    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + live_css + glossary_css
     if accent is not None:
         css += _accent_css(accent)
 
@@ -4549,6 +4566,7 @@ def build_multi_page(
     status_url: str | None = None,
     generation: int = 0,
     live: str = "off",
+    glossary: list[dict[str, str]] | None = None,
 ) -> str:
     """Return the complete HTML document for an `ask` call carrying several questions.
 
@@ -4570,7 +4588,9 @@ def build_multi_page(
     `theme`, `status_url`, `generation` and `live` are as `build_page` takes them.
     """
     live_css, live_script = _ask_live_assets(live)
-    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + _MULTI_ADDENDUM + live_css
+    glossary_css, glossary_script = _glossary_assets(glossary)
+    live_script += glossary_script
+    css = _load_base_css() + _ACTIONS_CSS + _ADDENDUM + _MULTI_ADDENDUM + live_css + glossary_css
     if accent is not None:
         css += _accent_css(accent)
 

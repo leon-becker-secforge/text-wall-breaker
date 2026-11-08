@@ -5,6 +5,24 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Glossary hints: `ask` underlines the first occurrence of each term of the nearest
+  `GLOSSARY.md` (else `CONTEXT.md`) per question and defines it on hover. `ask` takes
+  `project` to name the folder to search; `PRETTY_PROMPT_GLOSSARY=off` disables it.
+
+### Changed
+
+- `header` on a single `question` no longer errors: it is appended to the question.
+- `not_delivered` from `ask` carries a `reason`.
+- The `ask` description says that `live` blocks like `ask`.
+
+### Fixed
+
+- A long first paragraph put its `hint` into the shared `not_delivered` result, so every
+  later undelivered `ask` carried a length hint that had nothing to do with it. An
+  undelivered result never gets a hint now.
+
 ## [0.16.0] - 2026-11-06
 
 ### Added

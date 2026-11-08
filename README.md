@@ -148,6 +148,9 @@ wide column. The limit is soft: nothing is rejected.
 
 ### Several questions on one page
 
+`header` is Markdown above every step. On a single `question` it is appended to the
+question as a further paragraph.
+
 `questions` (prototype) replaces `question`/`options`/`multi_select`/`allow_free_text`
 (set one or the other, never both) to ask several questions on a single page, presented
 as a wizard: one question per screen, a progress bar, Back/Next.
@@ -165,6 +168,19 @@ Each entry takes the same keys `question`/`options`/`multi_select`/`allow_free_t
 takes for one question. The result carries one answer per question, in order, under
 `answers` instead of at the top level; see Result below.
 
+### Glossary hints
+
+If the server's working directory, or a folder above it up to the git root, holds a
+`GLOSSARY.md` (else a `CONTEXT.md`), the page underlines the first occurrence of each
+term per question and defines it in a popover on hover or keyboard focus. The nearest
+file wins, so a library folder's own glossary beats the repo root's. Terms are matched as
+whole words, case-insensitive, outside code. The file format is the one the
+`domain-modeling` skill writes: `**Term**:`, then the definition.
+
+`ask` takes `project`, a folder to look in instead of the working directory, for a git
+worktree or a session started elsewhere. Set `PRETTY_PROMPT_GLOSSARY=off` to turn the
+hints off.
+
 ### Result
 
 Exactly one of:
@@ -174,7 +190,7 @@ Exactly one of:
 {"answers": [{"selected": ["pg"], "free_text": "", "expanded": []}, ...]}
 {"cancelled": true}
 {"abandoned": true}
-{"not_delivered": true}
+{"not_delivered": true, "reason": "..."}
 ```
 
 The first shape answers `question`; the second, one entry per question in order,
