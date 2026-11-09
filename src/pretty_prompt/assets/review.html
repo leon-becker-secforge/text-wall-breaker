@@ -1,0 +1,811 @@
+<!doctype html>
+<html lang="en"__THEME_ATTR__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__
+</style>
+</head>
+<body__BODY_CLASS__>
+<main>
+  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+__HEADER_BLOCK__
+  <div class="pp-content">
+__CONTENT__
+  </div>
+
+  <label id="pp-overall-note-label" for="pp-overall-note">Overall note (optional)</label>
+  <textarea id="pp-overall-note"
+    placeholder="Anything for the whole call, beyond the per-line comments above"></textarea>
+
+  <div class="pp-actions">
+    <button type="button" id="pp-cancel">Cancel</button>
+    <div class="pp-actions-end">
+      <span id="pp-status"></span>
+      <button type="button" id="pp-submit">Send review</button>
+    </div>
+  </div>
+
+  <div id="pp-fallback" hidden>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="pp-fallback-reason"></p>
+    <textarea readonly rows="6"></textarea>
+  </div>
+</main>
+
+<div id="pp-dock" role="dialog" aria-label="Comment on the selected lines">
+  <div class="pp-dock-head">
+    <b id="pp-dock-label"></b><span id="pp-dock-count"></span>
+    <span class="pp-dock-quote" id="pp-dock-quote" hidden></span>
+  </div>
+  <textarea id="pp-dock-text" placeholder="Comment on the highlighted lines"></textarea>
+  <div class="pp-dock-row">
+    <span class="pp-dock-hint" id="pp-dock-hint">Ctrl+Enter adds &middot; Esc clears</span>
+    <button type="button" class="ghost" id="pp-dock-clear">Clear</button>
+    <button type="button" id="pp-dock-add">Comment</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SUBMIT_URL = __SUBMIT_URL__;
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+  var THEME_KEY = 'no-text-wall:theme';
+  // Same reasoning as ask's page — see there.
+  var BASE_TITLE = document.title;
+  document.title = '\u2753 ' + BASE_TITLE;
+
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
+  document.getElementById('pp-theme').addEventListener('click', function () {
+    var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
+    var next = document.documentElement.dataset.theme
+      ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      : (dark ? 'light' : 'dark');
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+    send('theme', { theme: next });
+  });
+
+  // A comment covers a run of rows of one diff, picked by selecting text across them,
+  // clicking a row (that whole line) or shift-clicking to extend from the last click. The
+  // dock under the last selected row takes the text. Every page stays in the DOM the
+  // whole time (the file list only toggles which .deck-slide is visible), so a comment
+  // survives navigating away from its page and back. `frozen` (set by freeze() below,
+  // once Submit/Cancel has been sent) stops any further change: editing then would
+  // silently go nowhere, the comments having already left.
+  var frozen = false;
+  // Rows are tracked as elements, never as positions: revealing hidden lines inserts rows
+  // and would shift every index after them.
+  var comments = [];   // {diff, first, last, quote, text, el}: first/last are row wraps
+  var sel = null;      // {diff, first, last, quote, editing}
+  var anchor = null;   // {diff, wrap} of the last plain click, for shift-click
+  var dock = document.getElementById('pp-dock');
+  var dockText = document.getElementById('pp-dock-text');
+  var dockAdd = document.getElementById('pp-dock-add');
+  var dockHint = document.getElementById('pp-dock-hint');
+  var DOCK_HINT = dockHint.textContent;
+  var slideEls = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
+
+  function wrapsOf(diff) {
+    return Array.prototype.slice.call(diff.querySelectorAll('.pp-review-row-wrap'));
+  }
+  function wrapOf(node) {
+    var el = node && (node.nodeType === 1 ? node : node.parentElement);
+    return el ? el.closest('.pp-review-row-wrap') : null;
+  }
+  function coord(wrap) {
+    return { side: wrap.dataset.side, line: parseInt(wrap.dataset.line, 10) };
+  }
+  // The rows a comment or selection covers: its wraps and their positions right now.
+  function span(o) {
+    var ws = wrapsOf(o.diff);
+    return { ws: ws, from: ws.indexOf(o.first), to: ws.indexOf(o.last) };
+  }
+  function rowLabel(o) {
+    var a = coord(o.first), b = coord(o.last);
+    if (o.first === o.last) return a.side + ' ' + a.line;
+    if (a.side === b.side) return a.side + ' ' + a.line + '\u2013' + b.line;
+    return a.side + ' ' + a.line + ' \u2192 ' + b.side + ' ' + b.line;
+  }
+  function rowsText(ws, from, to) {
+    return ws.slice(from, to + 1)
+      .map(function (w) { return w.querySelector('.pp-review-text').textContent; })
+      .join('\n');
+  }
+  function plain(text) { return text.replace(/\u00a0/g, ' ').replace(/\s+$/, ''); }
+
+  // Hidden lines between the ends: the comment would cover rows nobody saw.
+  function spansHiddenLines(o) {
+    if (o.first === o.last) return false;
+    for (var el = o.first.nextElementSibling; el && el !== o.last; el = el.nextElementSibling) {
+      if (el.classList.contains('pp-review-gap')) return true;
+    }
+    return false;
+  }
+  function updateDockState() {
+    if (!sel) return;
+    var hidden = spansHiddenLines(sel);
+    dockAdd.disabled = hidden;
+    dockHint.textContent = hidden
+      ? 'This spans hidden lines: show them or select fewer rows.' : DOCK_HINT;
+    placeDock();
+  }
+
+  function placeDock() {
+    var after = sel.last, inset = 46;
+    var box = sel.diff.getBoundingClientRect();
+    if (sel.diff.offsetParent === null && sel.block) {
+      // The diff is not on screen (one view at a time): the box goes under the block.
+      after = sel.block;
+      box = sel.block.closest('.pp-rendered').getBoundingClientRect();
+      inset = 18;
+    } else {
+      // Under the last selected row and any comment already shown there, not over it.
+      while (after.nextElementSibling &&
+          after.nextElementSibling.matches('.pp-comment, .pp-note')) {
+        after = after.nextElementSibling;
+      }
+    }
+    dock.style.width = Math.max(240, Math.min(680, box.width - inset - 14)) + 'px';
+    dock.style.left = (box.left + window.scrollX + inset) + 'px';
+    dock.style.top = (after.getBoundingClientRect().bottom + window.scrollY + 14) + 'px';
+  }
+
+  // The rendered view's blocks that lie wholly within the new-side lines `o` covers
+  // (outermost only), marked with `cls`. A selection or comment is made on the diff's rows;
+  // this is how it shows on the rendered file as well.
+  function markRendered(cls, o, all) {
+    Array.prototype.forEach.call(document.querySelectorAll('.pp-rendered .' + cls), function (e) {
+      e.classList.remove(cls);
+    });
+    (all || (o ? [o] : [])).forEach(function (c) {
+      var views = c.diff.closest('.pp-views');
+      var nums = [], covered = span(c);
+      for (var i = covered.from; i <= covered.to; i++) {
+        var w = covered.ws[i];
+        if (w.dataset.side === 'new') nums.push(parseInt(w.dataset.line, 10));
+      }
+      if (!views || !nums.length) return;
+      var lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+      var inside = function (e) {
+        return e && parseInt(e.dataset.first, 10) >= lo && parseInt(e.dataset.last, 10) <= hi;
+      };
+      var blocks = views.querySelectorAll('.pp-rendered [data-first]');
+      Array.prototype.forEach.call(blocks, function (e) {
+        var up = e.parentElement && e.parentElement.closest('[data-first]');
+        if (inside(e) && !inside(up)) e.classList.add(cls);
+      });
+    });
+  }
+  function revealLines(diff, a, z) {
+    Array.prototype.forEach.call(diff.querySelectorAll('.pp-review-gap'), function (el) {
+      var g = el._gap;
+      if (g && g.last - g.bottom >= a && g.first + g.top <= z) {
+        revealGap(g, g.size, g.position === 'end' ? 'down' : 'up');
+      }
+    });
+  }
+  var blockAnchor = null, textSelectedAt = 0;
+  document.addEventListener('click', function (event) {
+    var block =event.target.closest('.pp-rendered [data-first]');
+    if (!block || frozen) return;
+    var picked = window.getSelection();
+    if (picked && !picked.isCollapsed) return;
+    // The click that ends a drag follows its mouseup at once; focusing the box has already
+    // collapsed the text selection by then, and must not replace the quote's selection.
+    if (Date.now() - textSelectedAt < 300) return;
+    var diff = block.closest('.pp-views').querySelector('.pp-review-diff');
+    var from = block, to = block;
+    if (event.shiftKey && blockAnchor && blockAnchor.isConnected &&
+        blockAnchor.closest('.pp-views') === block.closest('.pp-views')) {
+      var early = parseInt(blockAnchor.dataset.first, 10) <= parseInt(block.dataset.first, 10);
+      from = early ? blockAnchor : block;
+      to = early ? block : blockAnchor;
+    } else {
+      blockAnchor = block;
+    }
+    selectBlocks(diff, from, to, '');
+  });
+  function selectBlocks(diff, from, to, quote) {
+    var a = parseInt(from.dataset.first, 10), z = parseInt(to.dataset.last, 10);
+    revealLines(diff, a, z);
+    var rowFor = function (n) {
+      return diff.querySelector('.pp-review-row-wrap[data-side="new"][data-line="' + n + '"]');
+    };
+    var first = rowFor(a), last = rowFor(z);
+    if (!first || !last) return;
+    anchor = { diff: diff, wrap: first };
+    var ws = wrapsOf(diff), from_ = ws.indexOf(first), to_ = ws.indexOf(last);
+    // The quote is only kept if it is real text of those rows (the server checks the same):
+    // a selection across formatting reads differently rendered than in the source.
+    var source = rowsText(ws, from_, to_).split(/\s+/).join(' ');
+    var needle = quote.split(/\s+/).join(' ').trim();
+    var keep = needle && source.indexOf(needle) >= 0 && needle !== source.trim();
+    setSel({ diff: diff, first: first, last: last, quote: keep ? quote : '', editing: null,
+      block: to });
+  }
+  // A drag over text in the rendered view: the blocks it touches, and the text as the quote.
+  function selectRenderedText(s) {
+    var r = s.getRangeAt(0);
+    function blockAt(node, offset, atEnd) {
+      var n = node;
+      if (n.nodeType === 1) n = n.childNodes[atEnd ? offset - 1 : offset] || n;
+      var el = n.nodeType === 1 ? n : n.parentElement;
+      return el && el.closest('.pp-rendered [data-first]');
+    }
+    var from = blockAt(r.startContainer, r.startOffset, false);
+    var to = blockAt(r.endContainer, r.endOffset, true);
+    var views = from && from.closest('.pp-views');
+    if (!views || !to || to.closest('.pp-views') !== views) return false;
+    if (parseInt(to.dataset.first, 10) < parseInt(from.dataset.first, 10)) return false;
+    blockAnchor = from;
+    textSelectedAt = Date.now();
+    selectBlocks(views.querySelector('.pp-review-diff'), from, to, plain(s.toString()));
+    return true;
+  }
+  // The quote shown in the diff as well, where it can be found as written.
+  function markQuote() {
+    if (!window.CSS || !CSS.highlights || typeof Highlight === 'undefined') return;
+    CSS.highlights.delete('pp-quote');
+    if (!sel || !sel.quote) return;
+    var covered = span(sel), texts = [], joined = '';
+    for (var i = covered.from; i <= covered.to; i++) {
+      // Token spans split a row's text into several text nodes.
+      var walker = document.createTreeWalker(
+        covered.ws[i].querySelector('.pp-review-text'), NodeFilter.SHOW_TEXT);
+      var node;
+      while ((node = walker.nextNode())) {
+        texts.push({ node: node, start: joined.length });
+        joined += node.textContent;
+      }
+      joined += '\n';
+    }
+    var at = joined.indexOf(sel.quote);
+    if (at < 0) return;
+    function point(offset) {
+      for (var k = texts.length - 1; k >= 0; k--) {
+        if (offset >= texts[k].start) return [texts[k].node, offset - texts[k].start];
+      }
+      return null;
+    }
+    var a = point(at), b = point(at + sel.quote.length);
+    if (!a || !b) return;
+    var range = new Range();
+    range.setStart(a[0], Math.min(a[1], a[0].length));
+    range.setEnd(b[0], Math.min(b[1], b[0].length));
+    CSS.highlights.set('pp-quote', new Highlight(range));
+  }
+  // A run of unchanged blocks behind one bar (see _render_review_chunks): the bar opens it
+  // and goes, so what was folded cannot be folded again.
+  document.addEventListener('click', function (event) {
+    var bar = event.target.closest('.pp-fold');
+    if (!bar) return;
+    bar.nextElementSibling.hidden = false;
+    bar.remove();
+    if (sel) placeDock();
+  });
+
+  function renderSel() {
+    Array.prototype.forEach.call(document.querySelectorAll('.has-sel'), function (e) {
+      e.classList.remove('has-sel');
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.is-sel'), function (e) {
+      e.classList.remove('is-sel', 'sel-first', 'sel-last');
+    });
+    markRendered('is-sel', sel);
+    markQuote();
+    if (!sel) { dock.classList.remove('is-open'); return; }
+    var covered = span(sel), ws = covered.ws;
+    sel.diff.classList.add('has-sel');
+    for (var i = covered.from; i <= covered.to; i++) ws[i].classList.add('is-sel');
+    sel.first.classList.add('sel-first');
+    sel.last.classList.add('sel-last');
+    document.getElementById('pp-dock-label').textContent = rowLabel(sel);
+    var count = covered.to - covered.from + 1;
+    document.getElementById('pp-dock-count').textContent = count + (count === 1 ? ' row' : ' rows');
+    var quote = document.getElementById('pp-dock-quote');
+    quote.hidden = !sel.quote;
+    quote.textContent = sel.quote || '';
+    dockText.value = sel.editing ? sel.editing.text : '';
+    dockAdd.textContent = sel.editing ? 'Update' : 'Comment';
+    if (window.ppLive) window.ppLive.dockOpened();
+    updateDockState();
+    dock.classList.add('is-open');
+    dock.scrollIntoView({
+      block: 'nearest',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+    });
+    dockText.focus();
+  }
+  function setSel(next) { sel = next; renderSel(); }
+  function clearSel() {
+    sel = null;
+    window.getSelection().removeAllRanges();
+    renderSel();
+    if (window.ppLive) window.ppLive.dockClosed();
+  }
+
+  function selectRow(diff, wrap, extend) {
+    var first = wrap, last = wrap;
+    if (extend && anchor && anchor.diff === diff && anchor.wrap.isConnected) {
+      var ws = wrapsOf(diff), a = ws.indexOf(anchor.wrap), b = ws.indexOf(wrap);
+      first = ws[Math.min(a, b)];
+      last = ws[Math.max(a, b)];
+    } else {
+      anchor = { diff: diff, wrap: wrap };
+    }
+    setSel({ diff: diff, first: first, last: last, quote: '', editing: null });
+  }
+
+  document.addEventListener('mouseup', function (event) {
+    if (frozen) return;
+    var chrome = '#pp-dock, .pp-comment, .pp-note, textarea, button, a, #pp-files, #pp-filebar';
+    if (event.target.closest(chrome)) return;
+    var s = window.getSelection();
+    if (s.rangeCount && !s.isCollapsed) {
+      if (selectRenderedText(s)) return;
+      var r = s.getRangeAt(0);
+      var first = wrapOf(r.startContainer), last = wrapOf(r.endContainer);
+      if (!first && r.startContainer.nodeType === 1) {
+        first = wrapOf(r.startContainer.childNodes[r.startOffset]);
+      }
+      var diff = first && first.closest('.pp-review-diff');
+      if (!diff || !last || last.closest('.pp-review-diff') !== diff) return;
+      var ws = wrapsOf(diff), from = ws.indexOf(first), to = ws.indexOf(last);
+      // A drag that ends at the very start of the next row, or starts at the very end of
+      // a row, selected none of that row's text.
+      if (to > from && r.endOffset === 0) to -= 1;
+      if (to > from && r.startContainer.nodeType === 3 &&
+          r.startOffset >= r.startContainer.length) from += 1;
+      var quote = plain(s.toString());
+      anchor = { diff: diff, wrap: ws[from] };
+      setSel({
+        diff: diff, first: ws[from], last: ws[to], editing: null,
+        quote: quote === plain(rowsText(ws, from, to)) ? '' : quote.slice(0, 2000)
+      });
+      return;
+    }
+    var wrap = event.target.closest('.pp-review-row-wrap');
+    if (wrap) {
+      selectRow(wrap.closest('.pp-review-diff'), wrap, event.shiftKey);
+    } else if (sel && dockText.value.trim() === '') {
+      clearSel();
+    }
+  });
+  document.addEventListener('keydown', function (event) {
+    if (frozen) return;
+    if (event.key === 'Escape' && sel) { clearSel(); return; }
+    var row = event.target.classList && event.target.classList.contains('pp-review-row')
+      ? event.target : null;
+    if (row && (event.key === 'Enter' || event.key === ' ')) {
+      event.preventDefault();
+      var wrap = row.closest('.pp-review-row-wrap');
+      selectRow(wrap.closest('.pp-review-diff'), wrap, event.shiftKey);
+    }
+  });
+  window.addEventListener('resize', function () { if (sel) placeDock(); });
+  document.addEventListener('pp-file-change', function () { if (sel) clearSel(); });
+
+  function markRows() {
+    Array.prototype.forEach.call(document.querySelectorAll('.has-comment'), function (e) {
+      e.classList.remove('has-comment');
+    });
+    comments.forEach(function (c) {
+      var covered = span(c);
+      for (var i = covered.from; i <= covered.to; i++) covered.ws[i].classList.add('has-comment');
+    });
+    markRendered('has-comment', null, comments);
+  }
+  function renderComment(c) {
+    var el = c.el || document.createElement('div');
+    el.className = 'pp-comment';
+    el.innerHTML = '<div class="pp-comment-head"><b></b><span class="pp-comment-actions">' +
+      '<button type="button" data-act="edit">Edit</button>' +
+      '<button type="button" data-act="delete">Delete</button></span></div>' +
+      '<span class="pp-comment-quote" hidden></span><div class="pp-comment-text"></div>';
+    el.querySelector('b').textContent = rowLabel(c);
+    var quote = el.querySelector('.pp-comment-quote');
+    quote.hidden = !c.quote;
+    quote.textContent = c.quote || '';
+    el.querySelector('.pp-comment-text').textContent = c.text;
+    c.last.after(el);
+    c.el = el;
+    if (window.ppLive) window.ppLive.decorate(c);
+  }
+  function commentsChanged() {
+    markRows();
+    var chip = document.getElementById('pp-chip-comments');
+    if (chip) {
+      var n = comments.length;
+      chip.innerHTML = '<b>' + n + '</b> comment' + (n === 1 ? '' : 's');
+    }
+    document.dispatchEvent(new CustomEvent('pp-comments'));
+    reportSoon();
+  }
+  function addComment() {
+    var text = dockText.value.trim();
+    if (!text || !sel || frozen || spansHiddenLines(sel)) return;
+    if (sel.editing) {
+      sel.editing.text = text;
+      renderComment(sel.editing);
+    } else {
+      var c = {
+        diff: sel.diff, first: sel.first, last: sel.last, quote: sel.quote, text: text, el: null
+      };
+      comments.push(c);
+      renderComment(c);
+      if (window.ppLive) window.ppLive.added(c);
+    }
+    clearSel();
+    commentsChanged();
+  }
+  dockAdd.addEventListener('click', addComment);
+  document.getElementById('pp-dock-clear').addEventListener('click', clearSel);
+  dockText.addEventListener('keydown', function (event) {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      addComment();
+    }
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.pp-comment [data-act]');
+    if (!button || frozen) return;
+    var c = comments.filter(function (x) { return x.el === button.closest('.pp-comment'); })[0];
+    if (!c) return;
+    if (button.dataset.act === 'delete') {
+      c.el.remove();
+      comments.splice(comments.indexOf(c), 1);
+      commentsChanged();
+    } else {
+      setSel({ diff: c.diff, first: c.first, last: c.last, quote: c.quote, editing: c });
+    }
+  });
+
+  // Agent notes: a chip on a note's first row folds it, the bar folds a page's notes, and
+  // Reply selects the note's rows so the dock opens on them. A note's last row is the wrap
+  // just before it, its first row the one holding its chip.
+  function noteMark(note) {
+    return note.parentNode.querySelector('.pp-note-mark[data-note="' + note.dataset.note + '"]');
+  }
+  function foldNote(note, open) {
+    note.classList.toggle('is-open', open);
+    var mark = noteMark(note);
+    if (mark) { mark.classList.toggle('is-open', open); mark.setAttribute('aria-expanded', open); }
+    // The bar above the diff says whether all, none or some of its notes are showing.
+    var bar = note.parentNode.previousElementSibling;
+    if (bar && bar.classList.contains('pp-notes-bar')) {
+      var all = note.parentNode.querySelectorAll('.pp-note').length;
+      var shown = note.parentNode.querySelectorAll('.pp-note.is-open').length;
+      bar.dataset.state = shown === all ? 'shown' : shown === 0 ? 'hidden' : 'mixed';
+    }
+  }
+  document.addEventListener('click', function (event) {
+    var mark = event.target.closest('.pp-note-mark');
+    if (mark) {
+      event.stopPropagation();
+      var n = mark.parentNode.parentNode.querySelector(
+        '.pp-note[data-note="' + mark.dataset.note + '"]');
+      if (n) foldNote(n, !n.classList.contains('is-open'));
+      return;
+    }
+    var all = event.target.closest('.pp-notes-bar [data-all]');
+    if (all) {
+      var d = all.closest('.deck-slide').querySelector('.pp-review-diff');
+      Array.prototype.forEach.call(d.querySelectorAll('.pp-note'), function (x) {
+        foldNote(x, all.dataset.all === '1');
+      });
+      return;
+    }
+    var reply = event.target.closest('.pp-note [data-act="reply"]');
+    if (reply && !frozen) {
+      var note = reply.closest('.pp-note');
+      var last = note.previousElementSibling;
+      while (last && !last.classList.contains('pp-review-row-wrap')) {
+        last = last.previousElementSibling;
+      }
+      var m = noteMark(note), first = m && m.closest('.pp-review-row-wrap');
+      if (!first || !last) return;
+      var diff = first.closest('.pp-review-diff');
+      anchor = { diff: diff, wrap: first };
+      setSel({ diff: diff, first: first, last: last, quote: '', editing: null });
+    }
+  });
+
+  // Hidden lines between hunks, shown ten at a time or all at once from the gap bar (see
+  // _render_review_gap). The text of each gap sits in a JSON element of its diff, in the
+  // order of the bars.
+  var GAP_STEP = 10;
+  function makeRow(path, oldNo, newNo, text) {
+    var wrap = document.createElement('div');
+    wrap.className = 'pp-review-row-wrap is-revealed';
+    wrap.dataset.path = path;
+    wrap.dataset.side = 'new';
+    wrap.dataset.line = newNo;
+    wrap.innerHTML = '<div class="pp-review-row ctx" role="button" tabindex="0" ' +
+      'aria-label="Select this line to comment">' +
+      '<span class="pp-review-gutter"></span><span class="pp-review-gutter"></span>' +
+      '<span class="pp-review-text"></span>' +
+      '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span></div>';
+    var gutters = wrap.querySelectorAll('.pp-review-gutter');
+    gutters[0].textContent = oldNo;
+    gutters[1].textContent = newNo;
+    wrap.querySelector('.pp-review-text').textContent = text || '\u00a0';
+    return wrap;
+  }
+  function updateGap(g) {
+    var left = g.size - g.top - g.bottom;
+    if (left <= 0) { g.el.remove(); return; }
+    var all = g.el.querySelector('.pp-gap-all');
+    all.textContent = left + ' hidden line' + (left === 1 ? '' : 's');
+    all.setAttribute('aria-label', 'Show all ' + left + ' hidden lines');
+    Array.prototype.forEach.call(g.el.querySelectorAll('.pp-gap-step'), function (b) {
+      var n = Math.min(GAP_STEP, left), down = b.dataset.step === 'down';
+      b.hidden = left <= GAP_STEP;
+      b.textContent = (down ? '\u2193 ' : '\u2191 ') + n;
+      b.setAttribute('aria-label',
+        'Show ' + n + ' lines ' + (down ? 'below the hunk above' : 'above the hunk below'));
+    });
+  }
+  function revealGap(g, count, direction) {
+    var n = Math.min(count, g.size - g.top - g.bottom);
+    if (n <= 0) return;
+    var first, last;
+    if (direction === 'down') {
+      first = g.first + g.top; last = first + n - 1; g.top += n;
+    } else {
+      last = g.last - g.bottom; first = last - n + 1; g.bottom += n;
+    }
+    // On screen: rows revealed downward, the bar, rows revealed upward, the next hunk.
+    var before = direction === 'down' ? g.el : (g.bottomFirst || g.anchor);
+    var path = g.diff.dataset.path, firstRow = null;
+    for (var k = first; k <= last; k++) {
+      var row = makeRow(path, k + g.delta, k, g.lines[k - g.first]);
+      g.diff.insertBefore(row, before);
+      firstRow = firstRow || row;
+    }
+    if (direction === 'up') g.bottomFirst = firstRow;
+    updateGap(g);
+    updateDockState();
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.pp-review-diff'), function (diff) {
+    var data = diff.querySelector('script.pp-review-lines');
+    if (!data) return;
+    var texts = JSON.parse(data.textContent);
+    Array.prototype.forEach.call(diff.querySelectorAll('.pp-review-gap'), function (el, i) {
+      var first = parseInt(el.dataset.first, 10), last = parseInt(el.dataset.last, 10);
+      el._gap = {
+        diff: diff, el: el, lines: texts[i], first: first, last: last, size: last - first + 1,
+        delta: parseInt(el.dataset.delta, 10), position: el.dataset.position,
+        top: 0, bottom: 0, bottomFirst: null, anchor: el.nextElementSibling
+      };
+    });
+  });
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.pp-gap-all, .pp-gap-step');
+    var g = button && button.closest('.pp-review-gap')._gap;
+    if (!g) return;
+    if (button.classList.contains('pp-gap-step')) {
+      revealGap(g, GAP_STEP, button.dataset.step);
+    } else {
+      revealGap(g, g.size, g.position === 'end' ? 'down' : 'up');
+    }
+  });
+
+  function collectComments() {
+    function order(c) {
+      var covered = span(c);
+      return [slideEls.indexOf(c.diff.closest('.deck-slide')), covered.from, covered.to];
+    }
+    return comments
+      .slice()
+      .sort(function (a, b) {
+        var x = order(a), y = order(b);
+        return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+      })
+      .map(spec);
+  }
+  function spec(c) {
+    var start = coord(c.first), end = coord(c.last);
+    var out = { path: c.diff.dataset.path, side: start.side, line: start.line };
+    if (c.last !== c.first) { out.end_side = end.side; out.end_line = end.line; }
+    if (c.quote) out.quote = c.quote;
+    out.text = c.text;
+    if (c.thread) out.thread = c.thread;
+    return out;
+  }
+  // A comment the server kept across a reload (a live session's refresh), back on its rows.
+  function restoreComment(s) {
+    var diff = document.querySelector('.pp-review-diff[data-path="' + CSS.escape(s.path) + '"]');
+    if (!diff) return;
+    function row(side, line) {
+      return diff.querySelector('.pp-review-row-wrap[data-side="' + side + '"][data-line="' +
+        line + '"]');
+    }
+    var endSide = s.end_side || s.side, endLine = s.end_line || s.line;
+    if (!row(s.side, s.line) || !row(endSide, endLine)) {
+      revealLines(diff, Math.min(s.line, endLine), Math.max(s.line, endLine));
+    }
+    var first = row(s.side, s.line), last = row(endSide, endLine);
+    if (!first || !last) return;
+    var c = { diff: diff, first: first, last: last, quote: s.quote || '', text: s.text, el: null };
+    if (s.thread) c.thread = s.thread;
+    comments.push(c);
+    renderComment(c);
+  }
+
+  var submitBtn = document.getElementById('pp-submit');
+  var cancelBtn = document.getElementById('pp-cancel');
+  var status = document.getElementById('pp-status');
+  var overallNote = document.getElementById('pp-overall-note');
+
+  var pageNotes = Array.prototype.slice.call(document.querySelectorAll('.pp-page-note'));
+  function collectPageNotes() {
+    return pageNotes
+      .map(function (t) { return { path: t.dataset.path, text: t.value.trim() }; })
+      .filter(function (n) { return n.text; });
+  }
+
+  function collect() {
+    return {
+      comments: collectComments(),
+      page_notes: collectPageNotes(),
+      overall_note: overallNote.value.trim(),
+      generation: GENERATION
+    };
+  }
+
+  function freeze(message) {
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    overallNote.readOnly = true;
+    pageNotes.forEach(function (t) { t.readOnly = true; });
+    frozen = true;
+    document.body.classList.add('pp-review-frozen');
+    if (window.ppLive) window.ppLive.frozen();
+    clearSel();
+    status.textContent = message;
+    stopHeartbeat();
+  }
+
+  // The heartbeat doubles as the progress report: if the tab is closed mid-review, the
+  // server returns the comments from the last one (see review.run_review) instead of
+  // losing them. Typing reports on its own after a short pause, so a closed tab loses
+  // at most the last moment of typing, not up to HEARTBEAT_MS of it.
+  var HEARTBEAT_MS = 15000;
+  var heartbeatTimer = null;
+  var progressTimer = null;
+  function heartbeat() { if (!frozen) send('progress', collect()); }
+  function reportSoon() {
+    clearTimeout(progressTimer);
+    progressTimer = setTimeout(heartbeat, 400);
+  }
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+    clearTimeout(progressTimer);
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') heartbeat();
+  });
+  overallNote.addEventListener('input', reportSoon);
+  pageNotes.forEach(function (t) { t.addEventListener('input', reportSoon); });
+
+  function fallback(payload, reason, title) {
+    var box = document.getElementById('pp-fallback');
+    var text = JSON.stringify(payload, null, 2);
+    box.hidden = false;
+    var textarea = box.querySelector('textarea');
+    textarea.value = text;
+    document.getElementById('pp-fallback-reason').textContent =
+      reason + ' \u2014 copy the text below and paste it to Claude Code.';
+    document.getElementById('pp-fallback-title').textContent =
+      title || "Couldn't reach Claude Code";
+    textarea.select();
+  }
+
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
+  async function send(kind, data) {
+    var payload = { kind: kind, data: data };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        if (kind !== 'probe' && kind !== 'progress') {
+          fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
+        }
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (kind !== 'probe' && kind !== 'progress') {
+        fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      }
+      return false;
+    }
+  }
+
+  function doneMessage(base) {
+    if (STATUS_URL) return base + ' Waiting for the next thing\u2026';
+    return base + ' You can close this tab.';
+  }
+
+  submitBtn.addEventListener('click', async function () {
+    var data = collect();
+    freeze('Sending\u2026');
+    if (await send('submit', data)) {
+      freeze(doneMessage('Review sent.'));
+      document.title = '\u2705 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+
+  cancelBtn.addEventListener('click', async function () {
+    // Cancel still sends whatever comments/overall note already exist — see
+    // review.run_review's docstring and ADR 0002. Same payload shape as Submit; only
+    // `kind` differs.
+    var data = collect();
+    freeze('Cancelling\u2026');
+    if (await send('cancel', data)) {
+      freeze(doneMessage('Cancelled.'));
+      document.title = '\u2716 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      submitBtn.click();
+    }
+  });
+
+  window.ppReview = {
+    liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
+    generation: GENERATION, comments: comments, send: send, collect: collect, spec: spec,
+    restore: restoreComment, commentsChanged: commentsChanged, reportSoon: reportSoon,
+    overallNote: overallNote, dockText: dockText, dockAdd: dockAdd,
+    dockOpen: function () { return !!sel; },
+    editing: function () { return !!(sel && sel.editing); }
+  };
+
+  send('probe', {});
+  startHeartbeat();
+}());
+</script>
+__DECK_SCRIPT__
+__LIVE_SCRIPT__
+__MERMAID__
+</body>
+</html>

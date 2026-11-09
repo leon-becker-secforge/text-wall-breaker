@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en"__THEME_ATTR__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__
+</style>
+</head>
+<body>
+<main__MAIN_EXTRA__>
+  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+__QUESTION_BLOCK__
+
+  <form id="pp-form" novalidate>
+__OPTIONS__
+__FREE_TEXT__
+    <div class="pp-actions">
+      <button type="button" id="pp-cancel">Cancel</button>
+      <button type="button" id="pp-stop">Stop here</button>
+      <button type="button" id="pp-stop-undo" hidden>never mind</button>
+      <div class="pp-actions-end">
+        <span id="pp-status">__HINT__</span>
+        <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
+        <button type="submit" id="pp-submit" disabled>Send answer</button>
+      </div>
+    </div>
+  </form>
+
+  <div id="pp-fallback" hidden>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="pp-fallback-reason"></p>
+    <textarea readonly rows="6"></textarea>
+  </div>
+</main>
+
+<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+
+<script>
+(function () {
+  var SUBMIT_URL = __SUBMIT_URL__;
+  var THEME_KEY = 'no-text-wall:theme';
+  // So the tab bar shows whether this question is open or done without switching to the
+  // tab — useful once several are open, or once one is answered and left to wait its
+  // turn. The pending mark goes on right away; submit/cancel below replace it.
+  var BASE_TITLE = document.title;
+  document.title = '\u2753 ' + BASE_TITLE;
+  // Set only when this tab is reused across `ask` calls (see listener.py's
+  // SessionListener) — null on the ordinary one-shot page, where startReusePolling()
+  // below is then a no-op.
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+
+  // Any image (a gallery thumbnail or one in an option/question body) expands full-size
+  // on click — a thumbnail is otherwise too small to actually compare against another.
+  var lightbox = document.getElementById('pp-lightbox');
+  var lightboxImg = document.getElementById('pp-lightbox-img');
+  document.querySelectorAll('main img').forEach(function (img) {
+    img.addEventListener('click', function (e) {
+      e.stopPropagation();
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.hidden = false;
+    });
+  });
+  lightbox.addEventListener('click', function () {
+    lightbox.hidden = true;
+    lightboxImg.src = '';
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !lightbox.hidden) {
+      lightbox.hidden = true;
+      lightboxImg.src = '';
+    }
+  });
+
+  var form = document.getElementById('pp-form');
+  var submitBtn = document.getElementById('pp-submit');
+  var cancelBtn = document.getElementById('pp-cancel');
+  var status = document.getElementById('pp-status');
+  var freeText = document.getElementById('pp-free-text');
+  var inputs = Array.prototype.slice.call(document.querySelectorAll('input[data-option-id]'));
+  var drawers = Array.prototype.slice.call(
+    document.querySelectorAll('.pp-option-drawer[data-option-id]')
+  );
+  // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
+  // now" — with several long-bodied options, closing one after reading it to get to the
+  // next is the expected motion, and a snapshot at submit time would read that as never
+  // having been opened at all. The initial `open` attribute (recommended: true) counts
+  // as having been shown too, seeded here rather than waiting for a first `toggle`.
+  drawers.forEach(function (d) {
+    d._wasExpanded = d.open;
+    d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
+  });
+  // `changed_from` (in collect()): every input ever checked, in first-checked order.
+  // The server drops the ones still in the final selection, so what reaches the agent
+  // is only what was picked and then abandoned. Only a user's own change counts: the
+  // reload reset below and deferral uncheck without firing `change`.
+  var picked = [];
+  inputs.forEach(function (i) {
+    i.addEventListener('change', function () {
+      if (i.checked && picked.indexOf(i) === -1) picked.push(i);
+    });
+  });
+  var frozen = false;
+
+  // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
+  // genuinely new question, never the one just answered — but the browser doesn't know
+  // that, and some (Firefox in particular) restore form field values across a plain
+  // reload keyed by field identity/position. Since the new question's fields can occupy
+  // the same identity as the old ones, that restore has to be undone before anything
+  // else reads these fields, or the new question can silently start pre-answered. Undone
+  // to the markup's own state (`defaultChecked`), which is a prefill when the agent set one.
+  inputs.forEach(function (i) { i.checked = i.defaultChecked; });
+  if (freeText) freeText.value = freeText.defaultValue;
+
+  // Theme: the root attribute overrides the OS preference, absent follows it. The server
+  // already set it from its own saved state (see page.py's __THEME_ATTR__) whenever it
+  // has one; localStorage is only the fallback for the very first page it ever serves,
+  // and stays as a same-tab-reload convenience after that.
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
+  document.getElementById('pp-theme').addEventListener('click', function () {
+    // rgb(30, 30, 30) is --ntw-bg's dark value (#1e1e1e) — kept in sync with the
+    // palette in _ADDENDUM by hand, since this runs before that stylesheet's custom
+    // properties can be read back out as anything other than a computed colour.
+    var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
+    var next = document.documentElement.dataset.theme
+      ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      : (dark ? 'light' : 'dark');
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+    // Fire-and-forget: the next page this process serves reads this back (see
+    // page.py's read_saved_theme), so the preference survives past this one tab.
+    send('theme', { theme: next });
+  });
+
+  // Deferral (allow_defer): the "Not yet" pill locks the options it sits beside and
+  // clears any selection, since "not yet, but B" is not an answer the agent can act on,
+  // while the free-text box stays open for the reason. Returns a function reading the
+  // current state, so collect() can report it. Only called when the pill exists.
+  function wireDefer(root, onChange) {
+    var btn = root.querySelector('.pp-defer');
+    if (!btn) return function () { return false; };
+    var banner = root.querySelector('.pp-defer-banner');
+    var list = root.querySelector('.pp-options');
+    var text = root.querySelector('textarea[id^="pp-free-text"]');
+    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[data-option-id]'));
+    var placeholder = text ? text.placeholder : '';
+    var on = false;
+    btn.addEventListener('click', function () {
+      on = !on;
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? 'Deferred, undo' : 'Not yet';
+      banner.hidden = !on;
+      if (list) list.classList.toggle('pp-locked', on);
+      boxes.forEach(function (i) {
+        if (on) i.checked = false;
+        i.disabled = on;
+      });
+      if (text) text.placeholder = on ? 'Why not yet? (optional)' : placeholder;
+      onChange();
+    });
+    return function () { return on; };
+  }
+  // <main>, not the form: the pill sits beside the question, which is outside it.
+  var isDeferred = wireDefer(document.querySelector('main'), function () { refresh(); });
+
+  function collect() {
+    return {
+      selected: inputs.filter(function (i) { return i.checked; })
+                      .map(function (i) { return i.dataset.optionId; }),
+      free_text: freeText ? freeText.value.trim() : '',
+      // Every drawer opened at any point this page has been up, not just the ones still
+      // open at submit time — see the `_wasExpanded` tracking above.
+      expanded: drawers.filter(function (d) { return d._wasExpanded; })
+                        .map(function (d) { return d.dataset.optionId; }),
+      changed_from: picked.map(function (i) { return i.dataset.optionId; }),
+      deferred: isDeferred()
+    };
+  }
+
+  // Free text is additive, never exclusive: either a checked option or a non-empty box
+  // is enough on its own to make the answer sendable.
+  //
+  // The hint only shows while the form isn't answerable yet: once something is picked
+  // or typed, "Pick an option, write an answer, or both." has done its job and stays
+  // out of the way rather than sitting there as clutter for the rest of the call.
+  function refresh() {
+    inputs.forEach(function (i) { i._wasChecked = i.checked; });
+    var d = collect();
+    submitBtn.disabled = !d.deferred && d.selected.length === 0 && d.free_text === '';
+    status.hidden = !submitBtn.disabled;
+    reportProgress();
+  }
+
+  // The answer so far, kept by the server so an ask that times out or is closed can be
+  // resumed with it. Debounced: refresh() runs on every keystroke in the free-text box.
+  var progressTimer = null;
+  function reportProgress() {
+    clearTimeout(progressTimer);
+    progressTimer = setTimeout(function () { send('progress', collect()); }, 400);
+  }
+
+  inputs.forEach(function (i) { i.addEventListener('change', refresh); });
+  // A radio has no native way back to nothing picked, so a click on the one already
+  // checked clears it. The browser checks a radio before its click event fires, so
+  // `_wasChecked` holds the state from before the click; refresh() resyncs it after
+  // every change, including the ones code makes (prefill, deferral).
+  inputs.forEach(function (i) {
+    if (i.type !== 'radio') return;
+    i.addEventListener('click', function () {
+      if (!i._wasChecked) return;
+      i.checked = false;
+      i.dispatchEvent(new Event('change'));
+    });
+  });
+  // An option with a long body is a <details> whose <summary> is the whole row (see
+  // page.py's _render_options), so a click on the checkbox/radio would otherwise also
+  // reach <summary> and toggle the drawer open. Stopping it here is what keeps
+  // selecting and opening independent.
+  inputs.forEach(function (i) {
+    i.addEventListener('click', function (e) { e.stopPropagation(); });
+  });
+  // The rest of a drawer's row selects too, like an option without a body. Only the
+  // Details pill opens the drawer, and the keyboard: Enter on the focused row arrives as
+  // a click with detail 0.
+  function wireSummary(s) {
+    var input = s.querySelector('input');
+    s.addEventListener('click', function (e) {
+      if (e.detail === 0 || e.target.closest('.pp-option-details')) return;
+      e.preventDefault();
+      if (!input.disabled) input.click();
+    });
+  }
+  document.querySelectorAll('.pp-option-drawer > summary').forEach(wireSummary);
+  if (freeText) freeText.addEventListener('input', refresh);
+
+  // The page's side of the shared Interruption script below.
+  function stopTarget() {
+    return { root: form, before: form.querySelector('.pp-actions'), id: 'pp-free-text' };
+  }
+  function stopMode(on) {
+    submitBtn.hidden = on;
+    if (on) status.hidden = true;
+    else refresh();
+  }
+  function stopPayload(stop) {
+    var data = collect();
+    data.free_text = stop.box.value.trim();
+    data.interrupted = true;
+    return data;
+  }
+  // Interruption ("Stop here", see CONTEXT.md): ends the ask at once with the answers so
+  // far and the current question marked, so the agent reads it before anything else. It
+  // needs the user's own words there: the question's text box turns required, and one is
+  // added where the question has none (allow_free_text off). stopTarget, stopMode and
+  // stopPayload above are each page's side of it.
+  var stopBtn = document.getElementById('pp-stop');
+  var stopSend = document.getElementById('pp-stop-send');
+  var stopUndo = document.getElementById('pp-stop-undo');
+  var stopping = null;
+  function syncStop() {
+    stopSend.disabled = frozen || !stopping || stopping.box.value.trim() === '';
+  }
+  stopBtn.addEventListener('click', function () {
+    var target = stopTarget();
+    var box = document.getElementById(target.id);
+    var made = !box;
+    if (made) {
+      var holder = document.createElement('label');
+      holder.className = 'pp-free-text';
+      holder.appendChild(document.createTextNode(''));
+      box = document.createElement('textarea');
+      box.id = target.id;
+      box.rows = 3;
+      holder.appendChild(box);
+      target.root.insertBefore(holder, target.before);
+    }
+    var label = box.parentNode;
+    stopping = { box: box, made: made, index: target.index, label: label.firstChild.nodeValue };
+    label.firstChild.nodeValue = 'Why stop here? Claude reads this first.';
+    label.classList.add('pp-required');
+    box.addEventListener('input', syncStop);
+    stopBtn.hidden = true;
+    stopSend.hidden = false;
+    stopUndo.hidden = false;
+    stopMode(true);
+    syncStop();
+    box.focus();
+  });
+  stopUndo.addEventListener('click', function () {
+    var label = stopping.box.parentNode;
+    stopping.box.removeEventListener('input', syncStop);
+    if (stopping.made) label.remove();
+    else {
+      label.classList.remove('pp-required');
+      label.firstChild.nodeValue = stopping.label;
+    }
+    stopping = null;
+    stopBtn.hidden = false;
+    stopSend.hidden = true;
+    stopUndo.hidden = true;
+    stopMode(false);
+  });
+  stopSend.addEventListener('click', async function () {
+    if (stopSend.disabled) return;
+    var data = stopPayload(stopping);
+    freeze('Sending\u2026');
+    if (await send('interrupt', data)) {
+      freeze(doneMessage('Stopped here. Claude reads your note first.'));
+      document.title = '\u270b ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+  function freezeStop() {
+    if (stopping) stopping.box.readOnly = true;
+    stopBtn.disabled = true;
+    stopSend.disabled = true;
+    stopUndo.hidden = true;
+  }
+
+  function freeze(message) {
+    frozen = true;
+    inputs.forEach(function (i) { i.disabled = true; });
+    document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
+    if (freeText) freeText.readOnly = true;
+    freezeStop();
+    submitBtn.disabled = true;
+    cancelBtn.disabled = true;
+    // Unlike refresh()'s hint, this message (sending/sent/cancelled) is never hidden —
+    // it's always relevant, not just while the form is unanswerable.
+    status.hidden = false;
+    status.textContent = message;
+    stopHeartbeat();
+  }
+
+  // The server treats a page that sends nothing for ABANDON_SECONDS (listener.py) as
+  // gone, so this is how an open tab says it is still there. It runs while the tab is
+  // hidden too: a hidden tab is still being used, only a closed one stops sending.
+  // Browsers throttle background timers to about once a minute, well inside the window.
+  var HEARTBEAT_MS = 15000;
+  var heartbeatTimer = null;
+  // On a reused tab GET /status keeps the call alive the same way a probe does, and
+  // also says whether a call still waits on this page. A one-shot page learns that its
+  // call ended from the probe failing, since its listener closes with the call.
+  async function heartbeat() {
+    if (!STATUS_URL) { send('probe', {}); return; }
+    try {
+      var res = await fetch(STATUS_URL);
+      if (!res.ok) return;
+      var body = await res.json();
+      // In a live session a new generation is the agent's refresh, which ask_live.js
+      // follows by reloading; it is not a call that ended.
+      if (body.generation !== GENERATION) {
+        if (!(window.ppAsk && window.ppAsk.liveStarted)) expire(false);
+      }
+      else if (!body.open) expire(true);
+    } catch (e) { expire(false); }
+  }
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    // Catches up immediately on refocus, rather than waiting up to HEARTBEAT_MS for the
+    // next tick, in case the deadline is close by the time the tab is looked at again.
+    if (document.visibilityState === 'visible') heartbeat();
+  });
+
+  // The call this page answers ended without an answer: Claude Code stopped waiting
+  // (abandoned, interrupted), or the server is gone. Freezing beats taking an answer
+  // nobody will read. On a reused tab still showing its own generation, the next
+  // question can still land here.
+  function expire(reusable) {
+    if (frozen) return;
+    freeze('Claude Code stopped waiting for this answer. Anything you entered is kept, ' +
+      'so Claude can reopen it.');
+    document.title = '\u231b ' + BASE_TITLE;
+    // Reopening depends on Claude doing it; the copy box works even if it never does.
+    fallback({ kind: 'submit', data: collect() }, 'Claude Code stopped waiting for this answer',
+      'Claude Code stopped waiting');
+    if (reusable) startReusePolling();
+  }
+
+  function fallback(payload, reason, title) {
+    // No navigator.clipboard.writeText() here — writing to the clipboard without the
+    // user asking for it is a surprise, not a convenience. The textarea is selected
+    // instead, so copying is still one keypress away, but it's the user's keypress.
+    var box = document.getElementById('pp-fallback');
+    var text = JSON.stringify(payload, null, 2);
+    box.hidden = false;
+    var textarea = box.querySelector('textarea');
+    textarea.value = text;
+    document.getElementById('pp-fallback-reason').textContent =
+      reason + ' \u2014 copy the text below and paste it to Claude Code.';
+    document.getElementById('pp-fallback-title').textContent =
+      title || "Couldn't reach Claude Code";
+    textarea.select();
+  }
+
+  // Only meaningful on a reused tab (STATUS_URL set — see listener.py's
+  // SessionListener): once this question is answered, keep checking whether the process
+  // has published a new one, and reload to pick it up when it has. On the ordinary
+  // one-shot page this never runs.
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
+  async function send(kind, data) {
+    var payload = { kind: kind, data: data };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        // text/plain keeps this a CORS simple request, so there is no preflight for a
+        // file:// origin to fail.
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        // Branch on the status, not on whether fetch threw: a 403 from a stale token
+        // resolves successfully and would otherwise be reported as sent.
+        if (kind === 'submit' || kind === 'cancel' || kind === 'interrupt') {
+          fallback(payload, 'Claude Code rejected the answer (HTTP ' + res.status + ')');
+        }
+        return false;
+      }
+      return true;
+    } catch (err) {
+      // An answer is worth copying out by hand; the background traffic only tells that
+      // nobody is listening any more.
+      if (kind === 'submit' || kind === 'cancel' || kind === 'interrupt') {
+        fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      } else expire(false);
+      return false;
+    }
+  }
+
+  // "You can close this tab" is only true on the ordinary one-shot page — a reused tab
+  // (STATUS_URL set) is about to reload itself for the next question instead. A tab whose
+  // discussion started has left the shared session: nothing reloads it.
+  function doneMessage(base) {
+    return STATUS_URL && !(window.ppAsk && window.ppAsk.liveStarted)
+      ? base + ' Waiting for the next question\u2026'
+      : base + ' You can close this tab.';
+  }
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    if (stopping) { stopSend.click(); return; }
+    if (submitBtn.disabled) return;
+    var data = collect();
+    freeze('Sending\u2026');
+    if (await send('submit', data)) {
+      freeze(doneMessage('Answer sent.'));
+      document.title = '\u2705 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+
+  cancelBtn.addEventListener('click', async function () {
+    freeze('Cancelling\u2026');
+    if (await send('cancel', {})) {
+      freeze(doneMessage('Cancelled.'));
+      document.title = '\u2716 ' + BASE_TITLE;
+      startReusePolling();
+    } else status.textContent = 'Not sent.';
+  });
+
+  document.addEventListener('keydown', function (event) {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  refresh();
+  if (freeText) freeText.focus();
+  else if (inputs.length) inputs[0].focus();
+  // Proves the token and the CORS response are readable from a real page load before
+  // the operator has spent any time answering. Never consumes the one submission.
+  send('probe', {});
+  startHeartbeat();
+  // What assets/ask_live.js (the live discussion, ADR 0005) works through.
+  window.ppAsk = {
+    liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
+    collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false,
+    generation: GENERATION
+  };
+}());
+</script>
+__LIVE_SCRIPT__
+__MERMAID__
+</body>
+</html>

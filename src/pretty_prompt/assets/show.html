@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en"__THEME_ATTR__>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+__CSS__
+</style>
+</head>
+<body>
+<main__MAIN_EXTRA__>
+  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+  <div class="pp-content">
+__CONTENT__
+  </div>
+
+  <div class="pp-actions">
+__SAVE_BUTTON__
+    <div class="pp-actions-end">
+      <span id="pp-status"></span>
+__ACK_BUTTON__
+    </div>
+  </div>
+
+  <div id="pp-fallback" hidden>
+    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="pp-fallback-reason"></p>
+  </div>
+</main>
+
+<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+
+<script>
+(function () {
+  var SUBMIT_URL = __SUBMIT_URL__;
+  var STATUS_URL = __STATUS_URL__;
+  var GENERATION = __GENERATION__;
+  var RAW_CONTENT = __RAW_CONTENT__;
+  var FILENAME_BASE = __FILENAME_BASE__;
+  var THEME_KEY = 'no-text-wall:theme';
+  var BASE_TITLE = document.title;
+
+  var lightbox = document.getElementById('pp-lightbox');
+  var lightboxImg = document.getElementById('pp-lightbox-img');
+  document.querySelectorAll('main img').forEach(function (img) {
+    img.addEventListener('click', function (e) {
+      e.stopPropagation();
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.hidden = false;
+    });
+  });
+  lightbox.addEventListener('click', function () {
+    lightbox.hidden = true;
+    lightboxImg.src = '';
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && !lightbox.hidden) {
+      lightbox.hidden = true;
+      lightboxImg.src = '';
+    }
+  });
+
+  if (!document.documentElement.dataset.theme) {
+    try {
+      var stored = localStorage.getItem(THEME_KEY);
+      if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
+    } catch (e) { /* private mode: fall back to the OS preference */ }
+  }
+  document.getElementById('pp-theme').addEventListener('click', function () {
+    var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
+    var next = document.documentElement.dataset.theme
+      ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
+      : (dark ? 'light' : 'dark');
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* not persisted, still applied */ }
+  });
+
+  // Client-side only — a save never touches SUBMIT_URL, so it works exactly the same
+  // whether or not this show call is being waited on. Markdown saves RAW_CONTENT (the
+  // Markdown the agent actually passed, the portable/diffable record — see no-text-wall's
+  // "HTML is a view, never the record"); HTML saves this page's own rendered markup, a
+  // snapshot of what was on screen, tables/diff formatting and all.
+  function download(filename, mime, data) {
+    var blob = new Blob([data], { type: mime });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  var saveBtn = document.getElementById('pp-save');
+  var saveMenu = document.getElementById('pp-save-menu');
+  if (saveBtn && saveMenu) {
+    saveBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      saveMenu.hidden = !saveMenu.hidden;
+    });
+    document.addEventListener('click', function () { saveMenu.hidden = true; });
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') saveMenu.hidden = true;
+    });
+    document.getElementById('pp-save-md').addEventListener('click', function () {
+      download(FILENAME_BASE + '.md', 'text/markdown', RAW_CONTENT);
+      saveMenu.hidden = true;
+    });
+    document.getElementById('pp-save-html').addEventListener('click', function () {
+      // A static snapshot of the content, not a serialization of this live page: the
+      // theme toggle, Save/Acknowledge actions (and the save menu itself, open right
+      // now) and the scripts that drive them have no meaning once this is a plain file
+      // on disk, so they're stripped rather than saved half-working.
+      var clone = document.documentElement.cloneNode(true);
+      ['#pp-theme', '.pp-actions', '#pp-fallback', '.pp-lightbox', 'script'].forEach(
+        function (selector) {
+          clone.querySelectorAll(selector).forEach(function (el) { el.remove(); });
+        }
+      );
+      download(FILENAME_BASE + '.html', 'text/html', '<!doctype html>\n' + clone.outerHTML);
+      saveMenu.hidden = true;
+    });
+  }
+
+  var ackBtn = document.getElementById('pp-ack');
+  var status = document.getElementById('pp-status');
+
+  function fallback(payload, reason) {
+    var box = document.getElementById('pp-fallback');
+    box.hidden = false;
+    document.getElementById('pp-fallback-reason').textContent =
+      reason + ' \u2014 the report is still on screen; only the acknowledgement failed to send.';
+  }
+
+  var HEARTBEAT_MS = 15000;
+  var heartbeatTimer = null;
+  function heartbeat() { send('probe', {}); }
+  function startHeartbeat() {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(heartbeat, HEARTBEAT_MS);
+  }
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') heartbeat();
+  });
+
+  function startReusePolling() {
+    if (!STATUS_URL) return;
+    var timer = setInterval(async function () {
+      try {
+        var res = await fetch(STATUS_URL);
+        if (!res.ok) return;
+        var body = await res.json();
+        if (body.generation !== GENERATION) {
+          clearInterval(timer);
+          location.reload();
+        }
+      } catch (e) { /* process gone — nothing left to reload for */ }
+    }, 1500);
+  }
+
+  async function send(kind, data) {
+    var payload = { kind: kind, data: data };
+    try {
+      var res = await fetch(SUBMIT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        if (kind !== 'probe') {
+          fallback(payload, 'Claude Code rejected it (HTTP ' + res.status + ')');
+        }
+        return false;
+      }
+      return true;
+    } catch (err) {
+      if (kind !== 'probe') {
+        fallback(payload, 'Claude Code is no longer listening (' + err.message + ')');
+      }
+      return false;
+    }
+  }
+
+  function doneMessage(base) {
+    return STATUS_URL ? base + ' Waiting for the next thing\u2026' : base;
+  }
+
+  if (ackBtn) {
+    ackBtn.addEventListener('click', async function () {
+      ackBtn.disabled = true;
+      if (!SUBMIT_URL) {
+        // No listener behind this page (see show.py's run_show): nothing to send,
+        // acknowledging is purely a local mark that the report was seen.
+        status.textContent = 'Acknowledged.';
+        return;
+      }
+      status.textContent = 'Sending\u2026';
+      if (await send('acknowledge', {})) {
+        status.textContent = doneMessage('Acknowledged.');
+        document.title = '\u2705 ' + BASE_TITLE;
+        stopHeartbeat();
+      } else {
+        ackBtn.disabled = false;
+        status.textContent = 'Not sent.';
+      }
+    });
+  }
+
+  if (SUBMIT_URL) {
+    // Proves the token and CORS response are readable before the user has done
+    // anything, same as ask's page — never consumes the one acknowledgement.
+    send('probe', {});
+    startHeartbeat();
+  }
+  // Unlike ask's page (which only starts this once its one answer is in, so a reload
+  // can't sweep away an answer mid-composition), show has no answer to protect: it
+  // polls from the moment it loads, so a later show/ask call reusing this tab lands
+  // here as a live update instead of being silently overwritten on the server while
+  // this page keeps showing stale content.
+  startReusePolling();
+}());
+</script>
+__DECK_SCRIPT__
+__MERMAID__
+</body>
+</html>

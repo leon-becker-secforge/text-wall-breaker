@@ -1,0 +1,38 @@
+
+.pp-header { color: var(--ntw-fg-muted); font-size: 0.85em; margin: 0 40px 14px 0; }
+.pp-header > :first-child, .pp-header-body > :first-child { margin-block-start: 0; }
+.pp-header > :last-child, .pp-header-body > :last-child { margin-block-end: 0; }
+details.pp-header > summary { cursor: pointer; list-style: none; font-family: var(--pp-font-mono);
+  font-size: 0.92em; }
+details.pp-header > summary::-webkit-details-marker { display: none; }
+details.pp-header > summary::before { content: "\203A"; display: inline-block; width: 1em;
+  transition: transform .15s; }
+details.pp-header[open] > summary::before { transform: rotate(90deg); }
+.pp-header-count { border: 1px solid var(--ntw-border); border-radius: 999px; padding: 0 7px;
+  margin-inline-start: 4px; }
+.pp-header-body { margin-block-start: 6px; }
+.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 18px 0; }
+.pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
+/* One segment per question: filled = answered or already passed, ringed = current. A
+   segment before the current one is a button that goes back to that question; the
+   current and later ones are disabled (forward stays Next's job, so it keeps checking
+   each answer). Each button is 18px tall for a usable click target; its ::before is the
+   visible 6px bar. */
+.pp-segments { flex: 1; display: flex; gap: 6px; }
+.pp-seg { flex: 1; position: relative; height: 18px; padding: 0; border: 0; background: none; }
+.pp-seg::before { content: ""; position: absolute; inset-block: 6px; inset-inline: 0;
+  border-radius: 3px; background: var(--ntw-border);
+  transition: background-color .2s ease, opacity .2s ease; }
+.pp-seg.pp-seg-done::before { background: var(--ntw-accent); }
+.pp-seg.pp-seg-cur::before { background: var(--ntw-accent); opacity: .45;
+  box-shadow: 0 0 0 2px var(--ntw-bg), 0 0 0 3px var(--ntw-accent); }
+.pp-seg.pp-seg-cur.pp-seg-done::before { opacity: 1; }
+.pp-seg:not(:disabled) { cursor: pointer; }
+.pp-seg:not(:disabled):hover::before { opacity: .7; }
+.pp-seg:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px;
+  border-radius: 4px; }
+@media (prefers-reduced-motion: reduce) { .pp-seg::before { transition: none; } }
+.pp-step { display: none; }
+.pp-step.pp-step-active { display: block; }
+.pp-step .pp-question { margin: 0 0 10px; }
+.pp-step .pp-free-text { margin: 10px 0 16px; }
