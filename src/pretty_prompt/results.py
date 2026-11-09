@@ -28,6 +28,7 @@ class AskResult(TypedDict, total=False):
     cancelled: bool
     abandoned: bool
     not_delivered: bool
+    reason: str
     interrupted: bool
     resume: str
     hint: str

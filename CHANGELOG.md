@@ -10,6 +10,19 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - `review` marks the characters that changed inside an edited line. A deleted line and the
   line that replaced it get the differing words in square boxes darker than the row. A
   changed word is marked whole; lines that look nothing alike are left alone.
+- `show_status` names a report that opened in its own tab under `own_tab`; such a report's
+  acknowledgement cannot be read, and it used to read as `none`.
+- Every tool publishes an output schema.
+
+### Changed
+
+- `live` rejects the arguments of the other kind of session the same way for `ask` and
+  `review` sessions (`paths: []` and `pages: []` now count as given).
+- `review` with `repo` sends progress while it reads the diff.
+
+### Fixed
+
+- A failure while a `review` turns into a live session no longer leaves its tab claimed.
 
 ## [0.17.0] - 2026-11-08
 
