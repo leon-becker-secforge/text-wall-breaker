@@ -222,6 +222,9 @@ main img { cursor: zoom-in; }
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
   padding: 1px 6px; flex: none; white-space: nowrap; }
 .pp-option-recommended + .pp-option-details { margin-inline-start: 6px; }
+/* Top of the row, level with the first line of the label: with a long label that wraps,
+   a centered tag floats beside its middle lines. */
+.pp-option-recommended, .pp-option-select > .pp-option-details { align-self: flex-start; }
 /* A radio cleared by clicking it again (see the script) shows that only while its row is
    hovered: the radio empties and takes a slash, previewing the cleared state. Not a
    "click again to clear" line in the row: any placement of it either squeezed a long

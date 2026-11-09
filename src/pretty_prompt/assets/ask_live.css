@@ -11,7 +11,16 @@
 .pp-live-ask:focus-visible, .pp-question:hover .pp-live-ask { opacity: 1; }
 @media (hover: none) { .pp-live-ask { opacity: 1; } }
 .pp-option { position: relative; }
-.pp-option .pp-option-select { padding-right: 40px; }
+/* Beside the card, in the gutter where the question's bubble is, so the row's right edge
+   stays the Recommended tag's and the Details pill's. The strip keeps the card hovered
+   while the pointer crosses the gap to the bubble. A narrow window has no gutter: the
+   bubble then takes a slot inside the row. */
+@media (min-width: 700px) {
+  .pp-option .pp-live-ask { right: -38px; top: 4px; }
+  .pp-option::after { content: ""; position: absolute; top: 0; bottom: 0; right: -44px;
+    width: 44px; }
+}
+@media (max-width: 699px) { .pp-option .pp-option-select { padding-right: 40px; } }
 .pp-question { position: relative; }
 .pp-question .pp-live-ask { top: 0; right: -36px; }
 

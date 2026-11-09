@@ -19,6 +19,10 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Changed
 
+- On a live-capable `ask` page the thought bubble sits beside the card, in the gutter where
+  the question's bubble is, instead of in a slot inside every row. The Recommended tag and
+  the Details pill are back at the row's right edge, and level with the label's first line
+  when a long label wraps. A window narrower than 700px keeps the bubble inside the row.
 - A mermaid diagram is drawn when it is first on screen, so a diagram inside a slide or
   page that starts hidden is no longer drawn with no size.
 
