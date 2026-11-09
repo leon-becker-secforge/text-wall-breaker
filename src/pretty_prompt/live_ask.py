@@ -17,7 +17,7 @@ from collections.abc import Callable
 from typing import Any
 
 from .listener import ABANDON_SECONDS, Submission
-from .live_common import POLL_SECONDS, LiveError, Reply, Tab
+from .live_common import POLL_SECONDS, LiveCall, LiveError, Reply, Tab, no_such_session
 from .markdown import render_markdown
 from .session import detach_shared_session, forget_live, register_live
 
@@ -143,24 +143,21 @@ class LiveAsk:
 
     # ---- the agent ----
 
-    def call(
-        self,
-        *,
-        session_id: str,
-        replies: list[Reply],
-        wait: bool,
-        update: tuple[str | None, list[Any] | None] | None = None,
-    ) -> dict[str, Any]:
+    def call(self, request: LiveCall) -> dict[str, Any]:
         """One `live` call: post, maybe replace the question or options, then wait for the
-        operator's next message. `update` is the new question and options (None: keep)."""
+        operator's next message."""
+        if request.has_review_arguments():
+            raise LiveError("refresh, git_range, paths, pages and notes are for review sessions")
+        update = (request.question, request.options) if request.has_ask_arguments() else None
+        wait = request.wait
         with self._cond:
-            if session_id != self.id or self._done:
-                raise LiveError(f"no live session {session_id!r}: it ended or never existed")
+            if request.session_id != self.id or self._done:
+                raise no_such_session(request.session_id)
             if self._blocking:
                 raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
                 return self._finish(refresh_dropped=update is not None)
-            for reply in replies:
+            for reply in request.replies:
                 self._post(reply)
             self._since = time.monotonic()
             self._version += 1

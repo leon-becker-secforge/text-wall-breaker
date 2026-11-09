@@ -16,6 +16,7 @@ import os
 import secrets
 import shutil
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -456,8 +457,17 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
     return _result_from_submission(request.pages, submission, progress, request.expansion())
 
 
-def run_review(request: ReviewRequest, *, live: bool = False) -> dict[str, Any]:
+def run_review(
+    request: ReviewRequest,
+    *,
+    live: bool = False,
+    start_live: Callable[[SessionListener, int], dict[str, Any]] | None = None,
+) -> dict[str, Any]:
     """Open the page for `request` and block until it is submitted, cancelled, or abandoned.
+
+    When the user starts a live session (or `live` is set), `start_live(session, generation)`
+    builds it on the shared tab and returns what the caller gets instead of a result; without
+    it the result is `{LIVE_START: generation}`.
 
     Returns `{"comments": [...], "page_notes": [{"path", "text"}], "overall_note": "..." |
     None}` on Submit, the same
@@ -478,13 +488,18 @@ def run_review(request: ReviewRequest, *, live: bool = False) -> dict[str, Any]:
 
     session = get_shared_session()
     if session.try_claim():
-        result: dict[str, Any] = {}
+        # A live session keeps the tab claimed until it ends (see live.LiveSession), so the
+        # tab is released unless `start_live` took it over; if that raises, it is released.
+        keep_tab = False
         try:
             result = _run_review_reusing_tab(request, session, live=live)
+            if LIVE_START in result:
+                if start_live is not None:
+                    result = start_live(session, result[LIVE_START])
+                keep_tab = True
             return result
         finally:
-            # A live session keeps the tab claimed until it ends (see live.LiveSession).
-            if LIVE_START not in result:
+            if not keep_tab:
                 session.release()
     if live:
         raise InvalidReview(

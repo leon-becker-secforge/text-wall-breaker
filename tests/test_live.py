@@ -1,10 +1,12 @@
 import threading
 import time
+from typing import Any
 
 import pytest
 
 from pretty_prompt.listener import LiveHandler, Submission
 from pretty_prompt.live import LiveError, LiveSession, Reply
+from pretty_prompt.live_common import LiveCall
 from pretty_prompt.review import Page, ReviewRequest
 
 DIFF = """--- a/a.txt
@@ -74,19 +76,8 @@ def make(diff=DIFF):
     return session, live
 
 
-def call(live, **kwargs):
-    args = {
-        "session_id": live.id,
-        "replies": [],
-        "refresh": False,
-        "git_range": None,
-        "paths": None,
-        "pages": None,
-        "notes": None,
-        "wait": True,
-    }
-    args.update(kwargs)
-    return live.call(**args)
+def call(live, session_id: str | None = None, **kwargs: Any):
+    return live.call(LiveCall(session_id=session_id or live.id, **kwargs))
 
 
 def comment(line=2, text="why?", **extra):
@@ -223,3 +214,11 @@ def test_a_stale_session_id_is_refused():
     _, live = make()
     with pytest.raises(LiveError, match="no live session"):
         call(live, session_id="ls-0")
+
+
+def test_a_review_session_rejects_ask_arguments():
+    _, live = make()
+    with pytest.raises(LiveError, match="ask sessions"):
+        call(live, question="new?")
+    with pytest.raises(LiveError, match="ask sessions"):
+        call(live, options=[])

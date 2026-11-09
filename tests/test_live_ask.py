@@ -13,7 +13,7 @@ from pretty_prompt import session as session_module
 from pretty_prompt.ask import AskRequest, InvalidAsk, Option, Question, run_ask
 from pretty_prompt.listener import Submission
 from pretty_prompt.live_ask import LiveAsk
-from pretty_prompt.live_common import LiveError, Reply
+from pretty_prompt.live_common import LiveCall, LiveError, Reply
 from pretty_prompt.page import build_multi_page, build_page
 
 
@@ -52,8 +52,21 @@ def chat(live, text, ref=None):
     return live.handle({"type": "chat", "text": text, "ref": ref})
 
 
+def call_as(live, session_id, *, replies=None, wait=True, update=None):
+    question, options = update or (None, None)
+    return live.call(
+        LiveCall(
+            session_id=session_id,
+            replies=replies or [],
+            wait=wait,
+            question=question,
+            options=options,
+        )
+    )
+
+
 def call(live, *, replies=None, wait=True):
-    return live.call(session_id=live.id, replies=replies or [], wait=wait)
+    return call_as(live, live.id, replies=replies, wait=wait)
 
 
 def test_a_message_about_an_option_reaches_the_agent_with_the_option():
@@ -198,13 +211,11 @@ def test_the_operator_starts_a_discussion_and_the_answer_comes_through_live(tab)
             "data": {"type": "chat", "text": "why A?", "ref": {"question": 0, "option": "a"}},
         },
     )
-    assert live.call(session_id=session_id, replies=[], wait=True)["messages"] == [
-        {"chat": "why A?", "option": "a"}
-    ]
-    live.call(session_id=session_id, replies=[Reply(to="chat", text="cheaper")], wait=False)
+    assert call_as(live, session_id, wait=True)["messages"] == [{"chat": "why A?", "option": "a"}]
+    call_as(live, session_id, replies=[Reply(to="chat", text="cheaper")], wait=False)
     _post(submit, {"kind": "submit", "data": {"selected": ["a"], "free_text": ""}})
 
-    result = live.call(session_id=session_id, replies=[], wait=True)
+    result = call_as(live, session_id, wait=True)
     assert result["selected"] == ["a"]
     assert [m["from"] for m in result["chat"]] == ["operator", "agent"]
     assert session_module.live_for(session_id) is None
@@ -226,9 +237,9 @@ def test_the_agent_replaces_the_options_and_learns_which_picks_are_gone(tab):
     )
     session_id, live = _start(tab, request, [picked])
 
-    result = live.call(
-        session_id=session_id,
-        replies=[],
+    result = call_as(
+        live,
+        session_id,
         wait=False,
         update=("Which one now?", [{"id": "b", "label": "B"}, {"id": "c", "label": "C"}]),
     )
@@ -242,20 +253,20 @@ def test_the_agent_replaces_the_options_and_learns_which_picks_are_gone(tab):
     # The new option is addressable; the removed one no longer is.
     _post(submit, {"kind": "live", "data": {"type": "chat", "text": "c?", "ref": {"option": "c"}}})
     _post(submit, {"kind": "live", "data": {"type": "chat", "text": "a?", "ref": {"option": "a"}}})
-    assert live.call(session_id=session_id, replies=[], wait=True)["messages"] == [
+    assert call_as(live, session_id, wait=True)["messages"] == [
         {"chat": "c?", "option": "c"},
         {"chat": "a?"},
     ]
     # The answer is read against the new options.
     _post(submit, {"kind": "submit", "data": {"selected": ["a", "c"], "free_text": ""}})
-    assert live.call(session_id=session_id, replies=[], wait=True)["selected"] == ["c"]
+    assert call_as(live, session_id, wait=True)["selected"] == ["c"]
 
 
-def test_a_refresh_with_nothing_to_change_publishes_nothing(tab):
+def test_a_call_without_question_or_options_publishes_nothing(tab):
     request = AskRequest(question="Which?", options=[Option(id="a", label="A")])
     session_id, live = _start(tab, request, [])
-    result = live.call(session_id=session_id, replies=[], wait=False, update=(None, None))
-    assert result == {"posted": True, "messages": [], "refreshed": {"dropped_picks": []}}
+    result = call_as(live, session_id, wait=False)
+    assert result == {"posted": True, "messages": []}
     assert tab.current_page()[1] == 1
     live._session.close()
 
@@ -266,7 +277,7 @@ def test_a_refresh_that_would_leave_no_way_to_answer_is_refused(tab):
     )
     session_id, live = _start(tab, request, [])
     with pytest.raises(LiveError, match="no way to answer"):
-        live.call(session_id=session_id, replies=[], wait=False, update=(None, []))
+        call_as(live, session_id, wait=False, update=(None, []))
     live._session.close()
 
 
@@ -274,7 +285,7 @@ def test_a_multi_question_ask_cannot_be_refreshed(tab):
     questions = [Question(question="One", options=[Option(id="a", label="A")])]
     session_id, live = _start(tab, AskRequest(questions=questions), [])
     with pytest.raises(LiveError, match="one question"):
-        live.call(session_id=session_id, replies=[], wait=False, update=("x", None))
+        call_as(live, session_id, wait=False, update=("x", None))
     live._session.close()
 
 
@@ -283,7 +294,7 @@ def test_a_refresh_after_the_end_is_dropped(tab):
     request = AskRequest(question="Which?", options=[Option(id="a", label="A")])
     session_id, live = _start(tab, request, [])
     _post(submit, {"kind": "submit", "data": {"selected": ["a"], "free_text": ""}})
-    result = live.call(session_id=session_id, replies=[], wait=False, update=("new", None))
+    result = call_as(live, session_id, wait=False, update=("new", None))
     assert result["selected"] == ["a"] and result["refresh_dropped"] is True
 
 
@@ -319,7 +330,7 @@ def test_a_multi_question_ask_reports_the_question_of_a_message(tab):
         },
     )
     live = session_module.live_for(session_id)
-    assert live.call(session_id=session_id, replies=[], wait=True)["messages"] == [
+    assert call_as(live, session_id, wait=True)["messages"] == [
         {"chat": "?", "option": "b", "question": 1}
     ]
     live._session.close()
@@ -363,3 +374,12 @@ def test_the_multi_question_page_is_live_too():
         live="offer",
     )
     assert "pp-live-panel" in html and 'liveMode: "offer"' in html and "__LIVE" not in html
+
+
+@pytest.mark.parametrize(
+    "extra", [{"refresh": True}, {"git_range": "HEAD"}, {"paths": []}, {"pages": []}, {"notes": []}]
+)
+def test_an_ask_session_rejects_review_arguments(extra):
+    _, live = make()
+    with pytest.raises(LiveError, match="review sessions"):
+        live.call(LiveCall(session_id=live.id, wait=False, **extra))

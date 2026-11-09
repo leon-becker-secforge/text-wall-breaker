@@ -1,11 +1,9 @@
 """The `pretty-prompt` MCP server.
 
-One tool, `ask`: a richer alternative to Claude Code's built-in AskUserQuestion. Instead
-of rendering options in the terminal panel it opens a real page in the desktop browser,
-so a question can carry unlimited options, Markdown bodies and images.
-
-The server name is deliberately broader than its one tool — more tools are expected here
-later — but nothing in this module is generalised ahead of a second one existing.
+Browser pages for the user instead of terminal text: `ask` is a richer alternative to
+Claude Code's built-in AskUserQuestion, `show` and `review` present a result or a diff, and
+`live` carries the conversation of a session that `ask` or `review` started. Each tool's
+description is what the agent reads, so it is kept under MAX_TOOL_DESCRIPTION_CHARS.
 """
 
 from __future__ import annotations
@@ -33,12 +31,12 @@ from .ask import (
     run_ask,
 )
 from .gitdiff import GitDiffError, pages_from_git
-from .live import ATTACH_INSTRUCTION, LiveError, LiveSession, Reply, RepoSource
-from .live_ask import LiveAsk
+from .listener import SessionListener
+from .live import ATTACH_INSTRUCTION, LiveSession, RepoSource
+from .live_common import LiveCall, LiveError, Reply, no_such_session
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .review import (
-    LIVE_START,
     InvalidReview,
     Note,
     Page,
@@ -46,7 +44,7 @@ from .review import (
     build_live_html,
     run_review,
 )
-from .session import get_shared_session, live_for
+from .session import live_for
 from .show import InvalidShow, ShowRequest, run_show, show_status
 
 __all__ = [
@@ -485,7 +483,7 @@ async def review(
             repo=repo, git_range=git_range, paths=paths, context_lines=context_lines
         )
         try:
-            pages, files = await anyio.to_thread.run_sync(_load_repo, source)
+            pages, files = await _blocking(ctx, partial(_load_repo, source))
         except GitDiffError as exc:
             raise ToolError(str(exc)) from exc
     request = ReviewRequest(
@@ -501,26 +499,27 @@ async def review(
     except InvalidReview as exc:
         raise ToolError(str(exc)) from exc
 
+    validated = request.validated()
+
+    def start_live(session: SessionListener, generation: int) -> dict[str, Any]:
+        started = LiveSession(
+            session,
+            validated,
+            source,
+            build_html=lambda req, generation: build_live_html(req, session, generation),
+            load_repo=_load_repo,
+            generation=generation,
+        )
+        return {"live": {"session": started.id}, "instruction": ATTACH_INSTRUCTION}
+
     try:
         # run_review owns a socket and, ordinarily, a browser tab for its whole
         # duration — off the event loop for the same reason ask's run_ask is.
-        result = await _blocking(ctx, partial(run_review, request, live=live))
+        return await _blocking(ctx, partial(run_review, request, live=live, start_live=start_live))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the review page: {exc}") from exc
     except InvalidReview as exc:
         raise ToolError(str(exc)) from exc
-    if LIVE_START not in result:
-        return result
-    session = get_shared_session()
-    started = LiveSession(
-        session,
-        request.validated(),
-        source,
-        build_html=lambda req, generation: build_live_html(req, session, generation),
-        load_repo=_load_repo,
-        generation=result[LIVE_START],
-    )
-    return {"live": {"session": started.id}, "instruction": ATTACH_INSTRUCTION}
 
 
 def _load_repo(source: RepoSource) -> tuple[list[Page], dict[str, str]]:
@@ -584,43 +583,23 @@ async def live(
     ] = True,
     ctx: Context | None = None,
 ) -> dict[str, Any]:
-    live_session = live_for(session)
-    if isinstance(live_session, LiveAsk):
-        if refresh or git_range is not None or paths is not None or pages or notes is not None:
-            raise ToolError("refresh, git_range, paths, pages and notes are for review sessions")
-        update = (question, options) if question is not None or options is not None else None
-        try:
-            return await _blocking(
-                ctx,
-                partial(
-                    live_session.call,
-                    session_id=session,
-                    replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
-                    wait=wait,
-                    update=update,
-                ),
-            )
-        except LiveError as exc:
-            raise ToolError(str(exc)) from exc
-    if not isinstance(live_session, LiveSession):
-        raise ToolError(f"no live session {session!r}: it ended or never existed")
-    if question is not None or options is not None:
-        raise ToolError("question and options are for ask sessions")
+    target = live_for(session)
+    if target is None:
+        raise ToolError(str(no_such_session(session)))
+    call = LiveCall(
+        session_id=session,
+        replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
+        wait=wait,
+        refresh=refresh,
+        git_range=git_range,
+        paths=paths,
+        pages=pages,
+        notes=notes,
+        question=question,
+        options=options,
+    )
     try:
-        return await _blocking(
-            ctx,
-            partial(
-                live_session.call,
-                session_id=session,
-                replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
-                refresh=refresh,
-                git_range=git_range,
-                paths=paths,
-                pages=pages,
-                notes=notes,
-                wait=wait,
-            ),
-        )
+        return await _blocking(ctx, partial(target.call, call))
     except (LiveError, GitDiffError) as exc:
         raise ToolError(str(exc)) from exc
 

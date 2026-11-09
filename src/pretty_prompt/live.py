@@ -24,7 +24,7 @@ from typing import Any
 
 from .diff import DiffLine, parse_unified_diff
 from .listener import ABANDON_SECONDS, Submission
-from .live_common import POLL_SECONDS, LiveError, Reply, Tab
+from .live_common import POLL_SECONDS, LiveCall, LiveError, Reply, Tab, no_such_session
 from .markdown import render_markdown
 from .review import (
     InvalidReview,
@@ -330,35 +330,30 @@ class LiveSession:
 
     # ---- the agent ----
 
-    def call(
-        self,
-        *,
-        session_id: str,
-        replies: list[Reply],
-        refresh: bool,
-        git_range: str | None,
-        paths: list[str] | None,
-        pages: list[Page] | None,
-        notes: list[Note] | None,
-        wait: bool,
-    ) -> dict[str, Any]:
-        """One `review_live` call: post, maybe refresh, then wait for the operator."""
+    def call(self, request: LiveCall) -> dict[str, Any]:
+        """One `live` call: post, maybe refresh, then wait for the operator."""
+        if request.has_ask_arguments():
+            raise LiveError("question and options are for ask sessions")
+        pages: list[Page] | None = request.pages
+        notes: list[Note] | None = request.notes
+        wants_refresh = request.refresh or bool(pages) or notes is not None
         with self._cond:
-            if session_id != self.id or self._done:
-                raise LiveError(f"no live session {session_id!r}: it ended or never existed")
+            if request.session_id != self.id or self._done:
+                raise no_such_session(request.session_id)
             if self._blocking:
                 raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
-                wants_refresh = refresh or bool(pages) or notes is not None
                 return self._finish(refresh_dropped=wants_refresh)
-            for reply in replies:
+            for reply in request.replies:
                 self._post(reply)
             self._since = time.monotonic()
             self._version += 1
-        if refresh or pages or notes is not None:
-            self._refresh(git_range=git_range, paths=paths, pages=pages, notes=notes)
+        if wants_refresh:
+            self._refresh(
+                git_range=request.git_range, paths=request.paths, pages=pages, notes=notes
+            )
         with self._cond:
-            if not wait:
+            if not request.wait:
                 return {"posted": True, "messages": self._take_inbox()}
             self._blocking = True
             self._since = time.monotonic()
