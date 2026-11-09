@@ -12,7 +12,7 @@ import os
 import sys
 from collections.abc import Callable
 from functools import partial
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, Protocol, cast
 
 import anyio
 import anyio.to_thread
@@ -44,6 +44,7 @@ from .live import ATTACH_INSTRUCTION, LiveSession, RepoSource
 from .live_common import LiveCall, LiveError, Reply, no_such_session
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
+from .results import AskResult, LiveResult, ReviewResult, ShowResult, ShowStatusResult
 from .review import (
     InvalidReview,
     Note,
@@ -191,7 +192,7 @@ async def ask(
         ),
     ] = None,
     ctx: Context | None = None,
-) -> dict[str, Any]:
+) -> AskResult:
     request = AskRequest(
         question=question,
         options=options or [],
@@ -212,7 +213,7 @@ async def ask(
     try:
         # run_ask owns a socket and a browser tab for its whole duration. Off the event
         # loop, so a second ask can open its own tab while this one is still waiting.
-        return await _blocking(ctx, partial(run_ask, request))
+        return cast(AskResult, await _blocking(ctx, partial(run_ask, request)))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the question page: {exc}") from exc
 
@@ -250,7 +251,7 @@ async def show(
         ),
     ] = False,
     ctx: Context | None = None,
-) -> dict[str, Any]:
+) -> ShowResult:
     request = ShowRequest(
         content=content,
         slides=slides,
@@ -269,14 +270,14 @@ async def show(
     try:
         # Writing and xdg-open are both quick, but off the event loop for the same
         # reason ask's run_ask is: nothing here should block the server's loop.
-        return await _blocking(ctx, partial(run_show, request))
+        return cast(ShowResult, await _blocking(ctx, partial(run_show, request)))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the page: {exc}") from exc
 
 
 @server.tool(name="show_status", description=SHOW_STATUS_DESCRIPTION)
-async def show_status_tool() -> dict[str, Any]:
-    return show_status()
+async def show_status_tool() -> ShowStatusResult:
+    return cast(ShowStatusResult, show_status())
 
 
 @server.tool(name="review", description=REVIEW_DESCRIPTION)
@@ -331,7 +332,7 @@ async def review(
         ),
     ] = False,
     ctx: Context | None = None,
-) -> dict[str, Any]:
+) -> ReviewResult:
     if repo is None and (git_range is not None or paths):
         raise ToolError("git_range and paths need repo")
     files: dict[str, str] = {}
@@ -375,7 +376,10 @@ async def review(
     try:
         # run_review owns a socket and, ordinarily, a browser tab for its whole
         # duration — off the event loop for the same reason ask's run_ask is.
-        return await _blocking(ctx, partial(run_review, request, live=live, start_live=start_live))
+        return cast(
+            ReviewResult,
+            await _blocking(ctx, partial(run_review, request, live=live, start_live=start_live)),
+        )
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the review page: {exc}") from exc
     except InvalidReview as exc:
@@ -442,7 +446,7 @@ async def live(
         bool, Field(description="Block for the user's next message (false: post and return).")
     ] = True,
     ctx: Context | None = None,
-) -> dict[str, Any]:
+) -> LiveResult:
     target = live_for(session)
     if target is None:
         raise ToolError(str(no_such_session(session)))
@@ -459,7 +463,7 @@ async def live(
         options=options,
     )
     try:
-        return await _blocking(ctx, partial(target.call, call))
+        return cast(LiveResult, await _blocking(ctx, partial(target.call, call)))
     except (LiveError, GitDiffError) as exc:
         raise ToolError(str(exc)) from exc
 
