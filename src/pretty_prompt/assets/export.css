@@ -1,0 +1,25 @@
+/* The export button beside the theme toggle and the popover it opens (assets/export.js). */
+#pp-export-btn { position: absolute; top: -4px; right: 34px; width: 30px; height: 30px; padding: 0;
+  border: none; background: transparent; color: var(--ntw-fg-muted); border-radius: 999px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center; }
+#pp-export-btn:hover, #pp-export-btn[aria-expanded="true"] { background: var(--ntw-border);
+  color: var(--ntw-fg); }
+#pp-export-btn svg { width: 18px; height: 18px; }
+#pp-export { position: absolute; top: 34px; right: 0; z-index: 20;
+  width: min(380px, calc(100vw - 32px)); box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid var(--ntw-border); border-radius: 8px; background: var(--ntw-bg-elevated);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35); }
+#pp-export[hidden] { display: none; }
+#pp-export strong { display: block; }
+#pp-export p { margin: 4px 0 0; color: var(--ntw-fg-muted); font-size: 0.88em; }
+#pp-export textarea { width: 100%; box-sizing: border-box; margin-block-start: 8px;
+  border: 1px solid var(--ntw-border); border-radius: 6px; background: var(--ntw-bg);
+  color: var(--ntw-fg); font-family: var(--pp-font-mono); font-size: 0.8em; padding: 8px; }
+#pp-export .pp-export-row { display: flex; gap: 8px; margin-top: 8px; justify-content: flex-end; }
+#pp-export .pp-export-row button { height: 30px; border-radius: 6px; padding: 0 12px;
+  cursor: pointer; font-family: var(--pp-font-mono); font-size: 0.8em;
+  border: 1px solid var(--ntw-fg-muted); background: transparent; color: var(--ntw-fg); }
+#pp-export .pp-export-row button:hover { background: var(--pp-btn-tint); }
+#pp-export .pp-export-row button.primary { border-color: var(--ntw-accent);
+  background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
+#pp-export .pp-export-row button.primary:hover { filter: brightness(0.9); }

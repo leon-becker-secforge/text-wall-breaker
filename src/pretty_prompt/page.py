@@ -754,7 +754,12 @@ def build_review_page(
     for one file, since the session card lives at its top.
     """
     with_files = len(pages) > 1 or live != "off"
-    css = _load_base_css() + _load_asset("actions.css") + _load_asset("review.css")
+    css = (
+        _load_base_css()
+        + _load_asset("actions.css")
+        + _load_asset("review.css")
+        + _load_asset("export.css")
+    )
     if live != "off":
         css += _load_asset("live.css")
     if accent is not None:
@@ -780,6 +785,7 @@ def build_review_page(
             "__BODY_CLASS__": ' class="pp-has-files"' if with_files else "",
             "__DECK_SCRIPT__": _review_files_script(with_files),
             "__LIVE_SCRIPT__": live_script,
+            "__EXPORT_SCRIPT__": _export_script(),
             "__MERMAID__": _mermaid_script(_needs_mermaid(content_html, header_html)),
             "__SUBMIT_URL__": _js_string(submit_url),
             "__STATUS_URL__": _js_string(status_url),
@@ -830,6 +836,7 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
 #   see the module docstring for why this stopped composing onto base.css's `.card` and
 #   `.theme-toggle`. multi.css is layered onto it (not merged) for the wizard page only:
 #   a progress bar in place of the single question.
+# - export.css: the export button and popover of ask, the wizard and review (export.js).
 # - show.css and review.css deliberately duplicate ask.css's palette, font, actions and
 #   fallback rules rather than share them, so a page does not carry rules for elements it
 #   never renders. review.css's own pieces (from `.pp-review-path` down) are a whole-row
@@ -1124,6 +1131,11 @@ def _deck_script(needed: bool) -> str:
     return "<script>\n" + _load_asset("deck.js") + "</script>"
 
 
+def _export_script() -> str:
+    """The `<script>` of the export button, on every page that takes an answer."""
+    return "<script>\n" + _load_asset("export.js").replace("</", "<\\/") + "\n</script>"
+
+
 def _ask_live_assets(live: str) -> tuple[str, str]:
     """The stylesheet and `<script>` of the live discussion, or two empty strings if "off".
 
@@ -1183,6 +1195,7 @@ def build_page(
         _load_base_css()
         + _load_asset("actions.css")
         + _load_asset("ask.css")
+        + _load_asset("export.css")
         + live_css
         + glossary_css
     )
@@ -1238,6 +1251,7 @@ def build_page(
         .replace("__GENERATION__", _js_string(generation))
         .replace("__LIVE_MODE__", _js_string(live))
         .replace("__LIVE_SCRIPT__", live_script)
+        .replace("__EXPORT_SCRIPT__", _export_script())
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(question_html, options_html)))
     )
 
@@ -1379,6 +1393,7 @@ def build_multi_page(
         + _load_asset("actions.css")
         + _load_asset("ask.css")
         + _load_asset("multi.css")
+        + _load_asset("export.css")
         + live_css
         + glossary_css
     )
@@ -1424,5 +1439,6 @@ def build_multi_page(
         .replace("__MERMAID_SRC__", _js_string(_MERMAID_SRC))
         .replace("__LIVE_MODE__", _js_string(live))
         .replace("__LIVE_SCRIPT__", live_script)
+        .replace("__EXPORT_SCRIPT__", _export_script())
         .replace("__MERMAID__", _mermaid_script(_needs_mermaid(header_html, steps_html)))
     )

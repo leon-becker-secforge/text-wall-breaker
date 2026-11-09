@@ -3,6 +3,9 @@ from __future__ import annotations
 import difflib
 import json
 import re
+import shutil
+import subprocess
+from importlib import resources
 
 import pytest
 
@@ -877,3 +880,26 @@ def test_a_page_without_notes_has_no_note_markup():
     html = _review("a.py")
     assert '<div class="pp-notes-bar">' not in html
     assert '<button type="button" class="pp-note-mark' not in html
+
+
+@pytest.mark.parametrize("build", [_page, _multi_page, lambda: _review("a.py")])
+def test_a_page_that_takes_an_answer_carries_the_export_button(build):
+    html = build()
+    assert "__EXPORT_SCRIPT__" not in html
+    assert "pp-export-btn" in html and "#pp-export {" in html
+
+
+def test_show_has_nothing_to_export():
+    html = build_show_page(content="# R", submit_url="http://x")
+    assert "pp-export" not in html
+
+
+def test_the_export_script_is_valid_javascript():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    asset = resources.files("pretty_prompt").joinpath("assets", "export.js")
+    result = subprocess.run(  # noqa: S603 — fixed argv: the node found above, our own asset
+        [node, "--check", str(asset)], capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, result.stderr

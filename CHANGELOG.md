@@ -7,6 +7,10 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `ask` and `review` pages have an export icon beside the theme toggle: a panel with the
+  answer entered so far as the JSON the page shows when Claude Code stops waiting, and a Copy
+  button. The user can hand the answer over by hand before a connection breaks; the page
+  stays open and nothing is sent.
 - The `pp-review` MCP prompt asks the agent to review the current branch against its base
   with `review`, annotating the most important changes. Optional argument: `base`.
 - `review` shows a status letter per file, in the file list and above the diff: `A` added,

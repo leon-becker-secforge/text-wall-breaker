@@ -213,6 +213,15 @@ slept. Browsers slow a background tab's timers to about once a minute, which is 
 window is that long. An abandoned `ask` returns `resume` like a cancelled one, when
 answers were entered.
 
+### Exporting an answer by hand
+
+Every `ask` and `review` page has a download icon beside the theme toggle. It opens a
+panel with the answer entered so far as the same JSON the page shows when Claude Code
+stops waiting, and a Copy button. The user can paste that to Claude Code at any time,
+for example before a long wait could end the call. The page stays open and usable, and
+nothing is sent. The Copy button writes to the clipboard on the user's click; the page
+never copies anything on its own. `show` has no icon: the user enters nothing there.
+
 ### Long waits and background tasks
 
 Claude Code moves an MCP call still running after 120 s to a background task. The
