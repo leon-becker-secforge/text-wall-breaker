@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-09
+
 ### Added
 
 - `review` marks the characters that changed inside an edited line. A deleted line and the
