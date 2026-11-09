@@ -163,3 +163,26 @@ Returns `{"state": "unacknowledged" | "acknowledged" | "none", "title": "..."}`.
 report that opened in its own one-off tab (shared tab busy, or holding an unread
 report) cannot be tracked: its title comes as `own_tab`, and its acknowledgement is
 unknown. `title` tells you which shared-tab report the state is about."""
+
+
+def pp_review_prompt(base: str | None) -> str:
+    """The text of the `pp-review` prompt: review the current branch against its base."""
+    base_step = (
+        f"The base is `{base}`."
+        if base
+        else "Find the base: the branch's upstream if it has one, else the repository's default "
+        "branch (`git symbolic-ref refs/remotes/origin/HEAD`, else `main` or `master`)."
+    )
+    return f"""Have the user review the current branch against its base with the pretty-prompt \
+`review` tool.
+
+1. {base_step} Use `git merge-base <base> HEAD` as the start, so the diff holds only this \
+branch's changes.
+2. Read the diff yourself first (`git diff <merge-base>..HEAD`) and pick the changes that matter \
+most: behavior changes, risky or non-obvious logic, public interfaces, and anything the user \
+could not guess from the file name. Skip mechanical changes (renames, formatting, generated \
+files).
+3. Call `review` with `repo` set to the repository root, `git_range` set to \
+`<merge-base>..HEAD`, and `notes` holding one remark per important change: what it does and why. \
+Keep each note short. Do not pass the diff as `pages`.
+4. When the call returns, work through the user's comments and notes, and answer each."""

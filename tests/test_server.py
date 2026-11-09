@@ -7,6 +7,7 @@ import time
 import anyio
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
+from mcp.types import GetPromptResult, TextContent
 from test_live import make as make_live
 
 from pretty_prompt.server import (
@@ -265,3 +266,26 @@ def test_a_note_side_is_an_enum_in_the_schema():
     review = next(t for t in anyio.run(server.list_tools) if t.name == "review")
     note = review.input_schema["$defs"]["Note"]["properties"]
     assert note["side"]["enum"] == ["new", "old"]
+
+
+def _prompt_text(**arguments: str) -> str:
+    result = anyio.run(server.get_prompt, "pp-review", arguments)
+    assert isinstance(result, GetPromptResult)
+    content = result.messages[0].content
+    assert isinstance(content, TextContent)
+    return content.text
+
+
+def test_pp_review_prompt_is_listed_and_asks_for_a_review_with_notes():
+    [prompt] = anyio.run(server.list_prompts)
+    assert prompt.name == "pp-review"
+    assert [arg.name for arg in prompt.arguments or []] == ["base"]
+    text = _prompt_text()
+    assert "`review`" in text and "merge-base" in text and "`notes`" in text
+    assert "branch's upstream" in text
+
+
+def test_pp_review_prompt_takes_an_explicit_base():
+    text = _prompt_text(base="release/1.x")
+    assert "The base is `release/1.x`." in text
+    assert "upstream" not in text

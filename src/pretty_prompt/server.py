@@ -38,6 +38,7 @@ from .descriptions import (
     REVIEW_DESCRIPTION,
     SHOW_DESCRIPTION,
     SHOW_STATUS_DESCRIPTION,
+    pp_review_prompt,
 )
 from .gitdiff import GitDiffError, pages_from_git
 from .listener import SessionListener
@@ -299,6 +300,16 @@ async def show(
         return cast(ShowResult, await _blocking(ctx, partial(run_show, request)))
     except BrowserUnavailable as exc:
         raise ToolError(f"could not open the page: {exc}") from exc
+
+
+@server.prompt(
+    name="pp-review",
+    title="Review the current branch",
+    description="Review the current branch against its base in the browser, with your "
+    "annotations on the most important changes.",
+)
+def pp_review(base: str | None = None) -> str:
+    return pp_review_prompt(base)
 
 
 @server.tool(name="show_status", description=SHOW_STATUS_DESCRIPTION)

@@ -421,6 +421,15 @@ Each page has a "Note on this file" box below its diff for a remark about the wh
 and an "Overall note" box below the pages holds one for the whole call; neither is tied to
 a line. Once Submit or Cancel is sent, nothing accepts further input.
 
+### The `pp-review` prompt
+
+The server offers one MCP prompt, `pp-review`. It asks the agent to find the current
+branch's base, read the diff, call `review` with `repo` and a `git_range` of
+`<merge-base>..HEAD`, and add `notes` on the most important changes. The optional `base`
+argument names the base; without it the agent uses the branch's upstream, else the default
+branch. Claude Code lists an MCP prompt as `/mcp__pretty-prompt__pp-review`, with `base` as
+the argument.
+
 ### Result
 
 ```json

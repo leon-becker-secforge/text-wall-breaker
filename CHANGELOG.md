@@ -7,6 +7,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- The `pp-review` MCP prompt asks the agent to review the current branch against its base
+  with `review`, annotating the most important changes. Optional argument: `base`.
 - `review` shows a status letter per file, in the file list and above the diff: `A` added,
   `M` modified, `D` deleted, `R` renamed. `repo` reads it from git, `pages` from the diff text.
 - `review` with `repo` detects renames: a renamed file is one page under its new path instead
