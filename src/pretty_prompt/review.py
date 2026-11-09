@@ -27,6 +27,7 @@ from .diff import (
     DiffLine,
     InvalidDiff,
     expansion_lines,
+    file_status,
     parse_unified_diff,
     rows_with_context,
     shown_new_side,
@@ -223,9 +224,12 @@ def _build_html(
             root=request.root,
             asset_base_url=asset_base_url,
         )
+        status, renamed_from = file_status(page.diff)
         entries.append(
             {
                 "path": page.path,
+                "status": status,
+                "renamed_from": renamed_from,
                 "diff": page.diff,
                 "blurb": page.blurb,
                 "lines": lines,

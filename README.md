@@ -349,7 +349,14 @@ For a change in git, pass `repo` instead of `pages` (never both): the server run
 the agent's context and pasted back. `git_range` is what `git diff` takes (`main..HEAD`,
 `abc123^!`; default `HEAD`, the uncommitted changes to tracked files), `paths` limits it,
 `context_lines` is `-U` (default 3). Binary files and pure mode changes have no line to
-comment on and are skipped; a rename shows as a delete plus an add.
+comment on and are skipped. A renamed file is one page under its new path (a rename
+without edits shows a single hunk line saying so), and comments and `notes` use that path.
+
+Each file carries a status letter in the file list and above its diff: `A` added (green),
+`M` modified (amber), `D` deleted (red), `R` renamed (gray; its tooltip and the list filter
+know the old path). For `repo` it comes from git's header lines; for `pages` from the diff
+text alone: its `diff --git` header lines when it has them, else its `---`/`+++` lines, else
+the first hunk (a file that starts at line 0 is new, one that ends at line 0 is deleted).
 
 A `repo` page also carries the file's text, so the user can show the lines the diff leaves
 out. Each hidden stretch (before the first hunk, between hunks, after the last) is a dashed

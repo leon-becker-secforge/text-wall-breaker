@@ -7,6 +7,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Added
 
+- `review` shows a status letter per file, in the file list and above the diff: `A` added,
+  `M` modified, `D` deleted, `R` renamed. `repo` reads it from git, `pages` from the diff text.
+- `review` with `repo` detects renames: a renamed file is one page under its new path instead
+  of a deleted and an added page. A rename without edits is a page with a single hunk line
+  that says so. The file list filter also matches a renamed file's old path.
 - `review` draws mermaid diagrams in the rendered view of a Markdown file (a ` ```mermaid `
   fence) and of an AsciiDoc file (`[mermaid]` or `[source,mermaid]` on a listing). A comment
   on a diagram lands on its fence's lines. The renderer loads from the CDN only on a page

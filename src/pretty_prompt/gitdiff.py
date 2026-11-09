@@ -24,6 +24,9 @@ __all__ = ["MAX_FILE_BYTES", "MAX_TOTAL_BYTES", "GitDiffError", "pages_from_git"
 _GIT_TIMEOUT_SECONDS = 30
 _FILE_HEADER = re.compile(r"^diff --git ", re.MULTILINE)
 _NO_FILE = "/dev/null"
+# Added to a rename without edits: a page needs a hunk header, and this one tells the
+# reader why there is nothing else to see.
+_RENAME_ONLY_HUNK = "@@ -0,0 +0,0 @@ renamed without changes\n"
 
 # What may travel inside the page for expanding context: per file, and over all files of
 # one call. Past either, a file shows only its hunks.
@@ -44,15 +47,20 @@ def _strip_prefix(raw: str) -> str:
 
 
 def _path_of(chunk: str) -> str | None:
-    old = new = None
+    old = new = renamed_to = None
     for line in chunk.split("\n"):
         if line.startswith("@@"):
             break
-        if line.startswith("--- "):
+        if line.startswith("rename to "):
+            renamed_to = _strip_prefix(line[len("rename to ") :])
+        elif line.startswith("--- "):
             old = _strip_prefix(line[4:])
         elif line.startswith("+++ "):
             new = _strip_prefix(line[4:])
     path = new if new and new != _NO_FILE else old
+    if not path or path == _NO_FILE:
+        # A rename without edits has no `---`/`+++` lines.
+        path = renamed_to
     return path if path and path != _NO_FILE else None
 
 
@@ -116,8 +124,9 @@ def pages_from_git(
 ) -> list[dict[str, str]]:
     """One `{"path", "diff"}` per changed file of `git diff <git_range>` in `repo`.
 
-    `git_range` defaults to `HEAD` (tracked changes in the working tree). Renames are
-    shown as a delete plus an add. A page whose new-side file can be shown in full also
+    `git_range` defaults to `HEAD` (tracked changes in the working tree). A renamed file
+    is one page under its new path; one renamed without edits gets a hunk header that says
+    so, since a page needs one. A page whose new-side file can be shown in full also
     has `"text"`: that file, for the page to expand the lines between the hunks.
     """
     directory = Path(repo).expanduser()
@@ -140,7 +149,7 @@ def pages_from_git(
         "--no-color",
         "--no-ext-diff",
         "--no-textconv",
-        "--no-renames",
+        "--find-renames",
         f"-U{context_lines}",
         revision,
         "--",
@@ -171,7 +180,10 @@ def pages_from_git(
     budget = MAX_TOTAL_BYTES
     for chunk in chunks:
         path = _path_of(chunk)
-        if path is not None and "\n@@ " in chunk:
+        pure_rename = "\nrename from " in chunk and "\n@@ " not in chunk
+        if path is not None and pure_rename:
+            pages.append({"path": path, "diff": chunk.rstrip("\n") + "\n" + _RENAME_ONLY_HUNK})
+        elif path is not None and "\n@@ " in chunk:
             page = {"path": path, "diff": chunk}
             text = _expandable_text(directory, revision, path, chunk)
             if text is not None and len(text.encode("utf-8")) <= budget:

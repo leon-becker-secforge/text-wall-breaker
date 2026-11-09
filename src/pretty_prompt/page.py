@@ -592,7 +592,8 @@ def _render_review_pages(
         blurb_html = f'<div class="pp-blurb">{blurb_md}</div>' if blurb else ""
         folder, _, name = path.rpartition("/")
         path_html = (
-            f'<span class="pp-path-dir">{html.escape(folder + "/" if folder else "")}</span>'
+            _status_badge(page)
+            + f'<span class="pp-path-dir">{html.escape(folder + "/" if folder else "")}</span>'
             f'<span class="pp-path-file">{html.escape(name)}</span>'
         )
         page_lines = page.get("lines")
@@ -629,6 +630,26 @@ def _render_review_pages(
 _FILTER_FROM = 8
 
 
+_STATUS_WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
+
+
+def _status_badge(page: dict[str, object]) -> str:
+    """The letter that says how the file changed (see `diff.file_status`), or "" if unknown.
+
+    A rename names its old path in the badge's tooltip.
+    """
+    status = page.get("status")
+    if not isinstance(status, str) or status not in _STATUS_WORDS:
+        return ""
+    title = _STATUS_WORDS[status]
+    if status == "R" and page.get("renamed_from"):
+        title += f" from {page['renamed_from']}"
+    return (
+        f'<span class="pp-status pp-status-{status}" '
+        f'title="{html.escape(title, quote=True)}">{status}</span>'
+    )
+
+
 def _render_review_files(pages: list[dict[str, object]]) -> str:
     """The file list of a multi-page `review`: a sidebar, and below 900px a bar + drawer.
 
@@ -643,9 +664,13 @@ def _render_review_files(pages: list[dict[str, object]]) -> str:
         directory, _, name = path.rpartition("/")
         shown_directory = html.escape(directory + "/" if directory else "./")
         current = " is-current" if index == 0 else ""
+        # The filter box matches the title, so a renamed file is found by its old path too.
+        old_path = page.get("renamed_from")
+        row_title = f"{path} (renamed from {old_path})" if old_path else path
         rows.append(
             f'<button type="button" class="pp-file{current}" data-index="{index}" '
-            f'title="{html.escape(path, quote=True)}">'
+            f'title="{html.escape(row_title, quote=True)}">'
+            f"{_status_badge(page)}"
             '<span class="pp-file-paths">'
             f'<span class="pp-file-name">{html.escape(name)}</span>'
             f'<span class="pp-file-dir">{shown_directory}</span>'

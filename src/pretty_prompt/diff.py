@@ -16,6 +16,7 @@ __all__ = [
     "Gap",
     "InvalidDiff",
     "expansion_lines",
+    "file_status",
     "gaps_of",
     "parse_unified_diff",
     "rows_with_context",
@@ -110,6 +111,50 @@ def parse_unified_diff(diff: str) -> list[DiffLine]:
     if not any(row.kind == "hunk" for row in rows):
         raise InvalidDiff("no @@ hunk header found; is this a unified diff?")
     return rows
+
+
+_NEW_FILE_HUNK = re.compile(r"^@@ -0(?:,0)? \+")
+_DELETED_FILE_HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+0(?:,0)? @@")
+
+
+def file_status(diff: str) -> tuple[str, str | None]:
+    """How the file changed: `("A" | "M" | "D" | "R", old path of a rename or None)`.
+
+    A diff with git's `diff --git` header is read from its extended header lines. A bare
+    diff (what an agent writes by hand) is read from its `---`/`+++` lines, else from its
+    first hunk: a file that starts at line 0 is new, one that ends at line 0 is deleted.
+    """
+    lines = diff.replace("\r\n", "\n").split("\n")
+    in_git_header = bool(lines) and lines[0].startswith("diff --git ")
+    old_path: str | None = None
+    status = "M"
+    seen_old = seen_new = False
+    for raw in lines:
+        if raw.startswith("@@"):
+            if in_git_header or seen_old or seen_new:
+                break
+            if _NEW_FILE_HUNK.match(raw):
+                status = "A"
+            elif _DELETED_FILE_HUNK.match(raw):
+                status = "D"
+            break
+        if raw.startswith("new file mode"):
+            return "A", None
+        if raw.startswith("deleted file mode"):
+            return "D", None
+        if raw.startswith("rename from "):
+            old_path = raw[len("rename from ") :]
+        elif raw.startswith("rename to ") and old_path is not None:
+            return "R", old_path
+        elif raw.startswith("--- "):
+            seen_old = True
+            if raw[4:].strip() == "/dev/null":
+                status = "A"
+        elif raw.startswith("+++ "):
+            seen_new = True
+            if raw[4:].strip() == "/dev/null":
+                status = "D"
+    return status, None
 
 
 @dataclass(frozen=True)

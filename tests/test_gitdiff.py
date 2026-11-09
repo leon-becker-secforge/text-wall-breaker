@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from pretty_prompt import gitdiff
+from pretty_prompt.diff import file_status
 from pretty_prompt.gitdiff import GitDiffError, _end_revision, pages_from_git
 from pretty_prompt.review import Page
 
@@ -131,6 +132,29 @@ def test_a_symlink_is_never_followed_out_of_the_repo(repo, tmp_path_factory):
     pages = pages_from_git(str(repo), None, None, 3)
     assert pages
     assert all("text" not in page for page in pages)
+
+
+def test_a_renamed_file_is_one_page_under_its_new_path(tmp_path):
+    _git(tmp_path, "init", "-q")
+    body = "".join(f"line {n}\n" for n in range(30))
+    (tmp_path / "old.txt").write_text(body)
+    (tmp_path / "same.txt").write_text(body + "extra\n")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    (tmp_path / "old.txt").rename(tmp_path / "new.txt")
+    (tmp_path / "new.txt").write_text(body.replace("line 3\n", "line three\n"))
+    (tmp_path / "same.txt").rename(tmp_path / "moved.txt")
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "move")
+
+    pages = _by_path(pages_from_git(str(tmp_path), "HEAD~1..HEAD", None, 3))
+    assert sorted(pages) == ["moved.txt", "new.txt"]
+    assert file_status(pages["new.txt"]["diff"]) == ("R", "old.txt")
+    # Renamed without edits: still a valid page, with a hunk header that says why it is bare.
+    assert file_status(pages["moved.txt"]["diff"]) == ("R", "same.txt")
+    assert "renamed without changes" in pages["moved.txt"]["diff"]
+    for entry in pages.values():
+        Page(**entry).validated(label=entry["path"])
 
 
 def test_a_file_that_changed_since_the_diff_is_not_expandable(repo, monkeypatch):

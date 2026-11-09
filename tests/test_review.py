@@ -318,6 +318,33 @@ def test_a_mermaid_fence_in_the_rendered_view_loads_the_diagram_script():
     assert "cdn.jsdelivr.net" not in plain
 
 
+def test_the_sidebar_and_the_header_show_how_each_file_changed():
+    added = "@@ -0,0 +1 @@\n+a\n"
+    renamed = (
+        "diff --git a/o.py b/n.py\nrename from o.py\nrename to n.py\n--- a/o.py\n+++ b/n.py\n"
+        "@@ -1 +1 @@\n-a\n+b\n"
+    )
+    request = ReviewRequest(
+        pages=[
+            Page(path="new.py", diff=added),
+            Page(path="n.py", diff=renamed),
+            Page(path="m.py", diff="@@ -1 +1 @@\n-a\n+b\n"),
+        ]
+    )
+    html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
+    assert html.count('class="pp-status pp-status-A"') == 2  # sidebar row and header
+    assert html.count('class="pp-status pp-status-R" title="renamed from o.py"') == 2
+    assert html.count('class="pp-status pp-status-M"') == 2
+    # the filter matches a renamed file by its old path too
+    assert 'title="n.py (renamed from o.py)"' in html
+
+
+def test_a_single_file_review_shows_the_status_in_its_header():
+    request = ReviewRequest(pages=[Page(path="x.py", diff="@@ -1,2 +0,0 @@\n-a\n-b\n")])
+    html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
+    assert html.count('class="pp-status pp-status-D"') == 1
+
+
 def test_a_page_of_another_kind_has_none():
     text = {"docs/a.py": "\n".join(MD_NEW) + "\n"}
     assert '<div class="pp-rendered"' not in _md_html("docs/a.py", text)

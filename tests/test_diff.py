@@ -7,6 +7,7 @@ import pytest
 from pretty_prompt.diff import (
     Gap,
     expansion_lines,
+    file_status,
     gaps_of,
     rows_with_context,
     split_lines,
@@ -92,3 +93,42 @@ def test_expansion_lines_accepts_the_file_the_diff_came_from():
 )
 def test_expansion_lines_refuses_a_file_that_is_not_the_diffs_new_side(text):
     assert expansion_lines(_diff(OLD, NEW), text) is None
+
+
+@pytest.mark.parametrize(
+    ("diff", "expected"),
+    [
+        (
+            "diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -1 +1 @@\n-a\n+b\n",
+            ("M", None),
+        ),
+        (
+            "diff --git a/x b/x\nnew file mode 100644\n--- /dev/null\n+++ b/x\n@@ -0,0 +1 @@\n+a\n",
+            ("A", None),
+        ),
+        (
+            "diff --git a/x b/x\ndeleted file mode 100644\n--- a/x\n+++ /dev/null\n"
+            "@@ -1 +0,0 @@\n-a\n",
+            ("D", None),
+        ),
+        (
+            "diff --git a/o b/n\nsimilarity index 80%\nrename from o\nrename to n\n"
+            "--- a/o\n+++ b/n\n@@ -1 +1 @@\n-a\n+b\n",
+            ("R", "o"),
+        ),
+        # An empty file that gets content is modified: the header decides, not the hunk.
+        (
+            "diff --git a/x b/x\nindex 1..2 100644\n--- a/x\n+++ b/x\n@@ -0,0 +1 @@\n+a\n",
+            ("M", None),
+        ),
+        # Bare diffs, as an agent writes them.
+        ("@@ -1 +1 @@\n-a\n+b\n", ("M", None)),
+        ("@@ -0,0 +1,2 @@\n+a\n+b\n", ("A", None)),
+        ("@@ -1,2 +0,0 @@\n-a\n-b\n", ("D", None)),
+        ("--- /dev/null\n+++ b/x\n@@ -0,0 +1 @@\n+a\n", ("A", None)),
+        ("--- a/x\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n", ("D", None)),
+        ("--- a/x\n+++ b/x\n@@ -0,0 +1 @@\n+a\n", ("M", None)),
+    ],
+)
+def test_file_status_reads_the_header_else_the_hunk(diff, expected):
+    assert file_status(diff) == expected

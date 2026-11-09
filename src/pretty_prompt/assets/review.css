@@ -410,6 +410,22 @@ body.pp-has-files { padding-left: 296px; }
   color: var(--ntw-accent-contrast); }
 .pp-file-count.is-zero { background: transparent; color: var(--ntw-fg-muted);
   border: 1px solid var(--ntw-border); font-weight: 400; }
+/* How the file changed: A added, M modified, D deleted, R renamed (neutral). */
+:root { --pp-st-a: #1a7f37; --pp-st-m: #9a6700; --pp-st-d: #cf222e; --pp-st-r: #57606a;
+  --pp-st-fg: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --pp-st-a: #3fb950; --pp-st-m: #d29922;
+    --pp-st-d: #f85149; --pp-st-r: #9198a1; --pp-st-fg: #111111; }
+}
+:root[data-theme="dark"] { --pp-st-a: #3fb950; --pp-st-m: #d29922; --pp-st-d: #f85149;
+  --pp-st-r: #9198a1; --pp-st-fg: #111111; }
+.pp-status { flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.55em; height: 1.55em; border-radius: 4px; font: 700 0.72em var(--pp-font-mono);
+  color: var(--pp-st-fg); background: var(--pp-st-m); cursor: default; }
+.pp-status-A { background: var(--pp-st-a); }
+.pp-status-D { background: var(--pp-st-d); }
+.pp-status-R { background: var(--pp-st-r); }
+.pp-review-path .pp-status { margin-inline: 0 8px; font-size: 0.8em; vertical-align: 1px; }
 #pp-filebar, #pp-files-backdrop { display: none; }
 @media (max-width: 900px) {
   body.pp-has-files { padding-left: 8px; }
