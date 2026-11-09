@@ -16,7 +16,7 @@
    while the pointer crosses the gap to the bubble. A narrow window has no gutter: the
    bubble then takes a slot inside the row. */
 @media (min-width: 700px) {
-  .pp-option .pp-live-ask { right: -38px; top: 4px; }
+  .pp-option .pp-live-ask { right: -38px; top: 4px; z-index: 1; }  /* above the strip */
   .pp-option::after { content: ""; position: absolute; top: 0; bottom: 0; right: -44px;
     width: 44px; }
 }
