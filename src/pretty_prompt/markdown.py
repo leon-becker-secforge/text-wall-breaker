@@ -81,7 +81,12 @@ _BADGE_VALUES = ("success", "warning", "danger", "info")
 # disambiguation link (`.../a_(b)`) to keep its own parens without closing the markdown
 # syntax early. `[^)\s]+` used to stop at the first `)`, truncating the href and leaking
 # the rest of the URL as sibling text.
-_URL_BODY = r"(?:[^\s()]+|\([^\s()]*\))+"
+#
+# Possessive (`++`, `*+`): the nested `(?:[^\s()]+|...)+` backtracked exponentially when
+# the closing `)` never came, so a link like `[t](https://...` with 30 characters after
+# the paren hung the server. A possessive run never gives characters back, and the groups
+# cannot overlap, so the match is the same and a miss fails in linear time.
+_URL_BODY = r"(?:[^\s()]++|\([^\s()]*+\))++"
 
 # One alternation over the raw source: whatever does not match is escaped as literal
 # text. Order matters — code spans come first so that `**` inside backticks stays

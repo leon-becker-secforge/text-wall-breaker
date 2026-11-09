@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
@@ -123,6 +124,23 @@ def test_link_url_keeps_a_parenthesised_segment():
 def test_image_url_keeps_a_parenthesised_segment():
     out = render_inline("![a](file:///tmp/x(1).png)")
     assert out == '<img src="file:///tmp/x(1).png" alt="a">'
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "[t](" + "a" * 5000,
+        "[t](" + "a" * 5000 + " tail",
+        "![x](" + "a" * 5000 + " tail)",
+        "[t](" + "(a)" * 2000 + " tail",
+    ],
+)
+def test_an_unclosed_link_url_does_not_hang(source):
+    # The nested quantifier in the URL pattern used to take exponential time here: 26
+    # characters already cost seconds.
+    start = time.perf_counter()
+    render_inline(source)
+    assert time.perf_counter() - start < 1
 
 
 def test_image_bare_path_is_a_file_url():

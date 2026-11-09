@@ -30,6 +30,9 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Fixed
 
+- Markdown with a link or image whose URL is never closed, such as `[t](https://example.com/...`
+  followed by a space or the end of the text, no longer hangs the server. The URL pattern took
+  exponential time: 26 characters cost seconds, 40 never finished.
 - An interrupted `live` call no longer locks its session. The wait ended only when the user
   sent something, so every later call failed with "another live call is already waiting".
 - A tool error raised while a call waits (`live`, `ask`, `review`, `show`) reaches the agent
