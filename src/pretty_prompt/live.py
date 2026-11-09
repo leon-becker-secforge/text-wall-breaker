@@ -360,6 +360,10 @@ class LiveSession:
             self._version += 1
             try:
                 while True:
+                    # Before anything is taken: the caller is gone, so a message or the
+                    # result taken now would be lost. The next call gets them.
+                    if request.cancel is not None and request.cancel.is_set():
+                        raise LiveError("the call was cancelled")
                     if self._final is not None:
                         return self._finish(refresh_dropped=False)
                     if self._inbox:

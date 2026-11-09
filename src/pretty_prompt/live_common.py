@@ -6,6 +6,7 @@ which imports `ask.py`: the shared parts cannot sit in `live.py`.
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -63,6 +64,9 @@ class LiveCall:
     notes: list[Any] | None = None
     question: str | None = None
     options: list[Any] | None = None
+    # Set when the caller abandoned the call (the user interrupted the agent): the wait
+    # must end without taking anything, or the session stays locked against the next call.
+    cancel: threading.Event | None = None
 
     def has_review_arguments(self) -> bool:
         return bool(

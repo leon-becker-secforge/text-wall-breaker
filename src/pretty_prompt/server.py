@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from collections.abc import Callable
 from functools import partial
 from typing import Annotated, Any, Protocol, cast
@@ -81,14 +82,32 @@ class _ReportsProgress(Protocol):
     ) -> None: ...
 
 
-async def _blocking[T](ctx: _ReportsProgress | None, func: Callable[[], T]) -> T:
+async def _blocking[T](
+    ctx: _ReportsProgress | None,
+    func: Callable[[], T],
+    *,
+    cancel: threading.Event | None = None,
+) -> T:
     """Run blocking `func` off the event loop, reporting progress until it returns.
 
     Off the loop because a call owns a socket and a browser tab until the user answers,
     and a second call must be able to open its own tab meanwhile.
+
+    With `cancel`, an interrupted call (the client abandons it) sets the event and returns
+    at once; `func` watches the event and ends its wait, as a live session must or the
+    abandoned wait would keep the session locked against the next call.
     """
+
+    async def run() -> T:
+        try:
+            return await anyio.to_thread.run_sync(func, abandon_on_cancel=cancel is not None)
+        except anyio.get_cancelled_exc_class():
+            if cancel is not None:
+                cancel.set()
+            raise
+
     if ctx is None:
-        return await anyio.to_thread.run_sync(func)
+        return await run()
 
     async def keepalive() -> None:
         beats = 0
@@ -97,12 +116,19 @@ async def _blocking[T](ctx: _ReportsProgress | None, func: Callable[[], T]) -> T
             beats += 1
             await ctx.report_progress(beats, message="waiting for the user")
 
-    async with anyio.create_task_group() as group:
-        group.start_soon(keepalive)
-        try:
-            result = await anyio.to_thread.run_sync(func)
-        finally:
-            group.cancel_scope.cancel()
+    try:
+        async with anyio.create_task_group() as group:
+            group.start_soon(keepalive)
+            try:
+                result = await run()
+            finally:
+                group.cancel_scope.cancel()
+    except BaseExceptionGroup as error:
+        # The task group wraps an error of `func`, which callers catch by its own type
+        # (`BrowserUnavailable`, `LiveError`), so a lone one is raised as it was.
+        if len(error.exceptions) == 1:
+            raise error.exceptions[0] from None
+        raise
     return result
 
 
@@ -450,7 +476,9 @@ async def live(
     target = live_for(session)
     if target is None:
         raise ToolError(str(no_such_session(session)))
+    cancel = threading.Event()
     call = LiveCall(
+        cancel=cancel,
         session_id=session,
         replies=[Reply(to=r.to, text=r.text, done=r.done) for r in replies or []],
         wait=wait,
@@ -463,7 +491,7 @@ async def live(
         options=options,
     )
     try:
-        return cast(LiveResult, await _blocking(ctx, partial(target.call, call)))
+        return cast(LiveResult, await _blocking(ctx, partial(target.call, call), cancel=cancel))
     except (LiveError, GitDiffError) as exc:
         raise ToolError(str(exc)) from exc
 

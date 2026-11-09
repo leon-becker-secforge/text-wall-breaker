@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import threading
 import time
 
 import anyio
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
+from test_live import make as make_live
 
 from pretty_prompt.server import (
     MAX_TOOL_DESCRIPTION_CHARS,
@@ -205,6 +207,58 @@ def test_every_tool_parameter_is_described():
         for path in _undocumented(tool.input_schema, tool.name)
     ]
     assert missing == []
+
+
+def test_an_error_of_a_blocking_call_is_not_wrapped_in_a_group():
+    def fail():
+        raise ValueError("boom")
+
+    with pytest.raises(ValueError, match="boom"):
+        anyio.run(server_module._blocking, _ProgressRecorder(), fail)
+
+
+def test_an_interrupted_call_sets_its_cancel_event_and_returns_at_once():
+    cancel = threading.Event()
+    finished = threading.Event()
+
+    def wait():
+        cancel.wait(5)
+        finished.set()
+
+    async def scenario():
+        with anyio.move_on_after(0.2) as scope:
+            await server_module._blocking(None, wait, cancel=cancel)
+        return scope.cancelled_caught
+
+    assert anyio.run(scenario) is True
+    assert cancel.is_set()
+    assert finished.wait(2)
+
+
+def test_an_interrupted_live_call_does_not_lock_the_session():
+    _, live = make_live()
+
+    async def scenario():
+        with anyio.move_on_after(0.3):
+            await server.call_tool("live", {"session": live.id})
+        await anyio.sleep(1.0)
+        return await server.call_tool(
+            "live", {"session": live.id, "wait": False, "replies": [{"to": "chat", "text": "hi"}]}
+        )
+
+    result = anyio.run(scenario)
+    assert result.structured_content == {"posted": True, "messages": []}
+
+
+def test_a_live_call_error_reaches_the_agent_as_its_own_message():
+    _, live = make_live()
+    live._blocking = True  # another call is waiting
+
+    async def scenario():
+        await server.call_tool("live", {"session": live.id})
+
+    with pytest.raises(ToolError, match="already waiting"):
+        anyio.run(scenario)
 
 
 def test_a_note_side_is_an_enum_in_the_schema():

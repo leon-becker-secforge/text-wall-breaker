@@ -5,6 +5,14 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- An interrupted `live` call no longer locks its session. The wait ended only when the user
+  sent something, so every later call failed with "another live call is already waiting".
+- A tool error raised while a call waits (`live`, `ask`, `review`, `show`) reaches the agent
+  with its message. It arrived as a bare "Error executing tool", because the progress
+  keepalive wrapped it in a task-group error that the handlers did not match.
+
 ## [0.18.0] - 2026-11-09
 
 ### Added
