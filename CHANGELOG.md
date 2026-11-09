@@ -30,6 +30,14 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Fixed
 
+- `ask` no longer scrolls sideways on long content:
+  - a code block with a long line no longer widens the whole question;
+  - a table wider than its column scrolls inside its own block;
+  - an unbreakable word (a URL, an identifier) in a question, option label, body or caveat
+    breaks inside its box instead of running under the Recommended tag, the Details pill, the
+    "Not yet" button or the next gallery card;
+  - on a narrow window the Recommended tag and Details pill wrap below the label instead of
+    squeezing it to a letter per line.
 - Markdown with a link or image whose URL is never closed, such as `[t](https://example.com/...`
   followed by a space or the end of the text, no longer hangs the server. The URL pattern took
   exponential time: 26 characters cost seconds, 40 never finished.

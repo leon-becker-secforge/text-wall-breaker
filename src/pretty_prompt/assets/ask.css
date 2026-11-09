@@ -77,7 +77,15 @@ blockquote > p:last-child { margin-block-end: 0; }
 /* Picked over a bordered grid and a zebra-striped card in a three-way visual A/B/C —
    see the "table style" pick in project history. No vertical rules, a single accent
    rule under the header instead of a shaded background. */
+.table-wrap { overflow-x: auto; margin: 0.6em 0; }
 table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size: 0.9em; }
+.table-wrap > table { margin: 0; }
+/* Prose breaks inside an unbreakable word (a URL, an identifier) rather than running under
+   the neighbouring button or past the card. Not on a table cell: that would squeeze the
+   columns instead of letting the wrapper scroll. */
+:is(.pp-question, .pp-option-body, .pp-option-caveat) :is(p, li, blockquote, h1, h2, h3, h4, h5, h6),
+.pp-option-caveat, code { overflow-wrap: anywhere; }
+.pp-option { min-width: 0; }
 th, td { padding: 6px 10px; text-align: left; border: none;
   border-bottom: 1px solid var(--ntw-border); }
 thead th { border-bottom: 2px solid var(--ntw-accent); color: var(--ntw-accent);
@@ -153,7 +161,9 @@ main img { cursor: zoom-in; }
 .pp-question img { max-width: 100%; height: auto; border-radius: 6px; }
 
 .pp-question-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 40px 14px 0; }
-.pp-question-row > .pp-question { flex: 1; margin: 0; }
+/* min-width: 0 lets the question shrink below its widest content (a long code line), which
+   scrolls inside its own block instead of widening the page. */
+.pp-question-row > .pp-question { flex: 1; margin: 0; min-width: 0; }
 /* A wizard step's question sits below the progress bar, not level with the theme toggle,
    so the pill can run to the options' right edge. */
 .pp-step .pp-question-row { margin-inline-end: 0; }
@@ -190,9 +200,11 @@ main img { cursor: zoom-in; }
   user-select: none; }
 .pp-option-select input { margin: 0; accent-color: var(--ntw-accent); }
 /* Grows into the row and wraps its own text: the row wraps (for the caveat below), so a
-   label left at its natural width would drop onto a line of its own under the input. */
-.pp-option-label { flex: 1 1 0; min-width: 0; font-family: var(--pp-font-mono);
-  font-weight: 500; font-size: 0.9em; }
+   label left at its natural width would drop onto a line of its own under the input. The
+   9em basis is the narrowest the label gets before the Recommended tag and the Details
+   pill wrap below it, instead of squeezing it to a letter per line. */
+.pp-option-label { flex: 1 1 9em; min-width: 0; font-family: var(--pp-font-mono);
+  font-weight: 500; font-size: 0.9em; overflow-wrap: anywhere; }
 /* Picked over a muted line (read as body text, easy to miss) and warning-coloured text
    (read as harsh) in a three-way visual A/B/C: a warning-tinted strip running the full
    width of the option's bottom edge. It wraps onto its own line inside the select row

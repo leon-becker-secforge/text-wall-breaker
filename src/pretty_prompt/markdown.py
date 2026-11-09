@@ -273,7 +273,8 @@ def _render_table(
     thead = f"<thead>{_render_table_row('th', header, aligns, asset_base_url)}</thead>"
     body_rows = "".join(_render_table_row("td", row, aligns, asset_base_url) for row in rows)
     tbody = f"<tbody>{body_rows}</tbody>"
-    return f"<table>{thead}{tbody}</table>"
+    # The wrapper scrolls a table wider than its column instead of widening the page.
+    return f'<div class="table-wrap"><table>{thead}{tbody}</table></div>'
 
 
 def _render_list(

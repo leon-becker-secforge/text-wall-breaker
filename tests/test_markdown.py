@@ -221,8 +221,8 @@ def test_quotes_are_escaped_in_alt_text():
 def test_table_renders_header_and_body():
     out = render_markdown("| A | B |\n| --- | --- |\n| 1 | 2 |")
     assert out == (
-        "<table><thead><tr><th>A</th><th>B</th></tr></thead>"
-        "<tbody><tr><td>1</td><td>2</td></tr></tbody></table>"
+        '<div class="table-wrap"><table><thead><tr><th>A</th><th>B</th></tr></thead>'
+        "<tbody><tr><td>1</td><td>2</td></tr></tbody></table></div>"
     )
 
 
@@ -241,8 +241,8 @@ def test_table_cells_render_inline_markdown():
 def test_table_ends_at_a_blank_line_or_non_table_line():
     out = render_markdown("| A |\n| --- |\n| 1 |\n\nafter")
     assert out == (
-        "<table><thead><tr><th>A</th></tr></thead>"
-        "<tbody><tr><td>1</td></tr></tbody></table><p>after</p>"
+        '<div class="table-wrap"><table><thead><tr><th>A</th></tr></thead>'
+        "<tbody><tr><td>1</td></tr></tbody></table></div><p>after</p>"
     )
 
 
