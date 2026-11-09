@@ -410,8 +410,8 @@ before asking about a report shown without `wait_for_acknowledge`.
 Returns `{"state": "unacknowledged" | "acknowledged" | "none", "title": "..."}`.
 `none`: no report in the shared tab, or an `ask`/`review` has replaced it since. A
 report that opened in its own one-off tab (shared tab busy, or holding an unread
-report) is not tracked: the result still describes the shared tab's report, or reads
-`none`. `title` tells you which report it is."""
+report) cannot be tracked: its title comes as `own_tab`, and its acknowledgement is
+unknown. `title` tells you which shared-tab report the state is about."""
 
 
 @server.tool(name="show_status", description=_SHOW_STATUS_DESCRIPTION)

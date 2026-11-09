@@ -39,6 +39,15 @@ from .session import get_shared_session
 __all__ = ["BrowserUnavailable", "InvalidShow", "ShowRequest", "run_show", "show_status"]
 
 
+class _OwnTab:
+    """Title of the last report shown in a one-off tab, which `show_status` cannot track."""
+
+    value: str | None = None
+
+
+_own_tab_title = _OwnTab()
+
+
 class InvalidShow(ValueError):
     """The request has nothing to show, or can't produce a page worth opening."""
 
@@ -130,6 +139,7 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
     submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
     status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
 
+    _own_tab_title.value = None
     generation = session.publish(
         lambda generation: _build_html(
             request, submit_url=submit_url, status_url=status_url, generation=generation
@@ -162,6 +172,7 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
         html = _build_html(request, submit_url=None)
         page.write_text(html, encoding="utf-8")
         open_in_browser(page)
+        _own_tab_title.value = request.title if request.acknowledge_button else None
         return {"opened": True, "path": str(page)}
 
     token = secrets.token_hex(16)
@@ -204,6 +215,10 @@ def show_status() -> dict[str, Any]:
 
     `{"state": "none" | "unacknowledged" | "acknowledged"[, "title": ...]}`. Only a
     report in the shared tab is tracked: a one-off tab (used when the shared one was
-    busy) has no listener, so its Acknowledge click is local and reads as "none" here.
+    busy) has no listener, so its Acknowledge click is local and cannot be read. The
+    last such report is named under `own_tab`, until a later report uses the shared tab.
     """
-    return get_shared_session().report_status()
+    status = get_shared_session().report_status()
+    if _own_tab_title.value is not None:
+        status["own_tab"] = _own_tab_title.value
+    return status

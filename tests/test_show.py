@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from pretty_prompt import show as show_module
 from pretty_prompt.page import build_show_page
 from pretty_prompt.show import InvalidShow, ShowRequest
 
@@ -78,3 +79,21 @@ def test_a_diff_fence_with_dashed_lines_inside_a_slide_is_not_split():
 def test_deck_save_content_reconstructs_header_slides_and_footer():
     html = build_show_page(slides=["one", "two"], header="head", footer="foot")
     assert "head\\n\\none\\n\\n---\\n\\ntwo\\n\\nfoot" in html
+
+
+def test_a_report_in_its_own_tab_is_named_by_show_status(monkeypatch):
+    class Busy:
+        def try_claim(self):
+            return False
+
+        def report_status(self):
+            return {"state": "none"}
+
+    monkeypatch.setattr(show_module, "get_shared_session", lambda: Busy())
+    monkeypatch.setattr(show_module, "open_in_browser", lambda path: None)
+    monkeypatch.setattr(show_module._own_tab_title, "value", None)
+    result = show_module.run_show(ShowRequest(content="# R", title="Report"))
+    assert result["opened"] is True
+    assert show_module.show_status() == {"state": "none", "own_tab": "Report"}
+    show_module._own_tab_title.value = None
+    assert show_module.show_status() == {"state": "none"}
