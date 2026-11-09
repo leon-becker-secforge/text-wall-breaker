@@ -586,6 +586,13 @@ making a network call beyond its one POST: rather than vendor the mermaid librar
 (~3.5MB) into this package, a page with a mermaid fence loads a pinned build from
 jsDelivr — never on a page without one. The diagram's theme is read once, from the
 page's own resolved theme, at load; it does not follow the in-page toggle afterwards.
+A diagram is drawn when it is first on screen, so one on a page or slide that starts
+hidden is not drawn until it is shown.
+
+The rendered view of a Markdown or AsciiDoc file in `review` draws diagrams the same way:
+a ` ```mermaid ` fence in Markdown, and `[mermaid]` or `[source,mermaid]` on a listing in
+AsciiDoc, the forms GitLab and GitHub draw. A comment on a diagram lands on the lines of
+its fence. A review page without such a diagram still makes no network request.
 
 Raw HTML is never passed through. Every run of source text is escaped before any tag is
 added, so a `<script>` in a question appears as visible text. Rendering happens in Python

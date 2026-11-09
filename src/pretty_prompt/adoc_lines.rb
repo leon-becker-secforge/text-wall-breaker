@@ -11,7 +11,20 @@ MARKED = %i[paragraph listing literal quote verse admonition example sidebar ope
 class LineConverter < Asciidoctor::Converter::Html5Converter
   Asciidoctor::Converter.register self, 'html5'
 
+  # A diagram as GitLab and GitHub draw it: `[mermaid]` or `[source,mermaid]` on a listing.
+  # Written as the element the page script draws; Asciidoctor itself drops the `mermaid`
+  # style of a plain `[mermaid]` block, so the page could not tell it from a listing.
+  def mermaid?(node)
+    node.context == :listing &&
+      (node.style == 'mermaid' || (node.style == 'source' && node.attr('language') == 'mermaid'))
+  end
+
   def convert(node, transform = node.node_name, opts = nil)
+    if mermaid?(node)
+      loc = node.source_location
+      mark = loc ? %( data-first="#{loc.lineno}") : ''
+      return %(<pre class="mermaid"#{mark}>#{node.content}</pre>)
+    end
     out = super
     return out unless out.is_a?(String)
     loc = node.respond_to?(:source_location) ? node.source_location : nil

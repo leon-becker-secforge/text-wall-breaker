@@ -6,7 +6,9 @@ them to turn a click on a block into the ordinary range comment on those lines.
 
 The text is untrusted file content shown in the operator's browser: raw HTML is escaped,
 a remote image is replaced by its alt text (opening a review makes no network request),
-and a local image is shown only if it resolves to a file inside the repository.
+and a local image is shown only if it resolves to a file inside the repository. A mermaid
+fence is the one exception to the network rule: it becomes a `<pre class="mermaid">`, and
+the page then loads the pinned renderer the way `markdown.py` describes.
 """
 
 from __future__ import annotations
@@ -20,7 +22,9 @@ from pathlib import Path, PurePosixPath
 from typing import NamedTuple
 
 from markdown_it import MarkdownIt
+from markdown_it.renderer import RendererHTML
 from markdown_it.token import Token
+from markdown_it.utils import EnvType, OptionsDict
 
 from .markdown import _image_src
 
@@ -106,8 +110,24 @@ def _tidy_inline(token: Token, path: str, root: str | None, asset_base_url: str 
                 child.attrs = {}
 
 
+def _mermaid_fence(
+    renderer: RendererHTML, tokens: list[Token], idx: int, options: OptionsDict, env: EnvType
+) -> str:
+    """A ` ```mermaid ` fence as the `<pre class="mermaid">` the page script draws.
+
+    Same element `markdown.py` writes for `ask` and `show`; the line marks stay on it so a
+    click on the diagram still comments on the fence.
+    """
+    token = tokens[idx]
+    if token.info.split(maxsplit=1)[:1] != ["mermaid"]:
+        return renderer.fence(tokens, idx, options, env)
+    token.attrJoin("class", "mermaid")
+    return f"<pre{renderer.renderAttrs(token)}>{escape(token.content)}</pre>\n"
+
+
 def _markdown(path: str, lines: list[str], root: str | None, asset_base_url: str | None) -> str:
     parser = MarkdownIt("commonmark", {"html": False}).enable("table")
+    parser.add_render_rule("fence", _mermaid_fence)
     tokens = parser.parse("\n".join(lines) + "\n")
     for token in tokens:
         if token.type in _BLOCKS and token.map:

@@ -304,6 +304,20 @@ def test_a_markdown_page_with_its_file_gets_a_rendered_view():
     assert '<div class="pp-chunk">' in html
 
 
+def test_a_mermaid_fence_in_the_rendered_view_loads_the_diagram_script():
+    old = ["# T", "", "text", ""]
+    new = ["# T", "", "```mermaid", "graph TD", "  A-->B", "```", ""]
+    files = {"docs/a.md": "\n".join(new) + "\n"}
+    request = ReviewRequest(
+        pages=[Page(path="docs/a.md", diff=_unified(old, new))], files=files, root=None
+    )
+    html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
+    assert '<pre data-first="3" data-last="6" class="mermaid">' in html
+    assert "cdn.jsdelivr.net/npm/mermaid@" in html
+    plain = _md_html("docs/a.md", {"docs/a.md": "\n".join(MD_NEW) + "\n"})
+    assert "cdn.jsdelivr.net" not in plain
+
+
 def test_a_page_of_another_kind_has_none():
     text = {"docs/a.py": "\n".join(MD_NEW) + "\n"}
     assert '<div class="pp-rendered"' not in _md_html("docs/a.py", text)

@@ -182,6 +182,31 @@ def test_asciidoc_output_is_cleaned():
     assert "the logo" in html
 
 
+MERMAID_MD = "# T\n\n```mermaid\ngraph TD\n  A-->B\n```\n\n```python\nprint(1)\n```"
+
+
+def test_a_mermaid_fence_in_markdown_is_a_diagram_block_with_its_lines():
+    html = _view(MERMAID_MD)
+    assert '<pre data-first="3" data-last="6" class="mermaid">graph TD\n  A--&gt;B\n</pre>' in html
+    # another language stays a code block
+    assert 'class="language-python"' in html and html.count('class="mermaid"') == 1
+
+
+MERMAID_ADOC = (
+    "= T\n\n[mermaid]\n----\ngraph TD\n  A-->B\n----\n\n[source,mermaid]\n----\ngraph TD\n"
+    "  C-->D\n----\n\n[source,python]\n----\nprint(1)\n----"
+)
+
+
+@needs_asciidoctor
+def test_both_asciidoc_mermaid_forms_are_diagram_blocks_with_their_lines():
+    html = _view(MERMAID_ADOC, "docs/a.adoc")
+    assert html.count('<pre class="mermaid"') == 2
+    assert 'class="mermaid" data-first="3" data-last="7">graph TD\n  A--&gt;B</pre>' in html
+    assert 'class="mermaid" data-first="9" data-last="13">graph TD\n  C--&gt;D</pre>' in html
+    assert 'class="language-python"' in html
+
+
 def test_asciidoc_is_left_out_without_ruby(monkeypatch):
     monkeypatch.setattr("pretty_prompt.render.shutil.which", lambda _name: None)
     assert rendered_view("a.adoc", ["= T"]) is None

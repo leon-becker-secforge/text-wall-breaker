@@ -5,6 +5,18 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `review` draws mermaid diagrams in the rendered view of a Markdown file (a ` ```mermaid `
+  fence) and of an AsciiDoc file (`[mermaid]` or `[source,mermaid]` on a listing). A comment
+  on a diagram lands on its fence's lines. The renderer loads from the CDN only on a page
+  with a diagram, as on `ask` and `show`.
+
+### Changed
+
+- A mermaid diagram is drawn when it is first on screen, so a diagram inside a slide or
+  page that starts hidden is no longer drawn with no size.
+
 ### Fixed
 
 - An interrupted `live` call no longer locks its session. The wait ended only when the user
