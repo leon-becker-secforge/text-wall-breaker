@@ -30,6 +30,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ### Fixed
 
+- Under WSL with `appendWindowsPath = false`, the server no longer refuses to start with
+  "Windows interop may be disabled": it also looks for `/mnt/c/Windows/explorer.exe`, and
+  when it finds nothing the message names that setting.
+- The WSL `explorer.exe` opener writes an unexpected exit status or any stderr output to the
+  server's stderr (the client's MCP log); before, a page that never opened left no trace but
+  `not_delivered`.
 - `ask` no longer scrolls sideways on long content:
   - a code block with a long line no longer widens the whole question;
   - a table wider than its column scrolls inside its own block;

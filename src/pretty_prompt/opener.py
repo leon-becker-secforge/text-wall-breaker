@@ -9,7 +9,8 @@
   3. macOS: `open`.
   4. WSL: the Windows browser, not a Linux one inside WSLg, since that is the browser
      the person actually uses. `wslview` (from `wslu`) if it is installed, otherwise
-     `explorer.exe` with a file target translated to its `\\\\wsl.localhost\\...` path.
+     `explorer.exe` (on `PATH`, else at `/mnt/c/Windows/explorer.exe`) with a file target
+     translated to its `\\\\wsl.localhost\\...` path.
      The loopback URLs work as-is, since WSL2 forwards `127.0.0.1` to Windows.
   5. Any other POSIX desktop: `webbrowser.open`, then `xdg-open` if that finds no
      browser. Only with `DISPLAY` or `WAYLAND_DISPLAY` set; a headless host gets a reason
@@ -33,6 +34,10 @@ from pathlib import Path
 __all__ = ["OPENER_ENV_VAR", "BrowserUnavailable", "Opener", "find_opener", "is_wsl"]
 
 OPENER_ENV_VAR = "PRETTY_PROMPT_OPENER"
+
+# Where WSL mounts the Windows system directory by default. `appendWindowsPath = false` in
+# /etc/wsl.conf keeps it off PATH while interop still works, so `which` alone misses it.
+WINDOWS_EXPLORER = "/mnt/c/Windows/explorer.exe"
 
 # Every opener here hands the target to the desktop and returns immediately. If one has
 # not returned by now something is wrong with the desktop session, and failing is better
@@ -78,6 +83,23 @@ class Opener:
         if self.check_exit and result.returncode != 0:
             detail = result.stderr.strip() or f"exit status {result.returncode}"
             raise BrowserUnavailable(f"{self.name} failed: {detail}")
+        if not self.check_exit:
+            self._log_unchecked(result)
+
+    def _log_unchecked(self, result: subprocess.CompletedProcess[str]) -> None:
+        """Leave a trace on stderr (the client's MCP log) of an opener whose status is ignored.
+
+        Status 0 and 1 with no output are what explorer.exe prints on success, so they
+        stay quiet; anything else is the only clue when no tab appears and the call ends
+        as `not_delivered`.
+        """
+        stderr = result.stderr.strip()
+        if result.returncode not in (0, 1) or stderr:
+            print(
+                f"pretty-prompt: {self.name} exited {result.returncode}"
+                + (f": {stderr}" if stderr else ""),
+                file=sys.stderr,
+            )
 
 
 def find_opener() -> Opener | str:
@@ -94,10 +116,14 @@ def find_opener() -> Opener | str:
         if wslview is not None:
             return wslview
         explorer = shutil.which("explorer.exe")
+        if explorer is None and Path(WINDOWS_EXPLORER).is_file():
+            explorer = WINDOWS_EXPLORER
         if explorer is None:
             return (
-                "running under WSL, but neither wslview nor explorer.exe is on PATH "
-                f"(Windows interop may be disabled); set {OPENER_ENV_VAR} to override"
+                "running under WSL, but neither wslview nor explorer.exe was found: not on "
+                f"PATH and not at {WINDOWS_EXPLORER}. Windows interop may be disabled, or "
+                "`appendWindowsPath = false` in /etc/wsl.conf keeps the Windows directories "
+                f"off PATH; set {OPENER_ENV_VAR} to override"
             )
         return Opener(name="explorer.exe", argv=(explorer,), check_exit=False, windows_paths=True)
     xdg_open = _on_path("xdg-open")

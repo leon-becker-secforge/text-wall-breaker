@@ -142,6 +142,44 @@ def test_wsl_without_interop_is_refused(monkeypatch):
     assert "WSL" in problem
 
 
+def test_wsl_finds_explorer_off_path_when_windows_dirs_are_not_appended(monkeypatch, tmp_path):
+    # `appendWindowsPath = false`: interop works, but `which` cannot see explorer.exe.
+    explorer = tmp_path / "explorer.exe"
+    explorer.write_text("")
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(opener_module, "is_wsl", lambda: True)
+    monkeypatch.setattr("shutil.which", _which_only())
+    monkeypatch.setattr(opener_module, "WINDOWS_EXPLORER", str(explorer))
+    assert find_opener() == Opener(
+        name="explorer.exe", argv=(str(explorer),), check_exit=False, windows_paths=True
+    )
+
+
+def test_wsl_refusal_names_the_path_setting(monkeypatch, tmp_path):
+    monkeypatch.setattr("sys.platform", "linux")
+    monkeypatch.setattr(opener_module, "is_wsl", lambda: True)
+    monkeypatch.setattr("shutil.which", _which_only())
+    monkeypatch.setattr(opener_module, "WINDOWS_EXPLORER", str(tmp_path / "missing.exe"))
+    problem = find_opener()
+    assert isinstance(problem, str)
+    assert "appendWindowsPath" in problem and "missing.exe" in problem
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stderr", "logged"),
+    [(0, "", False), (1, "", False), (1, "access denied", True), (2, "", True)],
+)
+def test_an_unchecked_openers_failure_is_logged(monkeypatch, capsys, returncode, stderr, logged):
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda argv, **kw: subprocess.CompletedProcess(argv, returncode, stdout="", stderr=stderr),
+    )
+    Opener(name="explorer.exe", argv=("/bin/explorer.exe",), check_exit=False).open("http://x/")
+    err = capsys.readouterr().err
+    assert ("explorer.exe exited" in err) is logged
+    assert (stderr in err) if stderr else True
+
+
 def test_failing_exit_status_is_browser_unavailable(monkeypatch):
     _record_runs(monkeypatch, returncode=3)
     with pytest.raises(BrowserUnavailable, match="exit status 3"):

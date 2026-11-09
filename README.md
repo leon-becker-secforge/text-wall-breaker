@@ -44,7 +44,7 @@ so what it checks for at launch, depends on the platform:
 | Platform | Opener | Refuses to start when |
 | --- | --- | --- |
 | Linux desktop | `webbrowser`, then `xdg-open` | `xdg-open` is missing, or neither `DISPLAY` nor `WAYLAND_DISPLAY` is set |
-| WSL | `wslview` if installed, else `explorer.exe` | neither is on `PATH` (Windows interop off) |
+| WSL | `wslview` if installed, else `explorer.exe` | `wslview` is missing, and `explorer.exe` is neither on `PATH` nor at `/mnt/c/Windows/explorer.exe` (Windows interop off) |
 | macOS | `open` | `open` is missing |
 | Windows | `os.startfile` | never |
 
@@ -52,7 +52,11 @@ Under WSL, pages open in the Windows browser, not a Linux one inside WSLg, and n
 display variable is needed. With the `explorer.exe` fallback, a one-shot page's file is
 first translated to its `\\wsl.localhost\...` path with `wslpath -w`; explorer.exe's exit
 status is ignored, since it reports 1 even on success, so a page that never opened
-shows up as `not_delivered` instead. `file://` images on such a one-shot page still
+shows up as `not_delivered` instead. Any other status, or any output on stderr, is
+written to the server's stderr, which the client keeps in its MCP log. With
+`appendWindowsPath = false` in `/etc/wsl.conf` the Windows directories are not on `PATH`
+although interop works; the server then looks for `/mnt/c/Windows/explorer.exe` itself.
+`file://` images on such a one-shot page still
 point at Linux paths the Windows browser can't read; pages on the shared tab load
 images over the loopback listener and are unaffected.
 
@@ -63,6 +67,11 @@ setup the table above gets wrong. The page's path or URL is appended as the last
 argument; the command is split shell-style but not run through a shell. An override
 also skips the display check. At launch, the first word must resolve on `PATH` (or be
 a path to an executable), otherwise the server refuses to start:
+
+An override gets a one-shot page (used when the shared tab is busy) as a plain file path,
+without the `wslpath -w` translation the built-in WSL opener applies. Under WSL, an override
+that hands the target to a Windows program therefore opens such a page only if the program
+understands Linux paths. Pages on the shared tab are loopback URLs and are unaffected.
 
 ```bash
 claude mcp add pretty-prompt --env PRETTY_PROMPT_OPENER="firefox --new-tab" -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
