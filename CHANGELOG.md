@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-10
+
 ### Added
 
 - `ask` and `review` pages have an export icon beside the theme toggle: a panel with the
