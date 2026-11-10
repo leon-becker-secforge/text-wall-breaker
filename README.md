@@ -136,13 +136,6 @@ conflict with an earlier answer. Users often pick an option without opening its 
 that sentence must not live there. Most options need no caveat; a longer or multi-line
 caveat is rejected before anything opens.
 
-`allow_defer: true` (per question, or top-level for a single question) adds a "Not yet"
-pill beside the question, for one the user may not be ready to settle because it depends
-on something still open. Pressing it locks and clears the options, shows a "Deferred"
-banner, and leaves the free-text box open for the reason; the answer counts as given for
-Send/Next. That answer then carries `"deferred": true` and an empty `selected`. Only
-answers to questions with `allow_defer` carry a `deferred` key at all.
-
 `header` (prototype, `questions` only) is Markdown shown above the progress bar, so on
 every step: typically what earlier rounds already settled, so each answer is given with
 it in view. A long header collapses behind a "Context" toggle, which also says how many

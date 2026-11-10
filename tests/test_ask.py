@@ -511,42 +511,7 @@ def test_run_ask_falls_back_to_a_new_tab_when_the_shared_session_is_busy():
     assert isinstance(fake.path, Path)  # a one-off file:// tab, not the shared session's
 
 
-def test_a_deferred_answer_is_reported_with_its_reason(browser):
-    # Selection is dropped even if the page sent one: the page locks the options while
-    # deferred, and "not yet, but also B" is not an answer the agent can act on.
-    browser(
-        lambda page: {
-            "kind": "submit",
-            "data": {"selected": ["a"], "free_text": " needs Q3 ", "deferred": True},
-        }
-    )
-    result = run_ask(
-        AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")])
-    )
-    assert result == {
-        "selected": [],
-        "free_text": "needs Q3",
-        "expanded": [],
-        "changed_from": [],
-        "deferred": True,
-    }
-
-
-def test_an_answer_that_could_have_been_deferred_says_it_was_not(browser):
-    browser(lambda page: {"kind": "submit", "data": {"selected": ["a"], "free_text": ""}})
-    result = run_ask(
-        AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")])
-    )
-    assert result == {
-        "selected": ["a"],
-        "free_text": "",
-        "expanded": [],
-        "changed_from": [],
-        "deferred": False,
-    }
-
-
-def test_deferred_is_ignored_and_absent_unless_allowed(browser):
+def test_a_deferred_key_in_a_payload_is_ignored(browser):
     browser(
         lambda page: {
             "kind": "submit",
@@ -555,53 +520,6 @@ def test_deferred_is_ignored_and_absent_unless_allowed(browser):
     )
     result = run_ask(AskRequest(question="q", options=[Option(id="a", label="A")]))
     assert result == {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": []}
-
-
-def test_multi_question_defer_is_per_question(browser):
-    browser(
-        lambda page: {
-            "kind": "submit",
-            "data": {
-                "answers": [
-                    {"selected": ["a"], "free_text": ""},
-                    {"selected": [], "free_text": "later", "deferred": True},
-                ]
-            },
-        }
-    )
-    result = run_ask(
-        AskRequest(
-            questions=[
-                Question(question="first", options=[Option(id="a", label="A")]),
-                Question(question="second", allow_defer=True, options=[]),
-            ]
-        )
-    )
-    assert result == {
-        "answers": [
-            {"selected": ["a"], "free_text": "", "expanded": [], "changed_from": [], "visits": 0},
-            {
-                "selected": [],
-                "free_text": "later",
-                "expanded": [],
-                "changed_from": [],
-                "visits": 0,
-                "deferred": True,
-            },
-        ]
-    }
-
-
-def test_the_page_offers_defer_only_when_allowed(browser):
-    pages = []
-
-    def respond(page):
-        pages.append(page)
-        return {"kind": "cancel", "data": {}}
-
-    browser(respond)
-    run_ask(AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")]))
-    assert 'class="pp-defer"' in pages[0].split("<body>", 1)[1]
 
 
 def test_changed_from_reports_abandoned_picks_only(browser):
@@ -614,20 +532,6 @@ def test_changed_from_reports_abandoned_picks_only(browser):
     result = run_ask(
         AskRequest(question="q", options=[Option(id="a", label="A"), Option(id="b", label="B")])
     )
-    assert result["changed_from"] == ["a"]
-
-
-def test_a_deferred_answer_keeps_what_was_picked_before_deferring(browser):
-    browser(
-        lambda page: {
-            "kind": "submit",
-            "data": {"selected": ["a"], "changed_from": ["a"], "deferred": True},
-        }
-    )
-    result = run_ask(
-        AskRequest(question="q", allow_defer=True, options=[Option(id="a", label="A")])
-    )
-    assert result["selected"] == []
     assert result["changed_from"] == ["a"]
 
 

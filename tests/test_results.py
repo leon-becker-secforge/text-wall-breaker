@@ -21,8 +21,8 @@ def test_every_tool_publishes_an_output_schema():
 
 
 def test_ask_answers_use_only_declared_keys():
-    step = Question(question="Q", id="q", options=[Option(id="a", label="A")], allow_defer=True)
-    raw = {"selected": ["a"], "free_text": "x", "expanded": ["a"], "deferred": False, "visits": 2}
+    step = Question(question="Q", id="q", options=[Option(id="a", label="A")])
+    raw = {"selected": ["a"], "free_text": "x", "expanded": ["a"], "visits": 2}
     single = ask_module._extract_answer(step, raw)
     multi = ask_module._extract_answer(step, raw, multi=True)
     interrupted = ask_module._interrupted(

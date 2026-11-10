@@ -96,7 +96,7 @@ __FREE_TEXT__
   // `changed_from` (in collect()): every input ever checked, in first-checked order.
   // The server drops the ones still in the final selection, so what reaches the agent
   // is only what was picked and then abandoned. Only a user's own change counts: the
-  // reload reset below and deferral uncheck without firing `change`.
+  // reload reset below unchecks without firing `change`.
   var picked = [];
   inputs.forEach(function (i) {
     i.addEventListener('change', function () {
@@ -140,37 +140,6 @@ __FREE_TEXT__
     send('theme', { theme: next });
   });
 
-  // Deferral (allow_defer): the "Not yet" pill locks the options it sits beside and
-  // clears any selection, since "not yet, but B" is not an answer the agent can act on,
-  // while the free-text box stays open for the reason. Returns a function reading the
-  // current state, so collect() can report it. Only called when the pill exists.
-  function wireDefer(root, onChange) {
-    var btn = root.querySelector('.pp-defer');
-    if (!btn) return function () { return false; };
-    var banner = root.querySelector('.pp-defer-banner');
-    var list = root.querySelector('.pp-options');
-    var text = root.querySelector('textarea[id^="pp-free-text"]');
-    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[data-option-id]'));
-    var placeholder = text ? text.placeholder : '';
-    var on = false;
-    btn.addEventListener('click', function () {
-      on = !on;
-      btn.setAttribute('aria-pressed', String(on));
-      btn.textContent = on ? 'Deferred, undo' : 'Not yet';
-      banner.hidden = !on;
-      if (list) list.classList.toggle('pp-locked', on);
-      boxes.forEach(function (i) {
-        if (on) i.checked = false;
-        i.disabled = on;
-      });
-      if (text) text.placeholder = on ? 'Why not yet? (optional)' : placeholder;
-      onChange();
-    });
-    return function () { return on; };
-  }
-  // <main>, not the form: the pill sits beside the question, which is outside it.
-  var isDeferred = wireDefer(document.querySelector('main'), function () { refresh(); });
-
   function collect() {
     return {
       selected: inputs.filter(function (i) { return i.checked; })
@@ -180,8 +149,7 @@ __FREE_TEXT__
       // open at submit time — see the `_wasExpanded` tracking above.
       expanded: drawers.filter(function (d) { return d._wasExpanded; })
                         .map(function (d) { return d.dataset.optionId; }),
-      changed_from: picked.map(function (i) { return i.dataset.optionId; }),
-      deferred: isDeferred()
+      changed_from: picked.map(function (i) { return i.dataset.optionId; })
     };
   }
 
@@ -194,7 +162,7 @@ __FREE_TEXT__
   function refresh() {
     inputs.forEach(function (i) { i._wasChecked = i.checked; });
     var d = collect();
-    submitBtn.disabled = !d.deferred && d.selected.length === 0 && d.free_text === '';
+    submitBtn.disabled = d.selected.length === 0 && d.free_text === '';
     status.hidden = !submitBtn.disabled;
     reportProgress();
   }
@@ -211,7 +179,7 @@ __FREE_TEXT__
   // A radio has no native way back to nothing picked, so a click on the one already
   // checked clears it. The browser checks a radio before its click event fires, so
   // `_wasChecked` holds the state from before the click; refresh() resyncs it after
-  // every change, including the ones code makes (prefill, deferral).
+  // every change, including the ones code makes (prefill).
   inputs.forEach(function (i) {
     if (i.type !== 'radio') return;
     i.addEventListener('click', function () {
@@ -328,7 +296,6 @@ __FREE_TEXT__
   function freeze(message) {
     frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
-    document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     if (freeText) freeText.readOnly = true;
     freezeStop();
     submitBtn.disabled = true;

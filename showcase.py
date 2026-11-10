@@ -176,7 +176,7 @@ DIFF_PAGE = """\
 
 async def showcase_ask(client: Client, images: dict[str, str]) -> None:
     # Single question: options with body, caveat, recommended, a long collapsing body,
-    # an image in the question, free text and defer.
+    # an image in the question and free text.
     await _call(
         client,
         "single question, every option feature",
@@ -202,7 +202,6 @@ async def showcase_ask(client: Client, images: dict[str, str]) -> None:
                 {"id": "none", "label": "Undecided"},
             ],
             "allow_free_text": True,
-            "allow_defer": True,
         },
     )
 
@@ -239,7 +238,7 @@ async def showcase_ask(client: Client, images: dict[str, str]) -> None:
         },
     )
 
-    # Several questions as a wizard, with header, ids, per-question defer and prefill.
+    # Several questions as a wizard, with header, ids and prefill.
     # "Stop here" on any step returns `interrupted: true` and a `resume` id.
     result = await _call(
         client,
@@ -252,7 +251,6 @@ async def showcase_ask(client: Client, images: dict[str, str]) -> None:
                 {
                     "id": "region",
                     "question": "Which region?",
-                    "allow_defer": True,
                     "options": [
                         {"id": "eu", "label": "eu-central-1", "recommended": True},
                         {"id": "us", "label": "us-east-1"},

@@ -97,7 +97,6 @@ __STEPS__
   var inputs = [];
   var drawers = [];
   var freeTexts = [];
-  var stepDeferred = [];
   // `changed_from` and `visits` (in collect()): see the single-question page for
   // `picked`. Inputs, not ids, since two steps may reuse an option id. `visits` counts
   // showStep() calls per step, so the first view is 1 and each Back or Next onto it adds 1.
@@ -157,7 +156,6 @@ __STEPS__
       freeTexts.push(t);
       t.addEventListener('input', refresh);
     });
-    stepDeferred.push(wireDefer(el, function () { refresh(); }));
   }
 
   // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
@@ -208,37 +206,7 @@ __STEPS__
   function stepFreeText(step) {
     return document.getElementById('pp-free-text-' + step);
   }
-  // Deferral (allow_defer): the "Not yet" pill locks the options it sits beside and
-  // clears any selection, since "not yet, but B" is not an answer the agent can act on,
-  // while the free-text box stays open for the reason. Returns a function reading the
-  // current state, so collect() can report it. Only called when the pill exists.
-  function wireDefer(root, onChange) {
-    var btn = root.querySelector('.pp-defer');
-    if (!btn) return function () { return false; };
-    var banner = root.querySelector('.pp-defer-banner');
-    var list = root.querySelector('.pp-options');
-    var text = root.querySelector('textarea[id^="pp-free-text"]');
-    var boxes = Array.prototype.slice.call(root.querySelectorAll('input[data-option-id]'));
-    var placeholder = text ? text.placeholder : '';
-    var on = false;
-    btn.addEventListener('click', function () {
-      on = !on;
-      btn.setAttribute('aria-pressed', String(on));
-      btn.textContent = on ? 'Deferred, undo' : 'Not yet';
-      banner.hidden = !on;
-      if (list) list.classList.toggle('pp-locked', on);
-      boxes.forEach(function (i) {
-        if (on) i.checked = false;
-        i.disabled = on;
-      });
-      if (text) text.placeholder = on ? 'Why not yet? (optional)' : placeholder;
-      onChange();
-    });
-    return function () { return on; };
-  }
-
   function stepAnswered(step) {
-    if (stepDeferred[step]()) return true;
     var selected = stepInputs(step).some(function (i) { return i.checked; });
     var ft = stepFreeText(step);
     return selected || (ft && ft.value.trim() !== '');
@@ -255,8 +223,7 @@ __STEPS__
                                  .map(function (d) { return d.dataset.optionId; }),
         changed_from: picked.filter(function (i) { return i.dataset.step === String(s); })
                             .map(function (i) { return i.dataset.optionId; }),
-        visits: visits[s],
-        deferred: stepDeferred[s]()
+        visits: visits[s]
       });
     }
     return { answers: answers };
@@ -422,7 +389,6 @@ __STEPS__
   function freeze(message) {
     frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
-    document.querySelectorAll('.pp-defer').forEach(function (b) { b.disabled = true; });
     freeTexts.forEach(function (t) { t.readOnly = true; });
     freezeStop();
     backBtn.disabled = true;

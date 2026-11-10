@@ -22,7 +22,6 @@ from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, Field
 
 from .ask import (
-    ALLOW_DEFER_DESCRIPTION,
     AskRequest,
     BrowserUnavailable,
     InvalidAsk,
@@ -177,12 +176,11 @@ async def ask(
     allow_free_text: Annotated[
         bool, Field(description="Show a free-text box alongside the options.")
     ] = True,
-    allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False,
     questions: Annotated[
         list[Question] | None,
         Field(
             description="Several questions on one page. Set instead of "
-            "question/options/multi_select/allow_free_text/allow_defer; the result is "
+            "question/options/multi_select/allow_free_text; the result is "
             '{"answers": [...]}.'
         ),
     ] = None,
@@ -225,7 +223,6 @@ async def ask(
         options=options or [],
         multi_select=multi_select,
         allow_free_text=allow_free_text,
-        allow_defer=allow_defer,
         questions=questions,
         header=header,
         resume=resume,

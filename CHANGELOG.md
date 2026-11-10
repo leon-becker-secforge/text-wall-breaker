@@ -32,6 +32,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - A mermaid diagram is drawn when it is first on screen, so a diagram inside a slide or
   page that starts hidden is no longer drawn with no size.
 
+### Removed
+
+- The "Not yet" control: the `allow_defer` parameter of `ask` (and of each entry of
+  `questions`), the pill and its banner on the page, and the `deferred` key of an answer. A
+  call that still passes `allow_defer` is no longer offered the control.
+
 ### Fixed
 
 - Under WSL with `appendWindowsPath = false`, the server no longer refuses to start with
@@ -44,8 +50,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   - a code block with a long line no longer widens the whole question;
   - a table wider than its column scrolls inside its own block;
   - an unbreakable word (a URL, an identifier) in a question, option label, body or caveat
-    breaks inside its box instead of running under the Recommended tag, the Details pill, the
-    "Not yet" button or the next gallery card;
+    breaks inside its box instead of running under the Recommended tag, the Details pill or
+    the next gallery card;
   - on a narrow window the Recommended tag and Details pill wrap below the label instead of
     squeezing it to a letter per line.
 - Markdown with a link or image whose URL is never closed, such as `[t](https://example.com/...`

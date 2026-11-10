@@ -1158,7 +1158,6 @@ def build_page(
     allow_free_text: bool,
     free_text_prefill: str = "",
     submit_url: str,
-    allow_defer: bool = False,
     title: str = "Claude Code is asking",
     accent: str | None = None,
     theme: str | None = None,
@@ -1238,10 +1237,7 @@ def build_page(
         .replace("__TITLE__", html.escape(title, quote=True))
         .replace(
             "__QUESTION_BLOCK__",
-            _with_defer(
-                f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>',
-                allow_defer,
-            ),
+            f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>',
         )
         .replace("__OPTIONS__", options_html)
         .replace("__FREE_TEXT__", free_text)
@@ -1256,29 +1252,12 @@ def build_page(
     )
 
 
-# The "Not yet" pill sits beside the question rather than in the action row, and a
-# banner above the options says the question is deferred while it is: picked over an
-# action-row button (easy to overlook) and a checkbox row under the options in a
-# three-way visual A/B/C. The page's script (wireDefer) does the locking.
-_DEFER_CONTROL = '<button type="button" class="pp-defer" aria-pressed="false">Not yet</button>'
-_DEFER_BANNER = (
-    '<div class="pp-defer-banner" hidden>Deferred: this stays open for a later round.</div>'
-)
-
-
 def _question_html(question: str, asset_base_url: str | None) -> tuple[str, str]:
     """The question's HTML and the class marking a long one, so only its lead stays bold."""
     if len(first_paragraph(question)) <= LONG_QUESTION_CHARS:
         return render_markdown(question, asset_base_url=asset_base_url), ""
     leading = bold_lead(question) or question
     return render_markdown(leading, asset_base_url=asset_base_url), " pp-long"
-
-
-def _with_defer(question_block: str, allow_defer: bool) -> str:
-    """`question_block` with the defer pill beside it and its banner after, if allowed."""
-    if not allow_defer:
-        return question_block
-    return f'<div class="pp-question-row">{question_block}{_DEFER_CONTROL}</div>\n{_DEFER_BANNER}'
 
 
 def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None = None) -> str:
@@ -1305,10 +1284,7 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
     # The wizard's JS toggles `pp-step-active` on navigation; the first step starts with
     # it already set so the page shows question one even before the script has run.
     active = " pp-step-active" if index == 0 else ""
-    question_block = _with_defer(
-        f'    <div class="pp-question{question_class}">{question_html}</div>',
-        bool(spec.get("allow_defer")),
-    )
+    question_block = f'    <div class="pp-question{question_class}">{question_html}</div>'
     return (
         f'  <section class="pp-step{active}" data-step-index="{index}">\n'
         f"{question_block}\n"

@@ -148,10 +148,10 @@ def test_ask_schema_matches_the_agreed_shape():
         "options",
         "multi_select",
         "allow_free_text",
-        "allow_defer",
         "questions",
         "header",
     }
+    assert "allow_defer" not in properties
     assert "timeout_seconds" not in properties
     option = schema["$defs"]["Option"]["properties"]
     assert set(option) == {"id", "label", "caveat", "body", "selected", "recommended"}
@@ -163,7 +163,6 @@ def test_ask_schema_matches_the_agreed_shape():
         "options",
         "multi_select",
         "allow_free_text",
-        "allow_defer",
     }
 
 
@@ -289,3 +288,17 @@ def test_pp_review_prompt_takes_an_explicit_base():
     text = _prompt_text(base="release/1.x")
     assert "The base is `release/1.x`." in text
     assert "upstream" not in text
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"question": "q", "allow_free_text": False, "allow_defer": True},
+        {"questions": [{"question": "q", "allow_free_text": False, "allow_defer": True}]},
+    ],
+)
+def test_a_call_that_still_passes_the_removed_allow_defer_is_not_rejected_for_it(arguments):
+    # Callers written while the parameter existed keep working: it is ignored, so the only
+    # error left is the unrelated "no way to answer" one these arguments are built to hit.
+    with pytest.raises(ToolError, match="no way to answer"):
+        anyio.run(server.call_tool, "ask", arguments)

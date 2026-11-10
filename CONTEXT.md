@@ -36,16 +36,11 @@ The option the agent leans towards. Marked visibly and read first, never chosen 
 operator's behalf. At most one per single-choice question.
 _Avoid_: default, suggested, preselected
 
-**Deferred question**:
-A question the operator declines to settle yet because it depends on something still open.
-Distinct from cancelling, which ends the whole ask.
-_Avoid_: skipped, postponed, unanswered
-
 **Interruption**:
 The operator stopping an ask at one question because the agent should read that answer
 now: the two are misaligned, or the answer matters too much to wait. Ends the ask at once
 and always carries the operator's own words on that question. Distinct from cancelling,
-which ends the ask with nothing to say, and from deferring, which keeps the ask going.
+which ends the ask with nothing to say.
 _Avoid_: escalation, flag, raise, urgent answer
 
 ### Review

@@ -138,13 +138,6 @@ class Option(BaseModel):
     ] = False
 
 
-ALLOW_DEFER_DESCRIPTION = (
-    'Offer a "Not yet" control, for a question that depends on something still open. '
-    "A deferred answer comes back with deferred: true, no selection, and the reason "
-    "(if any) in free_text. The deferred key only appears when this is set."
-)
-
-
 class Question(BaseModel):
     """One question on a page: the single-question shape, reused for `questions`."""
 
@@ -167,7 +160,6 @@ class Question(BaseModel):
     allow_free_text: Annotated[
         bool, Field(description="Show a free-text box alongside the options.")
     ] = True
-    allow_defer: Annotated[bool, Field(description=ALLOW_DEFER_DESCRIPTION)] = False
     free_text: Annotated[
         str | None,
         Field(description="Prefill: text the free-text box starts with, for the user to edit."),
@@ -233,7 +225,6 @@ class AskRequest(BaseModel):
     options: list[Option] = []
     multi_select: bool = False
     allow_free_text: bool = True
-    allow_defer: bool = False
     questions: list[Question] | None = None
     header: str = ""
     resume: str | None = None
@@ -279,7 +270,6 @@ class AskRequest(BaseModel):
             options=self.options,
             multi_select=self.multi_select,
             allow_free_text=self.allow_free_text,
-            allow_defer=self.allow_defer,
             free_text=self.free_text,
         )
 
@@ -353,17 +343,8 @@ def _extract_answer(step: Question, raw: object, *, multi: bool = False) -> dict
         "free_text": free_text.strip() if isinstance(free_text, str) else "",
         "expanded": _known_ids("expanded"),
     }
-    # Only on a step that offered it, so callers who never asked for deferral see the
-    # same shape as before. A deferred answer never carries a selection: the page locks
-    # the options while deferred, and this holds even if a payload says otherwise.
-    if step.allow_defer:
-        deferred = isinstance(raw, dict) and raw.get("deferred") is True
-        answer["deferred"] = deferred
-        if deferred:
-            answer["selected"] = []
     if not SHARE_INTERACTION_SIGNALS:
         return answer
-    # Set after deferral has emptied `selected`, so a pick abandoned by deferring counts.
     # dict.fromkeys dedupes in first-picked order.
     final = set(answer["selected"])
     changed = dict.fromkeys(value for value in _known_ids("changed_from") if value not in final)
@@ -398,7 +379,6 @@ def _build_html(
             options=[option.model_dump() for option in step.options],
             multi_select=step.multi_select,
             allow_free_text=step.allow_free_text,
-            allow_defer=step.allow_defer,
             free_text_prefill=step.free_text or "",
             submit_url=submit_url,
             accent=_resolve_accent(),
@@ -415,7 +395,6 @@ def _build_html(
                 "options": [option.model_dump() for option in step.options],
                 "multi_select": step.multi_select,
                 "allow_free_text": step.allow_free_text,
-                "allow_defer": step.allow_defer,
                 "free_text": step.free_text,
             }
             for step in steps
@@ -490,10 +469,7 @@ def _save_draft(
 
 
 def _resumed_request(request: AskRequest) -> AskRequest:
-    """The ask `request.resume` names, reopened with the user's earlier answers prefilled.
-
-    A deferral is not carried over (its reason stays in the free-text box).
-    """
+    """The ask `request.resume` names, reopened with the user's earlier answers prefilled."""
     with _drafts_lock:
         draft = _drafts.pop(request.resume or "", None)
     if draft is None or time.monotonic() - draft.saved > _DRAFT_TTL_SECONDS:
@@ -525,7 +501,6 @@ def _resumed_request(request: AskRequest) -> AskRequest:
         options=only.options,
         multi_select=only.multi_select,
         allow_free_text=only.allow_free_text,
-        allow_defer=only.allow_defer,
         free_text=only.free_text,
     )
 
@@ -560,9 +535,7 @@ def _interrupted(
     if not isinstance(stop, int) or isinstance(stop, bool) or not 0 <= stop < len(steps):
         stop = 0
     entered = [
-        index
-        for index, answer in enumerate(answers)
-        if answer["selected"] or answer["free_text"] or answer.get("deferred")
+        index for index, answer in enumerate(answers) if answer["selected"] or answer["free_text"]
     ]
     answers = answers[: max([stop, *entered]) + 1]
     answers[stop]["interrupted"] = True
@@ -628,7 +601,6 @@ def _start_live(
             options=new.options,
             multi_select=new.multi_select,
             allow_free_text=new.allow_free_text,
-            allow_defer=new.allow_defer,
         )
         return (
             lambda generation: _build_html(

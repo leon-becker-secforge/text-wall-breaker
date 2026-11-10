@@ -20,7 +20,6 @@ class AskResult(TypedDict, total=False):
     selected: list[str]
     free_text: str
     expanded: list[str]
-    deferred: bool
     changed_from: list[str]
     visits: int
     answers: list[dict[str, Any]]
