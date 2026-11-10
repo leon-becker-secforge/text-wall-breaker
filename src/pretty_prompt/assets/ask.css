@@ -153,14 +153,16 @@ main img { cursor: zoom-in; }
   font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
 #pp-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
 
-.pp-question { margin: 0 40px 14px 0; padding: 0; }
+/* 74px on the right: the theme toggle (30px) and the export icon (30px, 34px in) share the
+   top-right corner, and a heading must stop short of both. */
+.pp-question { margin: 0 74px 14px 0; padding: 0; }
 .pp-question > :first-child { margin-block-start: 0; font-weight: 600; font-size: 1.05em; }
 .pp-question.pp-long > :first-child { font-weight: 400; font-size: 1em; }
 .pp-question > :last-child { margin-block-end: 0; }
 .pp-question > :not(:first-child) { color: var(--ntw-fg-muted); font-size: 0.9em; }
 .pp-question img { max-width: 100%; height: auto; border-radius: 6px; }
 
-.pp-question-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 40px 14px 0; }
+.pp-question-row { display: flex; align-items: flex-start; gap: 10px; margin: 0 74px 14px 0; }
 /* min-width: 0 lets the question shrink below its widest content (a long code line), which
    scrolls inside its own block instead of widening the page. */
 .pp-question-row > .pp-question { flex: 1; margin: 0; min-width: 0; }

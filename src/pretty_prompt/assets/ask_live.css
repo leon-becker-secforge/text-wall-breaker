@@ -22,7 +22,8 @@
 }
 @media (max-width: 699px) { .pp-option .pp-option-select { padding-right: 40px; } }
 .pp-question { position: relative; }
-.pp-question .pp-live-ask { top: 0; right: -36px; }
+/* Below the theme toggle and the export icon, which fill the corner above it. */
+.pp-question .pp-live-ask { top: 30px; right: -36px; }
 
 /* Same text size as the page: the panel is read at the same distance as the question. */
 #pp-live-panel { position: fixed; right: 16px; top: 64px; bottom: 16px; width: 360px;

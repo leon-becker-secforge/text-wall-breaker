@@ -66,7 +66,7 @@ main { max-width: min(1760px, 98vw); margin: 0 auto; position: relative; }
 
 /* The top of the page (picked over a card and a document layout in a prototype): a slim row,
    the header folded under Details, the path as a breadcrumb, the blurb one quiet line. */
-.pp-head { margin: 0 0 12px; padding: 0 40px 8px 0; border-bottom: 1px solid var(--ntw-border); }
+.pp-head { margin: 0 0 12px; padding: 0 74px 8px 0; border-bottom: 1px solid var(--ntw-border); }
 .pp-head-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .pp-head-title { font-size: 1.1em; font-weight: 700; margin: 0; }
 .pp-chips { display: flex; flex-wrap: wrap; gap: 8px; }

@@ -1,5 +1,5 @@
 
-.pp-header { color: var(--ntw-fg-muted); font-size: 0.85em; margin: 0 40px 14px 0; }
+.pp-header { color: var(--ntw-fg-muted); font-size: 0.85em; margin: 0 74px 14px 0; }
 .pp-header > :first-child, .pp-header-body > :first-child { margin-block-start: 0; }
 .pp-header > :last-child, .pp-header-body > :last-child { margin-block-end: 0; }
 details.pp-header > summary { cursor: pointer; list-style: none; font-family: var(--pp-font-mono);
