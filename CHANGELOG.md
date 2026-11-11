@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- On `ask` pages the Recommended tag and the Details pill float at the top right of an
+  option's label, and a long label wraps under them: from its second line on, the label
+  runs the full width of the option instead of a narrow column beside the tag.
+
 ## [0.19.0] - 2026-11-10
 
 ### Added

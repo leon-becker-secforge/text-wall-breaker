@@ -1004,16 +1004,31 @@ def _render_options(
         # announce with none at all. Plain-escaped, not label_html: an aria-label is read
         # as text, not markup, so it must stay free of HTML tags.
         checked_attr = " checked" if option.get("selected") else ""
+        body_html = render_markdown(str(body), asset_base_url=asset_base_url) if body else ""
+        # A gallery never drawers its images behind a click — the whole point is seeing
+        # them at once — so it always takes the inline branch, long body or not.
+        drawer = bool(body) and not gallery and _is_long_body(body_html)
+
+        # The row is the drawer's <summary>, but only the Details pill opens it; the
+        # page's script turns any other click on the row into selecting the option.
+        tags = (
+            '<span class="pp-option-recommended">Recommended</span>'
+            if option.get("recommended")
+            else ""
+        ) + (
+            f'<span class="pp-option-details" aria-hidden="true">Details{_CHEVRON_SVG}</span>'
+            if drawer
+            else ""
+        )
+        # The tag and the Details pill float inside the label, ahead of its text, so a
+        # long label wraps under them instead of being squeezed into a column beside them.
+        tags_html = f'<span class="pp-option-tags">{tags}</span>' if tags else ""
         select_html = (
             f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr}'
             f'{checked_attr} aria-label="{label}">'
-            f'<span class="pp-option-label">{label_html}</span>'
-            + (
-                '<span class="pp-option-recommended">Recommended</span>'
-                if option.get("recommended")
-                else ""
-            )
+            f'<span class="pp-option-label">{tags_html}{label_html}</span>'
         )
+
         # Inside the select row (the <label> or the drawer's <summary>) rather than a
         # sibling of the body: a closed <details> shows only its <summary>, and the
         # caveat has to stay visible without opening anything. Inline rendering only, so
@@ -1029,26 +1044,20 @@ def _render_options(
             )
             continue
 
-        body_html = render_markdown(str(body), asset_base_url=asset_base_url)
         body_div = f'<div class="pp-option-body">{body_html}</div>'
 
-        # A gallery never drawers its images behind a click — the whole point is seeing
-        # them at once — so it always takes the inline branch, long body or not.
-        if gallery or not _is_long_body(body_html):
+        if not drawer:
             rows.append(
                 f'    <li class="pp-option"><label class="pp-option-select">'
                 f"{select_html}{caveat_html}</label>{body_div}</li>"
             )
             continue
 
-        # The row is the drawer's <summary>, but only the Details pill opens it; the
-        # page's script turns any other click on the row into selecting the option.
         open_attr = " open" if option.get("recommended") else ""
-        details = f'<span class="pp-option-details" aria-hidden="true">Details{_CHEVRON_SVG}</span>'
         rows.append(
             f'    <li class="pp-option"><details class="pp-option-drawer" '
             f'data-option-id="{option_id}"{open_attr}>'
-            f'<summary class="pp-option-select">{select_html}{details}{caveat_html}</summary>'
+            f'<summary class="pp-option-select">{select_html}{caveat_html}</summary>'
             f"{body_div}</details></li>"
         )
     ul_class = "pp-options pp-options-gallery" if gallery else "pp-options"

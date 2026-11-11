@@ -340,9 +340,17 @@ _RECOMMENDED_TAG = '<span class="pp-option-recommended">Recommended</span>'
 
 
 @pytest.mark.parametrize("body", [None, "short", "x " * 250], ids=["no-body", "short", "long"])
-def test_recommended_option_carries_a_badge_after_its_label(body):
+def test_recommended_option_carries_a_badge_ahead_of_its_label_text(body):
+    # Ahead of the text, inside the label: the tag floats, and a float sits at the line
+    # where it appears in the source.
     html = _body(_page(options=[_option(label="Postgres", body=body, recommended=True)]))
-    assert f'<span class="pp-option-label">Postgres</span>{_RECOMMENDED_TAG}' in html
+    assert f'<span class="pp-option-label"><span class="pp-option-tags">{_RECOMMENDED_TAG}' in html
+    assert "</span>Postgres</span>" in html
+
+
+def test_details_pill_floats_with_the_badge_inside_the_label():
+    html = _body(_page(options=[_option(label="Postgres", body="x " * 250, recommended=True)]))
+    assert f'<span class="pp-option-tags">{_RECOMMENDED_TAG}<span class="pp-option-details"' in html
 
 
 def test_option_not_recommended_has_no_badge():

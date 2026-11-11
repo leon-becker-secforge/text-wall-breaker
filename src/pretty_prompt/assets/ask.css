@@ -180,9 +180,7 @@ main img { cursor: zoom-in; }
   user-select: none; }
 .pp-option-select input { margin: 0; accent-color: var(--ntw-accent); }
 /* Grows into the row and wraps its own text: the row wraps (for the caveat below), so a
-   label left at its natural width would drop onto a line of its own under the input. The
-   9em basis is the narrowest the label gets before the Recommended tag and the Details
-   pill wrap below it, instead of squeezing it to a letter per line. */
+   label left at its natural width would drop onto a line of its own under the input. */
 .pp-option-label { flex: 1 1 9em; min-width: 0; font-family: var(--pp-font-mono);
   font-weight: 500; font-size: 0.9em; overflow-wrap: anywhere; }
 /* Picked over a muted line (read as body text, easy to miss) and warning-coloured text
@@ -205,18 +203,20 @@ main img { cursor: zoom-in; }
 /* A gallery card has 10px padding all round, and column-reverse puts its select row at
    the bottom whatever follows it in the markup, so the strip always meets that edge. */
 .pp-options-gallery .pp-option-caveat { margin: 8px -10px -10px; border-radius: 0 0 5px 5px; }
+/* The Recommended tag and the Details pill float top right inside the label, so a long
+   label wraps under them rather than running in a narrow column beside them (picked over
+   a tag above the label and one after its last word). Line 2 gets the full width only
+   while the float's height, bottom margin included, stays within one label line: the
+   tag and pill are ~20.5px against a ~24.3px line, so the float takes no bottom margin. */
+.pp-option-tags { float: right; display: flex; gap: 6px; align-items: center;
+  margin-inline-start: 10px; }
 /* Picked over the solid show-style pill (loudest thing in the row, read as "already
    chosen") and a tab on the top border (cost vertical space) in a three-way visual
-   A/B/C: small outlined accent caps pushed to the right edge, just before the Details
-   pill. */
-.pp-option-recommended { margin-inline-start: auto; font-family: var(--pp-font-mono);
+   A/B/C: small outlined accent caps, just before the Details pill. */
+.pp-option-recommended { font-family: var(--pp-font-mono);
   font-size: 0.68em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
   padding: 1px 6px; flex: none; white-space: nowrap; }
-.pp-option-recommended + .pp-option-details { margin-inline-start: 6px; }
-/* Top of the row, level with the first line of the label: with a long label that wraps,
-   a centered tag floats beside its middle lines. */
-.pp-option-recommended, .pp-option-select > .pp-option-details { align-self: flex-start; }
 /* A radio cleared by clicking it again (see the script) shows that only while its row is
    hovered: the radio empties and takes a slash, previewing the cleared state. Not a
    "click again to clear" line in the row: any placement of it either squeezed a long
@@ -235,7 +235,7 @@ main img { cursor: zoom-in; }
   border-color: var(--ntw-fg-muted);
   background: linear-gradient(-45deg, transparent calc(50% - 1px), var(--ntw-fg-muted)
     calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)); }
-.pp-option-details { margin-inline-start: auto; flex: none; display: inline-flex;
+.pp-option-details { flex: none; display: inline-flex;
   align-items: center; gap: 2px; padding: 1px 6px 1px 8px; border-radius: 999px;
   border: 1px solid var(--ntw-border); color: var(--ntw-fg-muted);
   font-family: var(--pp-font-mono); font-size: 0.68em; text-transform: uppercase;

@@ -221,8 +221,13 @@
   // ---- entry: the bubble ----
   function labelOf(input) {
     var row = input.closest('.pp-option');
-    var text = row && row.querySelector('.pp-option-label');
-    return text ? text.textContent.trim().split(':')[0] : input.dataset.optionId;
+    var label = row && row.querySelector('.pp-option-label');
+    if (!label) return input.dataset.optionId;
+    // The label holds the Recommended tag and Details pill; their text is not the name.
+    var text = label.cloneNode(true);
+    var tags = text.querySelector('.pp-option-tags');
+    if (tags) tags.remove();
+    return text.textContent.trim().split(':')[0];
   }
   // A press on a bubble is the question: it sends one at once, so the agent answers
   // without the operator typing. What is typed afterwards is a follow-up on the same option.
