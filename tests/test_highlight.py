@@ -1,5 +1,5 @@
 from pretty_prompt.diff import parse_unified_diff
-from pretty_prompt.highlight import highlight_rows
+from pretty_prompt.highlight import highlight_code, highlight_rows
 
 DIFF = (
     "--- a/x.py\n+++ b/x.py\n@@ -1,3 +1,3 @@\n def f():\n-    return 1\n+    return 'a'  # c\n \n"
@@ -31,3 +31,14 @@ def test_markup_in_the_source_is_escaped():
     colored = highlight_rows("x.py", parse_unified_diff(diff))
     assert "<script>" not in colored[1]
     assert "&lt;script&gt;" in colored[1]
+
+
+def test_code_keeps_its_line_count():
+    out = highlight_code("py", "x = 1\n\ny = 2")
+    assert out is not None
+    assert out.count("\n") == 2
+
+
+def test_code_without_a_language_or_lexer_is_none():
+    assert highlight_code("", "x") is None
+    assert highlight_code("nosuchlang", "x") is None

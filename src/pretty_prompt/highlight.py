@@ -1,7 +1,7 @@
-"""Syntax coloring for the rows of a review diff.
+"""Syntax coloring for the rows of a review diff and for fenced code blocks.
 
-Rows come back as HTML whose token spans carry `tk-*` classes (Pygments short names behind
-a prefix); the palette lives in `page.py`'s review CSS.
+Both come back as HTML whose token spans carry `tk-*` classes (Pygments short names behind
+a prefix); the palette lives in `assets/tokens.css`.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from pygments import format as pygments_format
 from pygments import lex
 from pygments.formatters.html import HtmlFormatter
 from pygments.lexer import Lexer
-from pygments.lexers import get_lexer_for_filename
+from pygments.lexers import get_lexer_by_name, get_lexer_for_filename
 from pygments.util import ClassNotFound
 
 from pretty_prompt.diff import DiffLine
@@ -45,6 +45,17 @@ def _color_lines(lexer: Lexer, lines: list[str]) -> list[str]:
     if len(pieces) != len(lines):
         return [html.escape(line) for line in lines]
     return pieces
+
+
+def highlight_code(language: str, source: str) -> str | None:
+    """`source` as token-span HTML for a fence tagged `language`, or None without a lexer."""
+    if not language:
+        return None
+    try:
+        lexer = get_lexer_by_name(language, stripnl=False, ensurenl=False)
+    except ClassNotFound:
+        return None
+    return "\n".join(_color_lines(lexer, source.split("\n")))
 
 
 def highlight_rows(path: str, rows: list[DiffLine]) -> dict[int, str]:

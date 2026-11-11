@@ -2,7 +2,8 @@
 
 Deliberately not a CommonMark implementation. The prompt text an agent writes is short
 and hand-authored, so the supported set is the one an agent actually reaches for:
-headings, paragraphs, fenced and inline code, unordered and ordered lists (nestable by
+headings, paragraphs, fenced code (syntax-colored when the fence names a language
+Pygments knows) and inline code, unordered and ordered lists (nestable by
 indentation), blockquotes, links, images, bold, italic, and strikethrough. Anything
 outside that set renders as literal text rather than silently disappearing.
 
@@ -42,6 +43,8 @@ import html
 import re
 from pathlib import Path
 from urllib.parse import quote
+
+from pretty_prompt.highlight import highlight_code
 
 __all__ = ["render_inline", "render_markdown"]
 
@@ -485,7 +488,8 @@ def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
                 out.append(f'<pre class="mermaid">{_escape("\n".join(body))}</pre>')
             else:
                 attr = f' data-language="{_escape(language)}"' if language else ""
-                code = _escape("\n".join(body))
+                source = "\n".join(body)
+                code = highlight_code(language, source) or _escape(source)
                 out.append(f'<pre class="code-block"{attr}><code>{code}</code></pre>')
             index += 1
             continue

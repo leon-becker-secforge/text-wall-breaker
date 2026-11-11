@@ -58,7 +58,11 @@ def test_switching_marker_starts_a_new_list():
 
 def test_fenced_code_block_keeps_its_language():
     out = render_markdown("```python\nx = 1\n```")
-    assert out == '<pre class="code-block" data-language="python"><code>x = 1</code></pre>'
+    assert out == (
+        '<pre class="code-block" data-language="python"><code>'
+        '<span class="tk-n">x</span> <span class="tk-o">=</span> <span class="tk-mi">1</span>'
+        "</code></pre>"
+    )
 
 
 def test_unterminated_fence_renders_what_it_has():
@@ -404,3 +408,16 @@ def test_table_separator_without_a_pipe_is_a_thematic_break_not_a_table():
     # into a bogus single-cell table — see _is_table_separator's pipe requirement.
     out = render_markdown("p99 | throughput both fine\n---\nafter")
     assert out == "<p>p99 | throughput both fine</p><hr><p>after</p>"
+
+
+def test_fence_with_a_known_language_is_syntax_colored():
+    out = render_markdown("```python\ndef f():\n    return '<x>'\n```")
+    assert out.startswith('<pre class="code-block" data-language="python"><code>')
+    assert '<span class="tk-k">def</span>' in out
+    assert "<x>" not in out
+    assert "&lt;x&gt;" in out
+
+
+def test_fence_with_an_unknown_language_stays_plain():
+    out = render_markdown("```nosuchlang\na < b\n```")
+    assert out == '<pre class="code-block" data-language="nosuchlang"><code>a &lt; b</code></pre>'

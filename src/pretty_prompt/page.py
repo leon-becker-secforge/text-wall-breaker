@@ -196,7 +196,12 @@ def build_show_page(
     together when this page is served by a `SessionListener` or a one-shot
     `LoopbackListener`, left at their defaults for a plain unlistened page.
     """
-    css = _load_base_css() + _load_asset("actions.css") + _load_asset("show.css")
+    css = (
+        _load_base_css()
+        + _load_asset("actions.css")
+        + _load_asset("show.css")
+        + _load_asset("tokens.css")
+    )
     if accent is not None:
         css += _accent_css(accent)
 
@@ -758,6 +763,7 @@ def build_review_page(
         _load_base_css()
         + _load_asset("actions.css")
         + _load_asset("review.css")
+        + _load_asset("tokens.css")
         + _load_asset("export.css")
     )
     if live != "off":
@@ -1203,6 +1209,7 @@ def build_page(
         _load_base_css()
         + _load_asset("actions.css")
         + _load_asset("ask.css")
+        + _load_asset("tokens.css")
         + _load_asset("export.css")
         + live_css
         + glossary_css
@@ -1377,6 +1384,7 @@ def build_multi_page(
         _load_base_css()
         + _load_asset("actions.css")
         + _load_asset("ask.css")
+        + _load_asset("tokens.css")
         + _load_asset("multi.css")
         + _load_asset("export.css")
         + live_css

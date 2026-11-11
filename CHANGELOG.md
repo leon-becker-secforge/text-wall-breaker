@@ -5,6 +5,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `ask` and `show` pages color a fenced code block's syntax when the fence names a
+  language Pygments knows (` ```python `, ` ```bash `, …), with the same palette as
+  `review`. A fence without a language, or with one Pygments doesn't know, stays plain.
+
 ### Changed
 
 - On `ask` pages the Recommended tag and the Details pill float at the top right of an

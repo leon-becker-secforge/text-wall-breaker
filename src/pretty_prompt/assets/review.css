@@ -143,22 +143,6 @@ body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
   --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
   --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24);
   --pp-add-chg: rgba(63, 185, 122, 0.40); --pp-del-chg: rgba(240, 113, 106, 0.40); }
-/* Syntax tokens (highlight.py): Pygments short class names behind `tk-`. */
-:root { --tk-kw: #cf222e; --tk-str: #0a3069; --tk-com: #57606a; --tk-num: #0550ae;
-  --tk-fn: #8250df; --tk-ty: #953800; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --tk-kw: #ff7b72; --tk-str: #a5d6ff; --tk-com: #8b949e;
-    --tk-num: #79c0ff; --tk-fn: #d2a8ff; --tk-ty: #ffa657; }
-}
-:root[data-theme="dark"] { --tk-kw: #ff7b72; --tk-str: #a5d6ff; --tk-com: #8b949e;
-  --tk-num: #79c0ff; --tk-fn: #d2a8ff; --tk-ty: #ffa657; }
-.pp-review-text [class^="tk-k"] { color: var(--tk-kw); }
-.pp-review-text [class^="tk-s"] { color: var(--tk-str); }
-.pp-review-text [class^="tk-c"] { color: var(--tk-com); font-style: italic; }
-.pp-review-text [class^="tk-m"] { color: var(--tk-num); }
-.pp-review-text .tk-nf, .pp-review-text .tk-fm, .pp-review-text .tk-nd { color: var(--tk-fn); }
-.pp-review-text .tk-nc, .pp-review-text .tk-nb, .pp-review-text .tk-ne,
-.pp-review-text .tk-nn { color: var(--tk-ty); }
 /* Long lines wrap; a wrapped line hangs under the text, not under the +/- mark. */
 .pp-review-row { display: flex; align-items: flex-start; padding: 1px 12px 1px 0;
   white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
