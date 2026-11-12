@@ -11,7 +11,8 @@ details.pp-header[open] > summary::before { transform: rotate(90deg); }
 .pp-header-count { border: 1px solid var(--ntw-border); border-radius: 999px; padding: 0 7px;
   margin-inline-start: 4px; }
 .pp-header-body { margin-block-start: 6px; }
-.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 18px 0; }
+/* 74px on the right, as for .pp-header: the theme toggle and export icon share the corner. */
+.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 74px 18px 0; }
 .pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
 /* One segment per question: filled = answered or already passed, ringed = current. A
    segment before the current one is a button that goes back to that question; the

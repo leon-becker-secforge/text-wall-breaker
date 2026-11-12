@@ -23,6 +23,11 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   option's label, and a long label wraps under them: from its second line on, the label
   runs the full width of the option instead of a narrow column beside the tag.
 
+### Fixed
+
+- On a multi-question `ask` page the progress bar stops short of the export icon instead
+  of running under it.
+
 ## [0.19.0] - 2026-11-10
 
 ### Added
