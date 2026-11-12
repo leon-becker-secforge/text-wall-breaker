@@ -1349,9 +1349,24 @@ def _render_rank(
         sent = prefill.get("order")
         order = [i for i in sent if i in by_id] if isinstance(sent, list) else []
         order = list(dict.fromkeys(order))
-        order += [i for i in ids if i not in order]
+        sent = prefill.get("excluded")
+        excluded = [i for i in sent if i in by_id] if isinstance(sent, list) else []
+        excluded = [i for i in dict.fromkeys(excluded) if i not in order]
+        order += [i for i in ids if i not in order and i not in excluded]
         items = []
-        for option_id in order:
+        # The cut line is a list entry of its own: rows after it are left out.
+        cut = (
+            '<li class="pp-rank-cut" draggable="true">'
+            '<button type="button" class="pp-rank-move" data-move="-1" '
+            'aria-label="Move the cut line up">&#8593;</button>'
+            "<span>left out below</span>"
+            '<button type="button" class="pp-rank-move" data-move="1" '
+            'aria-label="Move the cut line down">&#8595;</button></li>'
+        )
+        for option_id in [*order, None, *excluded]:
+            if option_id is None:
+                items.append(cut)
+                continue
             option = by_id[option_id]
             body = option.get("body")
             caveat = option.get("caveat")

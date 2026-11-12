@@ -175,8 +175,11 @@ takes for one question. The result carries one answer per question, in order, un
 A ranking question is a `questions` entry whose options the user orders instead of
 picking. `rank` turns it on and selects the widget:
 
-- `"rank": true` shows one ordered list. The user drags rows or uses the arrow
-  buttons. The answer carries `order`, every option id once, most important first.
+- `"rank": true` shows one ordered list ending in a cut line. The user drags rows or
+  uses the arrow buttons, and moves the cut line the same way. The answer carries
+  `order`, the option ids above the cut line, most important first, and `excluded`,
+  the ids below it. The cut line starts last, so `excluded` is empty until the user
+  moves it.
 - `"rank": ["Now", "Next", "Later"]` shows one row per tier plus an Unsorted row. The
   answer carries `tiers`, a map of tier name to option ids, and `unsorted`.
 

@@ -13,7 +13,8 @@ Stop here, export and `resume` without new code for each.
 
 `rank` takes two forms, picked in a prototype (branch `lab_prototype-ask-inputs`):
 
-- `true`: one ordered list. The answer carries `order`, every option id once.
+- `true`: one ordered list with a cut line. The answer carries `order`, the option
+  ids above the line, and `excluded`, the ids below it. Every option id appears once.
 - A list of tier names, such as `["Now", "Next", "Later"]`: the options are sorted
   into those tiers. The answer carries `tiers`, a map of tier name to option ids, and
   `unsorted`.
@@ -47,3 +48,7 @@ Rejected:
   ranking with less to explain.
 - **An explicit `mode` field.** The form of `rank` already says which widget to show,
   and a second field could contradict it.
+- **A strict full order, and leaving items out as a separate area or a strike-through
+  in place.** A user ranking the steps of a change could not leave out a step that
+  should not happen now. A second prototype (branch `lab_prototype-rank-exclude`)
+  compared the three ways; the cut line won because it keeps one list and one motion.

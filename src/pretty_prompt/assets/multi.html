@@ -166,6 +166,8 @@ __STEPS__
   function wireRank(widget) {
     rankWidgets.push(widget);
     var tiered = widget.classList.contains('pp-tiers');
+    // What moves: an option, or an ordered list's cut line, which moves like a row.
+    var MOVABLE = tiered ? '[data-option-id]' : '.pp-rank-item, .pp-rank-cut';
     var dragged = null;
     function clearDrop() {
       widget.querySelectorAll('.pp-drop').forEach(function (n) { n.classList.remove('pp-drop'); });
@@ -173,7 +175,7 @@ __STEPS__
     widget.addEventListener('click', function (e) {
       var btn = e.target.closest('.pp-rank-move');
       if (!btn || frozen) return;
-      var item = btn.closest('[data-option-id]');
+      var item = btn.closest(MOVABLE);
       var up = btn.dataset.move === '-1';
       if (tiered) {
         var tier = item.closest('.pp-tier');
@@ -193,12 +195,12 @@ __STEPS__
       refresh();
     });
     widget.addEventListener('dragstart', function (e) {
-      var item = e.target.closest('[data-option-id]');
+      var item = e.target.closest(MOVABLE);
       if (!item || frozen) { e.preventDefault(); return; }
       dragged = item;
       item.classList.add('pp-dragging');
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', item.dataset.optionId);
+      e.dataTransfer.setData('text/plain', item.dataset.optionId || '');
     });
     widget.addEventListener('dragend', function () {
       if (dragged) dragged.classList.remove('pp-dragging');
@@ -207,7 +209,7 @@ __STEPS__
     });
     widget.addEventListener('dragover', function (e) {
       if (!dragged) return;
-      var zone = e.target.closest(tiered ? '.pp-tier' : '.pp-rank-item');
+      var zone = e.target.closest(tiered ? '.pp-tier' : MOVABLE);
       if (!zone) return;
       e.preventDefault();
       if (!zone.classList.contains('pp-drop')) { clearDrop(); zone.classList.add('pp-drop'); }
@@ -224,7 +226,7 @@ __STEPS__
         if (!chip) box.appendChild(dragged);
         else if (chip !== dragged) box.insertBefore(dragged, chip);
       } else {
-        var row = e.target.closest('.pp-rank-item');
+        var row = e.target.closest(MOVABLE);
         if (!row || row === dragged) return;
         var rect = row.getBoundingClientRect();
         widget.insertBefore(dragged, e.clientY > rect.top + rect.height / 2 ? row.nextElementSibling : row);
@@ -240,7 +242,15 @@ __STEPS__
                                     function (n) { return n.dataset.optionId; });
   }
   function rankAnswer(widget) {
-    if (!widget.classList.contains('pp-tiers')) return { order: itemIds(widget) };
+    if (!widget.classList.contains('pp-tiers')) {
+      var answer = { order: [], excluded: [] };
+      var into = answer.order;
+      Array.prototype.forEach.call(widget.children, function (n) {
+        if (n.classList.contains('pp-rank-cut')) into = answer.excluded;
+        else into.push(n.dataset.optionId);
+      });
+      return answer;
+    }
     var tiers = {};
     widget.querySelectorAll('.pp-tier').forEach(function (t) {
       if (t.dataset.tier) tiers[t.dataset.tier] = itemIds(t);

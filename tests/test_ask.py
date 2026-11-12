@@ -852,9 +852,34 @@ def test_a_ranking_answer_lists_every_option_once(browser):
     )
     answer = run_ask(_rank_ask(True))["answers"][0]
     assert answer["order"] == ["c", "a", "b"]
+    assert answer["excluded"] == []
     assert answer["free_text"] == "ok"
     assert "selected" not in answer and "changed_from" not in answer
     assert 'class="pp-rank"' in fake.page
+    # The cut line starts last, so nothing is left out until the user moves it.
+    assert re.search(r'data-option-id="c".*?</li>\s*<li class="pp-rank-cut"', fake.page, re.S)
+
+
+def test_options_below_the_cut_line_come_back_excluded(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"answers": [{"order": ["b"], "excluded": ["c", "b", "x"]}]},
+        }
+    )
+    answer = run_ask(_rank_ask(True))["answers"][0]
+    assert answer["order"] == ["b", "a"]
+    assert answer["excluded"] == ["c"]
+
+
+def test_leaving_an_option_out_counts_as_entered_and_resumes_below_the_cut(browser):
+    browser(lambda page: _cancel_after({"answers": [{"order": ["a", "b"], "excluded": ["c"]}]}))
+    resume = run_ask(_rank_ask(True))["resume"]
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(resume=resume))
+    below = fake.page.split('class="pp-rank-cut"', 1)[1].split("</ol>", 1)[0]
+    assert 'data-option-id="c"' in below
+    assert 'data-option-id="a"' not in below
 
 
 def test_a_tiers_answer_puts_each_option_in_one_tier_or_unsorted(browser):

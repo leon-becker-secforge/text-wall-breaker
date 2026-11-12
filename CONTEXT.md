@@ -47,6 +47,11 @@ One named group of a ranking question, such as "Now" or "Later". Options left in
 tier come back as unsorted.
 _Avoid_: bucket, column, lane
 
+**Cut line**:
+The divider in a ranking question's ordered list. Options below it are left out of the
+ranking and come back as excluded. It starts last, so nothing is left out by default.
+_Avoid_: separator, threshold, fold
+
 **Interruption**:
 The operator stopping an ask at one question because the agent should read that answer
 now: the two are misaligned, or the answer matters too much to wait. Ends the ask at once

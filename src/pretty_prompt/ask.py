@@ -168,9 +168,9 @@ class Question(BaseModel):
         bool | list[str] | None,
         Field(
             description="Questions only: the user ranks `options` instead of picking. "
-            'true: one ordered list. Tier names (["Now", "Next", "Later"]): sorted into '
-            "those tiers. The answer carries `order`, or `tiers` and `unsorted`, "
-            "instead of `selected`."
+            "true: one ordered list, items below a cut line left out. Tier names "
+            '(["Now", "Next", "Later"]): sorted into those tiers. The answer carries '
+            "`order` and `excluded`, or `tiers` and `unsorted`, instead of `selected`."
         ),
     ] = None
     # The `order` or `tiers` a `resume` reopens a rank question with. Kept apart from
@@ -399,20 +399,27 @@ def _extract_answer(step: Question, raw: object, *, multi: bool = False) -> dict
 
 
 def _ranking(step: Question, raw: object) -> dict[str, Any]:
-    """`order`, or `tiers` and `unsorted`, from a page's answer for a rank question.
+    """`order` and `excluded`, or `tiers` and `unsorted`, from a page's rank answer.
 
     Every option appears exactly once: ids the page sent twice or never are repaired
     here, a missing one going to the end of `order` or into `unsorted`, in the order
-    the agent gave the options.
+    the agent gave the options. An id in both `order` and `excluded` stays in `order`.
     """
     ids = [option.id for option in step.options]
     raw = raw if isinstance(raw, dict) else {}
     tiers = step.tiers
     if tiers is None:
-        sent = raw.get("order")
-        order = [i for i in sent if i in ids] if isinstance(sent, list) else []
-        order = list(dict.fromkeys(order))
-        return {"order": order + [i for i in ids if i not in order]}
+
+        def known(key: str) -> list[str]:
+            sent = raw.get(key)
+            return (
+                list(dict.fromkeys(i for i in sent if i in ids)) if isinstance(sent, list) else []
+            )
+
+        order = known("order")
+        excluded = [i for i in known("excluded") if i not in order]
+        order += [i for i in ids if i not in order and i not in excluded]
+        return {"order": order, "excluded": excluded}
     sent_tiers = raw.get("tiers")
     sent_tiers = sent_tiers if isinstance(sent_tiers, dict) else {}
     placed: set[str] = set()
@@ -432,7 +439,8 @@ def _entered(step: Question, answer: dict[str, Any]) -> bool:
     if step.tiers is not None:
         return any(answer.get("tiers", {}).values())
     if step.ranked:
-        return answer.get("order") != [option.id for option in step.options]
+        default = [option.id for option in step.options]
+        return bool(answer.get("excluded")) or answer.get("order") != default
     return bool(answer.get("selected"))
 
 
@@ -592,7 +600,8 @@ def _resumed_request(request: AskRequest) -> AskRequest:
 
 def _resumed_rank_step(step: Question, answer: dict[str, Any]) -> Question:
     resumed = step.model_copy(update={"free_text": answer["free_text"] or None})
-    resumed._rank_prefill = {key: answer[key] for key in ("order", "tiers") if key in answer}
+    keys = ("order", "excluded", "tiers")
+    resumed._rank_prefill = {key: answer[key] for key in keys if key in answer}
     return resumed
 
 

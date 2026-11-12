@@ -62,11 +62,20 @@ details.pp-header[open] > summary::before { transform: rotate(90deg); }
 .pp-rank-move:hover:not(:disabled) { border-color: var(--ntw-accent); color: var(--ntw-accent); }
 .pp-rank-move:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px; }
 .pp-rank-move:disabled { opacity: .4; cursor: default; }
-.pp-rank-item:first-child [data-move="-1"],
-.pp-rank-item:last-child [data-move="1"] { visibility: hidden; }
+.pp-rank > :first-child [data-move="-1"],
+.pp-rank > :last-child [data-move="1"] { visibility: hidden; }
 .pp-tier:first-child [data-move="-1"], .pp-tier:last-child [data-move="1"] { display: none; }
 .pp-dragging { opacity: .4; }
 .pp-rank-item.pp-drop { border-color: var(--ntw-accent); }
+/* The cut line: rows after it are left out, so they are dimmed and not numbered. */
+.pp-rank-cut { display: flex; align-items: center; gap: 10px; padding: 2px 0; cursor: grab;
+  color: var(--ntw-fg-muted); font: 600 0.75em var(--pp-font-mono); text-transform: uppercase;
+  letter-spacing: .05em; }
+.pp-rank-cut::before, .pp-rank-cut::after { content: ""; flex: 1;
+  border-top: 2px dashed var(--ntw-border); }
+.pp-rank-cut.pp-drop::before, .pp-rank-cut.pp-drop::after { border-color: var(--ntw-accent); }
+.pp-rank-cut ~ .pp-rank-item { counter-increment: none; opacity: .5; }
+.pp-rank-cut ~ .pp-rank-item .pp-rank-pos::before { content: "\2013"; }
 
 .pp-tiers { display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px; }
 .pp-tier { display: grid; grid-template-columns: 7em 1fr; min-height: 48px;
