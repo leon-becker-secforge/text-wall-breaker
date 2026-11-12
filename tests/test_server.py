@@ -163,7 +163,10 @@ def test_ask_schema_matches_the_agreed_shape():
         "options",
         "multi_select",
         "allow_free_text",
+        "rank",
     }
+    # Ranking is for `questions` only: the single-question top level stays without it.
+    assert "rank" not in properties
 
 
 @pytest.mark.parametrize(

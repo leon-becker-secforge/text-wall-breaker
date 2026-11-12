@@ -36,3 +36,48 @@ details.pp-header[open] > summary::before { transform: rotate(90deg); }
 .pp-step.pp-step-active { display: block; }
 .pp-step .pp-question { margin: 0 0 10px; }
 .pp-step .pp-free-text { margin: 10px 0 16px; }
+
+/* Rank questions (page.py's _render_rank). Ordered list: a row per option, numbered by
+   a counter so a move only reorders nodes. Tiers: a row per tier, chips inside. A list
+   row's useless up or down keeps its space so the rows line up; a chip's is dropped. */
+.pp-rank { list-style: none; padding: 0; margin: 0 0 16px; display: flex;
+  flex-direction: column; gap: 6px; counter-reset: pp-rank; }
+.pp-rank-item { counter-increment: pp-rank; display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 10px; border: 1px solid var(--ntw-border); border-radius: 6px;
+  background: var(--ntw-bg-elevated); }
+.pp-rank-grip { cursor: grab; color: var(--ntw-fg-muted); user-select: none; line-height: 1.5; }
+.pp-rank-pos::before { content: counter(pp-rank); }
+.pp-rank-pos { font: 600 0.9em var(--pp-font-mono); color: var(--ntw-accent); min-width: 1.6em;
+  text-align: right; line-height: 1.6; }
+.pp-rank-text { flex: 1; min-width: 0; }
+.pp-rank-body { color: var(--ntw-fg-muted); font-size: 0.85em; margin-top: 2px; }
+.pp-rank-body > :first-child { margin-top: 0; }
+.pp-rank-body > :last-child { margin-bottom: 0; }
+.pp-rank-caveat { margin-top: 6px; padding: 3px 8px; border-left: 3px solid var(--ntw-warning);
+  font-size: 0.82em; }
+.pp-rank-move { flex: none; font: 0.8em var(--pp-font-mono); border: 1px solid var(--ntw-border);
+  background: var(--ntw-bg-elevated); color: var(--ntw-fg); border-radius: 4px;
+  padding: 2px 7px; cursor: pointer; }
+.pp-rank-move:hover:not(:disabled) { border-color: var(--ntw-accent); color: var(--ntw-accent); }
+.pp-rank-move:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px; }
+.pp-rank-move:disabled { opacity: .4; cursor: default; }
+.pp-rank-item:first-child [data-move="-1"],
+.pp-rank-item:last-child [data-move="1"] { visibility: hidden; }
+.pp-tier:first-child [data-move="-1"], .pp-tier:last-child [data-move="1"] { display: none; }
+.pp-dragging { opacity: .4; }
+.pp-rank-item.pp-drop { border-color: var(--ntw-accent); }
+
+.pp-tiers { display: flex; flex-direction: column; gap: 8px; margin: 0 0 16px; }
+.pp-tier { display: grid; grid-template-columns: 7em 1fr; min-height: 48px;
+  border: 1px solid var(--ntw-border); border-radius: 8px; overflow: hidden; }
+.pp-tier.pp-drop { border-color: var(--ntw-accent); }
+.pp-tier-name { display: grid; place-items: center; padding: 4px 6px; text-align: center;
+  font: 600 0.85em var(--pp-font-mono); background: var(--ntw-verdict-bg); overflow-wrap: anywhere; }
+.pp-tier-unsorted .pp-tier-name { background: var(--ntw-code-bg); color: var(--ntw-fg-muted); }
+.pp-tier-items { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; align-content: flex-start; }
+.pp-tier-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px 3px 11px;
+  border: 1px solid var(--ntw-border); border-radius: 999px; background: var(--ntw-bg-elevated);
+  cursor: grab; max-width: 100%; }
+.pp-tier-chip:hover { border-color: var(--ntw-accent); }
+.pp-tier-chip .pp-option-label { font-size: 0.85em; }
+.pp-tier-chip .pp-rank-move { border: 0; padding: 1px 4px; }

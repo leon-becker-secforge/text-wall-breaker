@@ -156,6 +156,96 @@ __STEPS__
       freeTexts.push(t);
       t.addEventListener('input', refresh);
     });
+    var widget = el.querySelector('.pp-rank, .pp-tiers');
+    if (widget) wireRank(widget);
+  }
+
+  // A rank question (page.py's _render_rank): the DOM order is the answer, so a move
+  // only moves nodes, and collect() reads them back.
+  var rankWidgets = [];
+  function wireRank(widget) {
+    rankWidgets.push(widget);
+    var tiered = widget.classList.contains('pp-tiers');
+    var dragged = null;
+    function clearDrop() {
+      widget.querySelectorAll('.pp-drop').forEach(function (n) { n.classList.remove('pp-drop'); });
+    }
+    widget.addEventListener('click', function (e) {
+      var btn = e.target.closest('.pp-rank-move');
+      if (!btn || frozen) return;
+      var item = btn.closest('[data-option-id]');
+      var up = btn.dataset.move === '-1';
+      if (tiered) {
+        var tier = item.closest('.pp-tier');
+        var to = up ? tier.previousElementSibling : tier.nextElementSibling;
+        if (!to) return;
+        to.querySelector('.pp-tier-items').appendChild(item);
+      } else {
+        var sib = up ? item.previousElementSibling : item.nextElementSibling;
+        if (!sib) return;
+        widget.insertBefore(item, up ? sib : sib.nextElementSibling);
+      }
+      // The moved node keeps focus, so repeated presses keep moving the same item.
+      var same = item.querySelector('[data-move="' + btn.dataset.move + '"]');
+      var shown = getComputedStyle(same);
+      if (shown.visibility !== 'hidden' && shown.display !== 'none') same.focus();
+      else item.querySelector('.pp-rank-move:not([data-move="' + btn.dataset.move + '"])').focus();
+      refresh();
+    });
+    widget.addEventListener('dragstart', function (e) {
+      var item = e.target.closest('[data-option-id]');
+      if (!item || frozen) { e.preventDefault(); return; }
+      dragged = item;
+      item.classList.add('pp-dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', item.dataset.optionId);
+    });
+    widget.addEventListener('dragend', function () {
+      if (dragged) dragged.classList.remove('pp-dragging');
+      dragged = null;
+      clearDrop();
+    });
+    widget.addEventListener('dragover', function (e) {
+      if (!dragged) return;
+      var zone = e.target.closest(tiered ? '.pp-tier' : '.pp-rank-item');
+      if (!zone) return;
+      e.preventDefault();
+      if (!zone.classList.contains('pp-drop')) { clearDrop(); zone.classList.add('pp-drop'); }
+    });
+    widget.addEventListener('drop', function (e) {
+      if (!dragged) return;
+      e.preventDefault();
+      clearDrop();
+      if (tiered) {
+        var tier = e.target.closest('.pp-tier');
+        if (!tier) return;
+        var chip = e.target.closest('.pp-tier-chip');
+        var box = tier.querySelector('.pp-tier-items');
+        if (!chip) box.appendChild(dragged);
+        else if (chip !== dragged) box.insertBefore(dragged, chip);
+      } else {
+        var row = e.target.closest('.pp-rank-item');
+        if (!row || row === dragged) return;
+        var rect = row.getBoundingClientRect();
+        widget.insertBefore(dragged, e.clientY > rect.top + rect.height / 2 ? row.nextElementSibling : row);
+      }
+      refresh();
+    });
+  }
+  function stepRank(step) {
+    return rankWidgets.filter(function (w) { return w.dataset.step === String(step); })[0] || null;
+  }
+  function itemIds(root) {
+    return Array.prototype.map.call(root.querySelectorAll('[data-option-id]'),
+                                    function (n) { return n.dataset.optionId; });
+  }
+  function rankAnswer(widget) {
+    if (!widget.classList.contains('pp-tiers')) return { order: itemIds(widget) };
+    var tiers = {};
+    widget.querySelectorAll('.pp-tier').forEach(function (t) {
+      if (t.dataset.tier) tiers[t.dataset.tier] = itemIds(t);
+    });
+    return { tiers: tiers };
   }
 
   // A reload on a reused tab (see STATUS_URL/startReusePolling below) always means a
@@ -206,10 +296,17 @@ __STEPS__
   function stepFreeText(step) {
     return document.getElementById('pp-free-text-' + step);
   }
+  // A ranking in the agent's order is a valid answer; a tiers question needs one item
+  // sorted into a tier.
   function stepAnswered(step) {
-    var selected = stepInputs(step).some(function (i) { return i.checked; });
     var ft = stepFreeText(step);
-    return selected || (ft && ft.value.trim() !== '');
+    if (ft && ft.value.trim() !== '') return true;
+    var widget = stepRank(step);
+    if (widget) {
+      return !widget.classList.contains('pp-tiers') ||
+        widget.querySelector('.pp-tier:not(.pp-tier-unsorted) [data-option-id]') !== null;
+    }
+    return stepInputs(step).some(function (i) { return i.checked; });
   }
   function collect() {
     var answers = [];
@@ -225,6 +322,8 @@ __STEPS__
                             .map(function (i) { return i.dataset.optionId; }),
         visits: visits[s]
       });
+      var widget = stepRank(s);
+      if (widget) Object.assign(answers[s], rankAnswer(widget));
     }
     return { answers: answers };
   }
@@ -390,6 +489,10 @@ __STEPS__
     frozen = true;
     inputs.forEach(function (i) { i.disabled = true; });
     freeTexts.forEach(function (t) { t.readOnly = true; });
+    rankWidgets.forEach(function (w) {
+      w.querySelectorAll('[draggable]').forEach(function (n) { n.draggable = false; });
+      w.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+    });
     freezeStop();
     backBtn.disabled = true;
     nextBtn.disabled = true;

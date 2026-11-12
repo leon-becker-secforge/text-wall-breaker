@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from .glossary import load as load_glossary
 from .listener import LoopbackListener, SessionListener, Submission
@@ -164,6 +164,27 @@ class Question(BaseModel):
         str | None,
         Field(description="Prefill: text the free-text box starts with, for the user to edit."),
     ] = None
+    rank: Annotated[
+        bool | list[str] | None,
+        Field(
+            description="Questions only: the user ranks `options` instead of picking. "
+            'true: one ordered list. Tier names (["Now", "Next", "Later"]): sorted into '
+            "those tiers. The answer carries `order`, or `tiers` and `unsorted`, "
+            "instead of `selected`."
+        ),
+    ] = None
+    # The `order` or `tiers` a `resume` reopens a rank question with. Kept apart from
+    # `options`, whose order stays the agent's: `_entered` compares against it.
+    _rank_prefill: dict[str, Any] | None = PrivateAttr(default=None)
+
+    @property
+    def tiers(self) -> list[str] | None:
+        """The tier names of a tiers question, else None."""
+        return self.rank if isinstance(self.rank, list) else None
+
+    @property
+    def ranked(self) -> bool:
+        return self.rank is True or isinstance(self.rank, list)
 
     def validated(self, *, label: str) -> Question:
         """Return self, or raise `InvalidAsk` naming `label` if unanswerable."""
@@ -171,6 +192,8 @@ class Question(BaseModel):
             raise InvalidAsk(f"{label}: id is empty; omit it or give a non-empty one")
         if not self.question.strip():
             raise InvalidAsk(f"{label}: question is empty")
+        if self.ranked:
+            self._validate_rank(label)
         if not self.options and not self.allow_free_text:
             raise InvalidAsk(
                 f"{label}: options is empty and allow_free_text is false, so it would "
@@ -210,6 +233,24 @@ class Question(BaseModel):
                 raise InvalidAsk(f"{label}: duplicate option id {option.id!r}")
             seen.add(option.id)
         return self
+
+    def _validate_rank(self, label: str) -> None:
+        if len(self.options) < 2:
+            raise InvalidAsk(f"{label}: rank needs at least 2 options to rank")
+        if self.multi_select or any(o.selected or o.recommended for o in self.options):
+            raise InvalidAsk(
+                f"{label}: multi_select, selected and recommended have no meaning on a "
+                "rank question; drop them"
+            )
+        tiers = self.tiers
+        if tiers is None:
+            return
+        if not tiers:
+            raise InvalidAsk(f"{label}: rank is an empty list; give tier names, or true")
+        if any(not name.strip() for name in tiers):
+            raise InvalidAsk(f"{label}: rank has an empty tier name")
+        if len(set(tiers)) != len(tiers):
+            raise InvalidAsk(f"{label}: rank has a duplicate tier name")
 
 
 class AskRequest(BaseModel):
@@ -339,21 +380,60 @@ def _extract_answer(step: Question, raw: object, *, multi: bool = False) -> dict
     free_text = raw.get("free_text") if isinstance(raw, dict) else None
     answer: dict[str, Any] = {
         **({"id": step.id} if step.id is not None else {}),
-        "selected": _known_ids("selected"),
+        **(_ranking(step, raw) if step.ranked else {"selected": _known_ids("selected")}),
         "free_text": free_text.strip() if isinstance(free_text, str) else "",
         "expanded": _known_ids("expanded"),
     }
     if not SHARE_INTERACTION_SIGNALS:
         return answer
-    # dict.fromkeys dedupes in first-picked order.
-    final = set(answer["selected"])
-    changed = dict.fromkeys(value for value in _known_ids("changed_from") if value not in final)
-    answer["changed_from"] = list(changed)
+    if not step.ranked:
+        # dict.fromkeys dedupes in first-picked order.
+        final = set(answer["selected"])
+        changed = dict.fromkeys(value for value in _known_ids("changed_from") if value not in final)
+        answer["changed_from"] = list(changed)
     if multi:
         visits = raw.get("visits") if isinstance(raw, dict) else None
         valid = isinstance(visits, int) and not isinstance(visits, bool)
         answer["visits"] = max(visits, 0) if valid else 0
     return answer
+
+
+def _ranking(step: Question, raw: object) -> dict[str, Any]:
+    """`order`, or `tiers` and `unsorted`, from a page's answer for a rank question.
+
+    Every option appears exactly once: ids the page sent twice or never are repaired
+    here, a missing one going to the end of `order` or into `unsorted`, in the order
+    the agent gave the options.
+    """
+    ids = [option.id for option in step.options]
+    raw = raw if isinstance(raw, dict) else {}
+    tiers = step.tiers
+    if tiers is None:
+        sent = raw.get("order")
+        order = [i for i in sent if i in ids] if isinstance(sent, list) else []
+        order = list(dict.fromkeys(order))
+        return {"order": order + [i for i in ids if i not in order]}
+    sent_tiers = raw.get("tiers")
+    sent_tiers = sent_tiers if isinstance(sent_tiers, dict) else {}
+    placed: set[str] = set()
+    out: dict[str, list[str]] = {}
+    for name in tiers:
+        members = sent_tiers.get(name)
+        members = members if isinstance(members, list) else []
+        out[name] = [i for i in dict.fromkeys(members) if i in ids and i not in placed]
+        placed.update(out[name])
+    return {"tiers": out, "unsorted": [i for i in ids if i not in placed]}
+
+
+def _entered(step: Question, answer: dict[str, Any]) -> bool:
+    """Whether the user gave `answer` anything: a pick, text, a sort or a reorder."""
+    if answer.get("free_text"):
+        return True
+    if step.tiers is not None:
+        return any(answer.get("tiers", {}).values())
+    if step.ranked:
+        return answer.get("order") != [option.id for option in step.options]
+    return bool(answer.get("selected"))
 
 
 def _build_html(
@@ -396,6 +476,8 @@ def _build_html(
                 "multi_select": step.multi_select,
                 "allow_free_text": step.allow_free_text,
                 "free_text": step.free_text,
+                "rank": step.rank if step.ranked else None,
+                "rank_prefill": step._rank_prefill,
             }
             for step in steps
         ],
@@ -453,8 +535,8 @@ def _save_draft(
     """
     raw = (progress or {}).get("answers") if multi else [progress]
     if not isinstance(raw, list) or not any(
-        isinstance(entry, dict) and (entry.get("selected") or entry.get("free_text"))
-        for entry in raw
+        isinstance(entry, dict) and _entered(step, _extract_answer(step, entry))
+        for step, entry in zip(steps, raw, strict=False)
     ):
         return None
     now = time.monotonic()
@@ -481,6 +563,9 @@ def _resumed_request(request: AskRequest) -> AskRequest:
     for index, step in enumerate(draft.steps):
         raw = draft.answers[index] if index < len(draft.answers) else None
         answer = _extract_answer(step, raw)
+        if step.ranked:
+            steps.append(_resumed_rank_step(step, answer))
+            continue
         picked = set(answer["selected"])
         steps.append(
             step.model_copy(
@@ -503,6 +588,12 @@ def _resumed_request(request: AskRequest) -> AskRequest:
         allow_free_text=only.allow_free_text,
         free_text=only.free_text,
     )
+
+
+def _resumed_rank_step(step: Question, answer: dict[str, Any]) -> Question:
+    resumed = step.model_copy(update={"free_text": answer["free_text"] or None})
+    resumed._rank_prefill = {key: answer[key] for key in ("order", "tiers") if key in answer}
+    return resumed
 
 
 def _unanswered(
@@ -534,9 +625,7 @@ def _interrupted(
     stop = data.get("interrupted")
     if not isinstance(stop, int) or isinstance(stop, bool) or not 0 <= stop < len(steps):
         stop = 0
-    entered = [
-        index for index, answer in enumerate(answers) if answer["selected"] or answer["free_text"]
-    ]
+    entered = [index for index, answer in enumerate(answers) if _entered(steps[index], answer)]
     answers = answers[: max([stop, *entered]) + 1]
     answers[stop]["interrupted"] = True
     result: dict[str, Any] = {"answers": answers}

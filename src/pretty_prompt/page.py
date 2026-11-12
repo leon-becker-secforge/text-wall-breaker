@@ -1281,14 +1281,25 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
     raw_options = spec.get("options")
     options = list(raw_options) if isinstance(raw_options, list) else []
     multi_select = bool(spec.get("multi_select"))
-    options_html = _render_options(
-        options,
-        multi_select,
-        name=f"pp-option-step-{index}",
-        data_step=str(index),
-        gallery=_is_gallery(options),
-        asset_base_url=asset_base_url,
-    )
+    rank = spec.get("rank")
+    if rank is True or isinstance(rank, list):
+        prefill = spec.get("rank_prefill")
+        options_html = _render_rank(
+            index,
+            options,
+            rank,
+            prefill if isinstance(prefill, dict) else {},
+            asset_base_url,
+        )
+    else:
+        options_html = _render_options(
+            options,
+            multi_select,
+            name=f"pp-option-step-{index}",
+            data_step=str(index),
+            gallery=_is_gallery(options),
+            asset_base_url=asset_base_url,
+        )
     free_text_html = ""
     if spec.get("allow_free_text", True):
         free_text_html = (
@@ -1308,6 +1319,92 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
         f"{free_text_html}\n"
         "  </section>"
     )
+
+
+_RANK_MOVES = (
+    '<button type="button" class="pp-rank-move" data-move="-1" aria-label="{up}">&#8593;</button>'
+    '<button type="button" class="pp-rank-move" data-move="1" aria-label="{down}">&#8595;</button>'
+)
+
+
+def _render_rank(
+    index: int,
+    options: list[dict[str, object]],
+    rank: object,
+    prefill: dict[str, object],
+    asset_base_url: str | None,
+) -> str:
+    """A rank question's widget: one ordered list, or tier rows plus Unsorted.
+
+    `prefill` is a resumed answer (`order`, or `tiers`); the page script reads the
+    answer back from the DOM order, so the markup is the only state.
+    """
+    by_id = {str(option.get("id")): option for option in options}
+    ids = list(by_id)
+
+    def label(option_id: str) -> str:
+        return html.escape(str(by_id[option_id].get("label", "")))
+
+    if not isinstance(rank, list):
+        sent = prefill.get("order")
+        order = [i for i in sent if i in by_id] if isinstance(sent, list) else []
+        order = list(dict.fromkeys(order))
+        order += [i for i in ids if i not in order]
+        items = []
+        for option_id in order:
+            option = by_id[option_id]
+            body = option.get("body")
+            caveat = option.get("caveat")
+            body_html = ""
+            if body:
+                body_html = render_markdown(str(body), asset_base_url=asset_base_url)
+                body_html = f'<div class="pp-rank-body">{body_html}</div>'
+            caveat_html = ""
+            if caveat:
+                caveat_html = render_inline(str(caveat), asset_base_url=asset_base_url)
+                caveat_html = f'<div class="pp-rank-caveat">{caveat_html}</div>'
+            items.append(
+                f'<li class="pp-rank-item" draggable="true" '
+                f'data-option-id="{html.escape(option_id, quote=True)}">'
+                '<span class="pp-rank-grip" aria-hidden="true">&#10303;</span>'
+                '<span class="pp-rank-pos" aria-hidden="true"></span>'
+                f'<div class="pp-rank-text"><div class="pp-option-label">{label(option_id)}</div>'
+                f"{body_html}{caveat_html}</div>"
+                + _RANK_MOVES.format(up="Move up", down="Move down")
+                + "</li>"
+            )
+        return f'  <ol class="pp-rank" data-step="{index}">\n' + "\n".join(items) + "\n  </ol>"
+
+    tiers = [str(name) for name in rank]
+    sent_tiers = prefill.get("tiers")
+    sent_tiers = sent_tiers if isinstance(sent_tiers, dict) else {}
+    placed: set[str] = set()
+    members: dict[str, list[str]] = {}
+    for name in tiers:
+        sent = sent_tiers.get(name)
+        sent = sent if isinstance(sent, list) else []
+        members[name] = [i for i in dict.fromkeys(sent) if i in by_id and i not in placed]
+        placed.update(members[name])
+    members[""] = [i for i in ids if i not in placed]
+
+    rows = []
+    for name in [*tiers, ""]:
+        chips = "".join(
+            f'<span class="pp-tier-chip" draggable="true" '
+            f'data-option-id="{html.escape(option_id, quote=True)}">'
+            f'<span class="pp-option-label">{label(option_id)}</span>'
+            + _RANK_MOVES.format(up="Move up a tier", down="Move down a tier")
+            + "</span>"
+            for option_id in members[name]
+        )
+        shown = html.escape(name) if name else "Unsorted"
+        extra = "" if name else " pp-tier-unsorted"
+        rows.append(
+            f'<div class="pp-tier{extra}" data-tier="{html.escape(name, quote=True)}">'
+            f'<div class="pp-tier-name">{shown}</div>'
+            f'<div class="pp-tier-items">{chips}</div></div>'
+        )
+    return f'  <div class="pp-tiers" data-step="{index}">\n' + "\n".join(rows) + "\n  </div>"
 
 
 def build_step_fragments(

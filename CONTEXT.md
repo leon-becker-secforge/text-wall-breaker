@@ -36,6 +36,17 @@ The option the agent leans towards. Marked visibly and read first, never chosen 
 operator's behalf. At most one per single-choice question.
 _Avoid_: default, suggested, preselected
 
+**Ranking question**:
+A question whose options the operator orders instead of picking: one ordered list, or
+sorted into named tiers. A kind of question inside `ask`, not a tool of its own; see
+[ADR 0006](./docs/adr/0006-ranking-is-a-question-kind-in-ask.md).
+_Avoid_: sort question, priority list, rank tool
+
+**Tier**:
+One named group of a ranking question, such as "Now" or "Later". Options left in no
+tier come back as unsorted.
+_Avoid_: bucket, column, lane
+
 **Interruption**:
 The operator stopping an ask at one question because the agent should read that answer
 now: the two are misaligned, or the answer matters too much to wait. Ends the ask at once
@@ -47,9 +58,11 @@ _Avoid_: escalation, flag, raise, urgent answer
 
 A `review` call presents one diff per page and blocks until the operator submits, so the
 agent gets back exactly what was flagged, in one round trip. "Feedback" is the informal
-umbrella term for this family of tools (`review` today, perhaps a ranking/slider tool
-later) — never the name of a tool itself; see
-[ADR 0001](./docs/adr/0001-review-is-a-separate-tool-from-ask.md).
+umbrella term for this family of tools (`review` today, perhaps a slider tool later) —
+never the name of a tool itself; see
+[ADR 0001](./docs/adr/0001-review-is-a-separate-tool-from-ask.md). Ranking became a
+question kind in `ask` instead; see
+[ADR 0006](./docs/adr/0006-ranking-is-a-question-kind-in-ask.md).
 
 **Page** (review):
 One file's diff, submitted as raw unified diff text. The unit `review` paginates by,

@@ -10,6 +10,12 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 - `ask` and `show` pages color a fenced code block's syntax when the fence names a
   language Pygments knows (` ```python `, ` ```bash `, …), with the same palette as
   `review`. A fence without a language, or with one Pygments doesn't know, stays plain.
+- `ask`: ranking questions. A `questions` entry with `rank: true` asks the user to
+  order its options, and the answer carries `order`. With tier names, such as
+  `rank: ["Now", "Next", "Later"]`, the user sorts the options into those tiers, and the
+  answer carries `tiers` and `unsorted`. Ranking questions mix with choice questions on
+  one page and work with cancel, Stop here, export and `resume`. See
+  [ADR 0006](docs/adr/0006-ranking-is-a-question-kind-in-ask.md).
 
 ### Changed
 

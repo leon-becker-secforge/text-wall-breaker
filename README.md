@@ -170,6 +170,35 @@ Each entry takes the same keys `question`/`options`/`multi_select`/`allow_free_t
 takes for one question. The result carries one answer per question, in order, under
 `answers` instead of at the top level; see Result below.
 
+#### Ranking questions
+
+A ranking question is a `questions` entry whose options the user orders instead of
+picking. `rank` turns it on and selects the widget:
+
+- `"rank": true` shows one ordered list. The user drags rows or uses the arrow
+  buttons. The answer carries `order`, every option id once, most important first.
+- `"rank": ["Now", "Next", "Later"]` shows one row per tier plus an Unsorted row. The
+  answer carries `tiers`, a map of tier name to option ids, and `unsorted`.
+
+```json
+{
+  "questions": [
+    {"question": "Which approach?", "options": [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]},
+    {"question": "Sort the follow-ups.", "rank": ["Now", "Later"],
+     "options": [{"id": "tests", "label": "Tests"}, {"id": "docs", "label": "Docs"}]}
+  ]
+}
+```
+
+In this example, the second answer can be
+`{"tiers": {"Now": ["tests"], "Later": []}, "unsorted": ["docs"], "free_text": "", ...}`.
+
+A ranking answer has no `selected` and no `changed_from`. An ordered list sent
+unchanged is a valid answer. A tiers question needs one option in a tier, or free text.
+The ordered list shows each option's `body` and `caveat`; a tier chip shows the label
+only. `rank` needs at least two options and must not be combined with `multi_select`,
+`selected` or `recommended`. The top-level single question does not take `rank`.
+
 ### Glossary hints
 
 If the server's working directory, or a folder above it up to the git root, holds a

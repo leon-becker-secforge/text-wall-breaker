@@ -817,3 +817,121 @@ def test_a_long_question_leaves_no_hint_on_an_undelivered_result(monkeypatch):
     first = run_ask(AskRequest(question=long_question))
     assert first == ask_module.NOT_DELIVERED
     assert "hint" not in ask_module.NOT_DELIVERED
+
+
+def _abc() -> list[Option]:
+    return [Option(id=i, label=i.upper()) for i in "abc"]
+
+
+def _rank_ask(rank: bool | list[str]) -> AskRequest:
+    return AskRequest(questions=[Question(id="r", question="Rank?", options=_abc(), rank=rank)])
+
+
+@pytest.mark.parametrize(
+    ("question", "message"),
+    [
+        (Question(question="q", options=[Option(id="a", label="A")], rank=True), "at least 2"),
+        (Question(question="q", options=_abc(), rank=True, multi_select=True), "no meaning"),
+        (Question(question="q", options=_a_b(recommended=True), rank=True), "no meaning"),
+        (Question(question="q", options=_abc(), rank=[]), "empty list"),
+        (Question(question="q", options=_abc(), rank=["Now", " "]), "empty tier name"),
+        (Question(question="q", options=_abc(), rank=["Now", "Now"]), "duplicate tier"),
+    ],
+)
+def test_an_unanswerable_rank_question_is_rejected(question, message):
+    with pytest.raises(InvalidAsk, match=message):
+        AskRequest(questions=[question]).validated()
+
+
+def test_a_ranking_answer_lists_every_option_once(browser):
+    fake = browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {"answers": [{"order": ["c", "x", "c", "a"], "free_text": " ok "}]},
+        }
+    )
+    answer = run_ask(_rank_ask(True))["answers"][0]
+    assert answer["order"] == ["c", "a", "b"]
+    assert answer["free_text"] == "ok"
+    assert "selected" not in answer and "changed_from" not in answer
+    assert 'class="pp-rank"' in fake.page
+
+
+def test_a_tiers_answer_puts_each_option_in_one_tier_or_unsorted(browser):
+    fake = browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {
+                "answers": [{"tiers": {"Now": ["b", "x"], "Later": ["b", "a"], "Bogus": ["c"]}}]
+            },
+        }
+    )
+    answer = run_ask(_rank_ask(["Now", "Later"]))["answers"][0]
+    assert answer["tiers"] == {"Now": ["b"], "Later": ["a"]}
+    assert answer["unsorted"] == ["c"]
+    assert 'class="pp-tiers"' in fake.page
+    assert 'data-tier="Later"' in fake.page
+
+
+def test_an_untouched_ranking_is_not_worth_resuming(browser):
+    browser(lambda page: _cancel_after({"answers": [{"order": ["a", "b", "c"], "free_text": ""}]}))
+    assert run_ask(_rank_ask(True)) == {"cancelled": True}
+
+
+def test_a_resumed_ranking_starts_in_the_users_order(browser):
+    browser(lambda page: _cancel_after({"answers": [{"order": ["c", "b", "a"]}]}))
+    resume = run_ask(_rank_ask(True))["resume"]
+    fake = browser(lambda page: _cancel_after({"answers": [{"order": ["c", "b", "a"]}]}))
+    result = run_ask(AskRequest(resume=resume))
+    items = re.findall(r'class="pp-rank-item"[^>]*data-option-id="(\w)"', fake.page)
+    assert items == ["c", "b", "a"]
+    # The resumed order counts as entered (it differs from the agent's), so a second
+    # cancel without further moves still keeps a draft.
+    assert "resume" in result
+
+
+def test_a_resumed_tiers_question_starts_with_its_items_sorted(browser):
+    browser(lambda page: _cancel_after({"answers": [{"tiers": {"Now": ["b"], "Later": []}}]}))
+    resume = run_ask(_rank_ask(["Now", "Later"]))["resume"]
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(resume=resume))
+    now = fake.page.split('data-tier="Now"', 1)[1].split('data-tier="Later"', 1)[0]
+    assert 'data-option-id="b"' in now
+    assert 'data-option-id="a"' not in now
+
+
+def test_an_interrupted_ask_counts_a_reorder_as_an_answer(browser):
+    questions = [
+        Question(question="one?", options=_a_b()),
+        Question(question="rank?", options=_abc(), rank=True),
+    ]
+    browser(
+        lambda page: {
+            "kind": "interrupt",
+            "data": {
+                "interrupted": 0,
+                "answers": [{"free_text": "stop"}, {"order": ["b", "a", "c"]}],
+            },
+        }
+    )
+    answers = run_ask(AskRequest(questions=questions))["answers"]
+    assert len(answers) == 2
+    assert answers[1]["order"] == ["b", "a", "c"]
+
+
+def test_rank_markup_escapes_labels_and_tier_names():
+    from pretty_prompt.page import build_multi_page
+
+    page = build_multi_page(
+        questions=[
+            {
+                "question": "q",
+                "options": [{"id": "a", "label": "<A>"}, {"id": "b", "label": "B"}],
+                "rank": ["<now>", "Later"],
+            }
+        ],
+        submit_url="http://127.0.0.1:1/s",
+    )
+    assert "<A>" not in page and "&lt;A&gt;" in page
+    assert 'data-tier="&lt;now&gt;"' in page
+    assert ">Unsorted<" in page
