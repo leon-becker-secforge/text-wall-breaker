@@ -384,6 +384,13 @@ def _extract_answer(step: Question, raw: object, *, multi: bool = False) -> dict
         "free_text": free_text.strip() if isinstance(free_text, str) else "",
         "expanded": _known_ids("expanded"),
     }
+    if (
+        multi
+        and isinstance(raw, dict)
+        and raw.get("skipped") is True
+        and not _entered(step, answer)
+    ):
+        answer["skipped"] = True
     if not SHARE_INTERACTION_SIGNALS:
         return answer
     if not step.ranked:

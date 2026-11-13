@@ -368,6 +368,31 @@ def test_multi_question_submission_returns_one_answer_per_question(browser):
     }
 
 
+def test_a_skipped_question_is_marked_only_when_nothing_was_entered(browser):
+    browser(
+        lambda page: {
+            "kind": "submit",
+            "data": {
+                "answers": [
+                    {"selected": [], "free_text": "", "skipped": True},
+                    {"selected": [], "free_text": "-", "skipped": True},
+                ]
+            },
+        }
+    )
+    result = run_ask(
+        AskRequest(
+            questions=[
+                Question(question="first", options=[Option(id="a", label="A")]),
+                Question(question="second", options=[Option(id="a", label="A")]),
+            ]
+        )
+    )
+    assert result["answers"][0]["skipped"] is True
+    assert result["answers"][1]["free_text"] == "-"
+    assert "skipped" not in result["answers"][1]
+
+
 def test_multi_question_filters_unknown_ids_per_question(browser):
     browser(
         lambda page: {

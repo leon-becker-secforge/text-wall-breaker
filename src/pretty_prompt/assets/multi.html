@@ -334,6 +334,7 @@ __STEPS__
       });
       var widget = stepRank(s);
       if (widget) Object.assign(answers[s], rankAnswer(widget));
+      if (!stepAnswered(s)) answers[s].skipped = true;
     }
     return { answers: answers };
   }
@@ -376,8 +377,11 @@ __STEPS__
     var last = current === STEP_COUNT - 1;
     progressLabel.textContent = 'Question ' + (current + 1) + ' of ' + STEP_COUNT;
     syncSegments();
-    nextBtn.textContent = last ? 'Send answers' : 'Next';
-    nextBtn.disabled = !stepAnswered(current);
+    var skipping = !stepAnswered(current);
+    nextBtn.textContent = last ? (skipping ? 'Skip and send' : 'Send answers')
+                               : (skipping ? 'Skip' : 'Next');
+    nextBtn.disabled = false;
+    nextBtn.classList.toggle('pp-skip', skipping);
     reportProgress();
   }
 

@@ -44,8 +44,8 @@ Images in Markdown: `![alt](/abs/path)` or `file:///abs/path`.
 Paragraph breaks are real newlines, not the `\\n` escape.
 
 Open `question` with a short bold lead sentence; context may follow in further
-paragraphs, lists or blockquotes. Past 400 characters the page widens. A `hint` in the
-result is formatting advice for your next ask.
+paragraphs, lists or blockquotes. Past 400 characters the page widens. A result `hint`
+is formatting advice for your next ask.
 
 Terms from the project's GLOSSARY.md (else CONTEXT.md) are defined on hover.
 
@@ -68,7 +68,7 @@ at the last one given, plus `resume`: use it only if the rest still makes sense.
 text changes them, ask anew.
 
 With `questions`, returns `{"answers": [...]}`, one entry per question in order,
-carrying the question's `id` when it set one; match by id.
+carrying the question's `id` when it set one; match by id. `skipped: true`: skipped.
 
 `{"live": {"session": id}}`: the user opened a discussion about an option (or you set
 `live`). Call `live` now, as `instruction` says; the answer comes through it. `live`

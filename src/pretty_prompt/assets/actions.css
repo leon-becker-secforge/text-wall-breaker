@@ -21,6 +21,10 @@
   color: var(--ntw-accent-contrast); }
 #pp-submit:not(:disabled):hover, #pp-next:not(:disabled):hover, #pp-ack:not(:disabled):hover {
   background: var(--ntw-accent); filter: brightness(0.9); }
+/* Unanswered question: Next turns into Skip, outlined so it does not read as the primary. */
+#pp-next.pp-skip:not(:disabled) { background: transparent; color: var(--ntw-fg);
+  border-color: var(--ntw-fg-muted); }
+#pp-next.pp-skip:not(:disabled):hover { background: var(--pp-btn-tint); filter: none; }
 #pp-stop:not(:disabled) { border-color: var(--ntw-warning); color: var(--ntw-warning); }
 #pp-stop-send:not(:disabled) { border-color: var(--ntw-warning); background: var(--ntw-warning);
   color: var(--ntw-bg); }

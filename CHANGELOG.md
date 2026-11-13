@@ -18,8 +18,17 @@ All notable changes to `pretty-prompt` are documented here. The format follows
   one page and work with cancel, Stop here, export and `resume`. See
   [ADR 0006](docs/adr/0006-ranking-is-a-question-kind-in-ask.md).
 
+- On a multi-question `ask` page the Next button stays enabled for an unanswered question
+  and reads `Skip` (`Skip and send` on the last one). A skipped question's answer carries
+  `skipped: true`, so it is distinct from free text typed as `-`.
+
 ### Changed
 
+- Every tool rejects an argument it does not define with an error. Before, a misnamed
+  one (`reply=` for `replies=`) was dropped and the call still succeeded. The removed
+  `allow_defer` argument of `ask` is rejected too.
+- The `live` and `ask` descriptions name the `replies` argument and say to ask anew when
+  an interrupting message changes the questions.
 - On `ask` pages the Recommended tag and the Details pill float at the top right of an
   option's label, and a long label wraps under them: from its second line on, the label
   runs the full width of the option instead of a narrow column beside the tag.
