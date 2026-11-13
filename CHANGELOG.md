@@ -5,6 +5,8 @@ All notable changes to `pretty-prompt` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-13
+
 ### Added
 
 - `ask` and `show` pages color a fenced code block's syntax when the fence names a
