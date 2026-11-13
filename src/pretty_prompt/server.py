@@ -504,6 +504,19 @@ async def live(
         raise ToolError(str(exc)) from exc
 
 
+def _reject_unknown_arguments() -> None:
+    # MCPServer ignores extra tool arguments; a misnamed one (`reply=` for `replies=`)
+    # would otherwise be dropped while the call still succeeds.
+    for tool in server._tool_manager.list_tools():
+        model = tool.fn_metadata.arg_model
+        model.model_config["extra"] = "forbid"
+        model.model_rebuild(force=True)
+        tool.parameters = model.model_json_schema(by_alias=True)
+
+
+_reject_unknown_arguments()
+
+
 def main() -> None:
     for problem in (environment_problem(), accent_config_problem()):
         if problem is not None:

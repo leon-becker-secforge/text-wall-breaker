@@ -64,7 +64,8 @@ abandoned ask carries `resume` when answers were entered.
 `interrupted: true` on an answer: the user stopped the ask there for you to read now.
 Its `free_text` may correct your plan or only constrain this answer: do what it says,
 no more; its pick counts. The call returns at once; with `questions`, `answers` ends
-at the last one given, plus `resume`: use it only if the rest still makes sense.
+at the last one given, plus `resume`: use it only if the rest still makes sense. If the
+text changes them, ask anew.
 
 With `questions`, returns `{"answers": [...]}`, one entry per question in order,
 carrying the question's `id` when it set one; match by id.
@@ -131,7 +132,8 @@ never loaded.
 call `live` now, as `instruction` says."""
 
 LIVE_DESCRIPTION = """Take part in a live session that `review` or `ask` started: post
-replies, then block until the user sends something new.
+replies (argument `replies`: a list of `{to, text}`; an unknown argument is an error),
+then block until the user sends something new.
 
 Returns `{"messages": [...]}`, what the user sent since your last call:
   - `{"thread": id, "path", "side", "line", "context", "text"}`: a new thread on lines

@@ -47,6 +47,14 @@ def test_a_blocking_call_reports_progress_until_it_returns(monkeypatch):
     assert len(recorder.beats) == count
 
 
+def test_unknown_tool_arguments_are_an_error():
+    async def main():
+        return await server.call_tool("live", {"session": "x", "reply": "hi"})
+
+    with pytest.raises(ToolError, match="reply"):
+        anyio.run(main)
+
+
 def test_a_blocking_call_without_a_context_just_runs():
     async def main():
         return await server_module._blocking(None, lambda: 7)
@@ -293,15 +301,6 @@ def test_pp_review_prompt_takes_an_explicit_base():
     assert "upstream" not in text
 
 
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"question": "q", "allow_free_text": False, "allow_defer": True},
-        {"questions": [{"question": "q", "allow_free_text": False, "allow_defer": True}]},
-    ],
-)
-def test_a_call_that_still_passes_the_removed_allow_defer_is_not_rejected_for_it(arguments):
-    # Callers written while the parameter existed keep working: it is ignored, so the only
-    # error left is the unrelated "no way to answer" one these arguments are built to hit.
-    with pytest.raises(ToolError, match="no way to answer"):
-        anyio.run(server.call_tool, "ask", arguments)
+def test_the_removed_allow_defer_argument_is_rejected():
+    with pytest.raises(ToolError, match="allow_defer"):
+        anyio.run(server.call_tool, "ask", {"question": "q", "allow_defer": True})
