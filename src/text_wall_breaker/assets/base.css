@@ -133,7 +133,7 @@ body {
 /* 2. Badge — colour follows the severity axis only (#22); every other
       axis (category, source, etc.) renders neutral regardless of value.
       Solid block tag ("variant B" in the three-variant review), chosen over the
-      original tinted-pill and a dot+label style — see pretty-prompt's CLAUDE.md for
+      original tinted-pill and a dot+label style — see text-wall-breaker's CLAUDE.md for
       the review process this came out of. */
 .badge {
   display: inline-block;
@@ -295,7 +295,7 @@ tbody tr:hover {
 }
 
 /* 9. Deck (`deck` template) — one slide visible at a time. Accented card ("variant C"
-      in the three-variant review — see pretty-prompt's CLAUDE.md) over a plain
+      in the three-variant review — see text-wall-breaker's CLAUDE.md) over a plain
       borderless slide and an unaccented card: the shadow + top accent bar mark this as
       a slide, distinct from an ordinary `.card` report section. */
 .deck-slide {
@@ -319,7 +319,7 @@ tbody tr:hover {
   background: var(--ntw-accent);
   border-radius: var(--ntw-radius) var(--ntw-radius) 0 0;
 }
-/* Icon-only, borderless ("variant B" in the three-variant review — see pretty-prompt's
+/* Icon-only, borderless ("variant B" in the three-variant review — see text-wall-breaker's
    CLAUDE.md) over labelled bordered buttons and a labelled accent-pill style. Pinned to
    the left/right edges (space-between), not clustered in the middle — centred left the
    two bare glyphs looking adrift with empty space on both sides, caught in review. */

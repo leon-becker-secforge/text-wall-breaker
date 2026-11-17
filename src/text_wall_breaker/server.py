@@ -1,4 +1,4 @@
-"""The `pretty-prompt` MCP server.
+"""The `text-wall-breaker` MCP server.
 
 Browser pages for the user instead of terminal text: `ask` is a richer alternative to
 Claude Code's built-in AskUserQuestion, `show` and `review` present a result or a diff, and
@@ -65,7 +65,7 @@ __all__ = [
     "server",
 ]
 
-server = MCPServer(name="pretty-prompt", instructions=INSTRUCTIONS)
+server = MCPServer(name="text-wall-breaker", instructions=INSTRUCTIONS)
 
 
 # Claude Code aborts a tool call whose server sends no response and no progress
@@ -144,7 +144,7 @@ def environment_problem() -> str | None:
 
 
 def accent_config_problem() -> str | None:
-    """Return why `PRETTY_PROMPT_ACCENT` can't be used, or None if it's unset or valid.
+    """Return why `TEXT_WALL_BREAKER_ACCENT` can't be used, or None if it's unset or valid.
 
     Checked once at startup, same reasoning as `environment_problem`: a typo in the
     colour should surface as a connection error the person configuring the server sees
@@ -499,7 +499,7 @@ async def live(
         options=options,
     )
     try:
-        return cast(LiveResult, await _blocking(ctx, partial(target.call, call), cancel=cancel))
+        return await _blocking(ctx, partial(target.call, call), cancel=cancel)
     except (LiveError, GitDiffError) as exc:
         raise ToolError(str(exc)) from exc
 
@@ -520,7 +520,7 @@ _reject_unknown_arguments()
 def main() -> None:
     for problem in (environment_problem(), accent_config_problem()):
         if problem is not None:
-            print(f"pretty-prompt: {problem}", file=sys.stderr)
+            print(f"text-wall-breaker: {problem}", file=sys.stderr)
             raise SystemExit(2)
     server.run(transport="stdio")
 

@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Runs the exact same checks as .github/workflows/ci.yml's "check" job, over the whole
+# repository, before a push leaves this machine. Added after a push (0.9.0) went to CI
+# red twice in a row: `ruff check` had been run locally, but not `ruff format --check` (a
+# different command, format vs. lint), and `ty check` had only been pointed at individual
+# changed files rather than the whole repository, missing a cross-file typing issue that
+# only showed up checking everything together.
+#
+# `git config core.hooksPath .githooks` is what actually wires this up — see README.md.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Git exports these to hooks (always GIT_DIR in a worktree). Tests that run git in a
+# temporary directory inherit them and act on this repository instead: a push from a
+# worktree once committed into its branches and set core.bare.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_PREFIX GIT_OBJECT_DIRECTORY
+
+echo "pre-push: uv sync --locked"
+uv sync --locked
+
+echo "pre-push: ruff format --check ."
+uv run --no-sync ruff format --check .
+
+echo "pre-push: ruff check ."
+uv run --no-sync ruff check .
+
+echo "pre-push: ty check"
+uv run --no-sync ty check
+
+echo "pre-push: pytest -q"
+uv run --no-sync pytest -q

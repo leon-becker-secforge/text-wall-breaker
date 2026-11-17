@@ -1,9 +1,22 @@
 # Changelog
 
-All notable changes to `pretty-prompt` are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+All notable changes to `text-wall-breaker` (named `pretty-prompt` up to 0.20.0) are
+documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
+
+## [0.21.0] - 2026-11-17
+
+### Changed
+
+- **Breaking:** renamed from `pretty-prompt` to `text-wall-breaker`. The distribution is
+  `text-wall-breaker`, the module `text_wall_breaker`, the console script
+  `text-wall-breaker-mcp`. An MCP client registers the server under a new name, so tool
+  names become `mcp__text-wall-breaker__<tool>`.
+- **Breaking:** the environment variables `PRETTY_PROMPT_OPENER` and `PRETTY_PROMPT_ACCENT`
+  are now `TEXT_WALL_BREAKER_OPENER` and `TEXT_WALL_BREAKER_ACCENT`.
+- Moved out of the `python-libs` monorepo into its own repository. Installed from Git,
+  not from a package index. Licensed under MIT.
 
 ## [0.20.0] - 2026-11-13
 

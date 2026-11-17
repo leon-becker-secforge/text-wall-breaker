@@ -446,7 +446,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
         submit_url = f"http://127.0.0.1:{listener.port}/submit?t={token}"
         html = _build_html(request, submit_url=submit_url)
 
-        directory = Path(tempfile.mkdtemp(prefix="pretty-prompt-review-"))
+        directory = Path(tempfile.mkdtemp(prefix="text-wall-breaker-review-"))
         try:
             page = directory / "review.html"
             page.write_text(html, encoding="utf-8")

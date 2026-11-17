@@ -1,9 +1,9 @@
 # Testing local MCP edits without a harness reload or an upload
 
-The `pretty-prompt` MCP server is a long-running process, connected once at session
-start. Editing `src/pretty_prompt/*.py` does **not** change its behavior — the process
+The `text-wall-breaker` MCP server is a long-running process, connected once at session
+start. Editing `src/text_wall_breaker/*.py` does **not** change its behavior — the process
 already has the old module imported in memory, and Python does not hot-reload imports.
-Calling `mcp__pretty-prompt__ask`/`show` again after an edit still exercises the stale
+Calling `mcp__text-wall-breaker__ask`/`show` again after an edit still exercises the stale
 code.
 
 To check the *current* state of the code without restarting the MCP connection, and
@@ -14,7 +14,7 @@ without publishing anything externally (no Artifact tool — see memory
    ```bash
    /path/to/repo/.venv/bin/python -c "
    import sys; sys.path.insert(0, 'src')
-   from pretty_prompt.page import build_page, build_multi_page
+   from text_wall_breaker.page import build_page, build_multi_page
    html = build_multi_page(questions=[...], submit_url='http://127.0.0.1:1/submit')
    open('/tmp/.../check.html', 'w').write(html)
    "

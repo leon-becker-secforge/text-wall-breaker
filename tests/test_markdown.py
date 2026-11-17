@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pretty_prompt.markdown import render_inline, render_markdown
+from text_wall_breaker.markdown import render_inline, render_markdown
 
 
 def test_empty_input_renders_nothing():
@@ -347,7 +347,7 @@ def test_multiple_nesting_levels():
 
 
 def test_bold_lead_bolds_first_sentence_of_a_long_question():
-    from pretty_prompt.markdown import bold_lead
+    from text_wall_breaker.markdown import bold_lead
 
     question = "Minor `a.py:82`: the rename leaves old names. " + "More detail. " * 25
     bolded = bold_lead(question)
@@ -356,7 +356,7 @@ def test_bold_lead_bolds_first_sentence_of_a_long_question():
 
 
 def test_bold_lead_leaves_short_or_leadless_questions_alone():
-    from pretty_prompt.markdown import bold_lead
+    from text_wall_breaker.markdown import bold_lead
 
     assert bold_lead("Short question?") is None
     assert bold_lead("x" * 300) is None
@@ -364,7 +364,7 @@ def test_bold_lead_leaves_short_or_leadless_questions_alone():
 
 
 def test_bold_lead_does_not_nest_inside_an_already_bold_lead():
-    from pretty_prompt.markdown import bold_lead, render_inline
+    from text_wall_breaker.markdown import bold_lead, render_inline
 
     question = "**Important**. " + "padding " * 30 + "more context past the threshold."
     bolded = bold_lead(question)
@@ -376,7 +376,7 @@ def test_bold_lead_does_not_nest_inside_an_already_bold_lead():
 
 
 def test_bold_lead_skips_a_terminator_inside_a_markdown_link():
-    from pretty_prompt.markdown import bold_lead
+    from text_wall_breaker.markdown import bold_lead
 
     # The `. ` inside the link text used to end the lead there, splicing the closing
     # `**` into the middle of `[...](...)` and breaking the link entirely.

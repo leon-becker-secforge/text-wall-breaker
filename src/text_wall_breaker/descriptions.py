@@ -175,7 +175,7 @@ def pp_review_prompt(base: str | None) -> str:
         else "Find the base: the branch's upstream if it has one, else the repository's default "
         "branch (`git symbolic-ref refs/remotes/origin/HEAD`, else `main` or `master`)."
     )
-    return f"""Have the user review the current branch against its base with the pretty-prompt \
+    return f"""Have the user review the current branch against its base with the text-wall-breaker \
 `review` tool.
 
 1. {base_step} Use `git merge-base <base> HEAD` as the start, so the diff holds only this \

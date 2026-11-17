@@ -117,7 +117,7 @@ main { max-width: min(1760px, 98vw); margin: 0 auto; position: relative; }
 .pp-gap-pill button:hover { background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
 .pp-gap-pill button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
 /* Whole row is the click/keyboard target — chosen over a separate gutter button in a
-   three-variant review (see pretty-prompt's CLAUDE.md): nothing small to aim for, and the
+   three-variant review (see text-wall-breaker's CLAUDE.md): nothing small to aim for, and the
    bubble glyph below is purely decorative, not itself a click target
    (`pointer-events: none`). Selecting rows or text opens the comment dock below. */
 .pp-review-row-wrap { position: relative; cursor: pointer; }

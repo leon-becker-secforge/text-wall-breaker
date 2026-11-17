@@ -1,4 +1,4 @@
-# pretty-prompt
+# text-wall-breaker
 
 An MCP server that lets an agent ask the operator a question, show them a result, or have
 them review an artifact, in a browser page instead of the terminal.

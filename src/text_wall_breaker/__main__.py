@@ -1,4 +1,4 @@
-"""`python -m pretty_prompt`, equivalent to the `pretty-prompt-mcp` console script."""
+"""`python -m text_wall_breaker`, equivalent to the `text-wall-breaker-mcp` console script."""
 
 from __future__ import annotations
 

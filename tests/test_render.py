@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from pretty_prompt.render import is_renderable, rendered_view
+from text_wall_breaker.render import is_renderable, rendered_view
 
 PNG = bytes.fromhex(
     "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478"
@@ -208,7 +208,7 @@ def test_both_asciidoc_mermaid_forms_are_diagram_blocks_with_their_lines():
 
 
 def test_asciidoc_is_left_out_without_ruby(monkeypatch):
-    monkeypatch.setattr("pretty_prompt.render.shutil.which", lambda _name: None)
+    monkeypatch.setattr("text_wall_breaker.render.shutil.which", lambda _name: None)
     assert rendered_view("a.adoc", ["= T"]) is None
 
 

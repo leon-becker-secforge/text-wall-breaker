@@ -1,16 +1,16 @@
-# pretty-prompt
+# text-wall-breaker
 
 An MCP server that asks the user a question, shows them a result, or has them review a
 diff, in a browser page.
 
 A wall of unformatted text is hard to read, and HTML is the tool for fixing that. But
 hand-writing a page per question doesn't scale, and a model generating HTML inline tends
-to look it — inconsistent, slow to produce, obviously AI-written. `pretty-prompt` covers
+to look it — inconsistent, slow to produce, obviously AI-written. `text-wall-breaker` covers
 the common cases — options with explanations, images, long text — with one well-designed
 page instead, so neither cost has to be paid per question.
 
 Claude Code's built-in AskUserQuestion renders inside the terminal panel: at most four
-options, plain-text previews, no images. `pretty-prompt` opens a real page on the desktop
+options, plain-text previews, no images. `text-wall-breaker` opens a real page on the desktop
 instead, so a question can carry any number of options, a Markdown body per option, and
 images.
 
@@ -25,16 +25,18 @@ reports without blocking whether the last `show` was acknowledged.
 Register it with Claude Code, from a checkout of this repository:
 
 ```bash
-claude mcp add pretty-prompt -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
+claude mcp add text-wall-breaker -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp
 ```
 
-Or from the released wheel, with no checkout:
+Or straight from the Git repository, with no checkout (a tag pins a release):
 
 ```bash
-claude mcp add pretty-prompt \
-  --env UV_INDEX_INTERNAL_USERNAME=<user> --env UV_INDEX_INTERNAL_PASSWORD=... \
-  -- uvx --index internal=https://index.example.com/simple/ --from pretty-prompt pretty-prompt-mcp
+claude mcp add text-wall-breaker \
+  -- uvx --from git+ssh://git@github.com/leon-becker-secforge/text-wall-breaker.git@v0.21.0 text-wall-breaker-mcp
 ```
+
+It is not published to PyPI: the name `text-wall-breaker` is not reserved there for this
+project.
 
 The server refuses to start on a host it cannot show a page on, and exits with status 2
 and a message on stderr instead. That surfaces as a connection error in the client
@@ -62,7 +64,7 @@ images over the loopback listener and are unaffected.
 
 ### Opener override
 
-Set `PRETTY_PROMPT_OPENER` to a command line to open pages with that instead, for a
+Set `TEXT_WALL_BREAKER_OPENER` to a command line to open pages with that instead, for a
 setup the table above gets wrong. The page's path or URL is appended as the last
 argument; the command is split shell-style but not run through a shell. An override
 also skips the display check. At launch, the first word must resolve on `PATH` (or be
@@ -74,18 +76,18 @@ that hands the target to a Windows program therefore opens such a page only if t
 understands Linux paths. Pages on the shared tab are loopback URLs and are unaffected.
 
 ```bash
-claude mcp add pretty-prompt --env PRETTY_PROMPT_OPENER="firefox --new-tab" -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
+claude mcp add text-wall-breaker --env TEXT_WALL_BREAKER_OPENER="firefox --new-tab" -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp
 ```
 
 ### Accent colour
 
 The page's accent — the selected-option border and tint, the submit/Acknowledge button,
 focus rings — defaults to green, for `ask`, `show`, and `review` alike. Set
-`PRETTY_PROMPT_ACCENT` to a `#rrggbb` hex colour to use something else instead, in both
+`TEXT_WALL_BREAKER_ACCENT` to a `#rrggbb` hex colour to use something else instead, in both
 light and dark theme:
 
 ```bash
-claude mcp add pretty-prompt --env PRETTY_PROMPT_ACCENT=#2563eb -- uv run --directory /path/to/python-libs --package pretty-prompt pretty-prompt-mcp
+claude mcp add text-wall-breaker --env TEXT_WALL_BREAKER_ACCENT=#2563eb -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp
 ```
 
 The text colour on top of the accent (e.g. the submit button's label) and the tint
@@ -212,7 +214,7 @@ whole words, case-insensitive, outside code. The file format is the one the
 `domain-modeling` skill writes: `**Term**:`, then the definition.
 
 `ask` takes `project`, a folder to look in instead of the working directory, for a git
-worktree or a session started elsewhere. Set `PRETTY_PROMPT_GLOSSARY=off` to turn the
+worktree or a session started elsewhere. Set `TEXT_WALL_BREAKER_GLOSSARY=off` to turn the
 hints off.
 
 ### Result
@@ -252,7 +254,7 @@ never copies anything on its own. `show` has no icon: the user enters nothing th
 Claude Code moves an MCP call still running after 120 s to a background task. The
 answer then arrives as a task notification marked "NOT USER INPUT", which an agent must
 not treat as the user's answer or approval, so it asks the user to repeat it in chat.
-The limit belongs to Claude Code, not to pretty-prompt. Per the
+The limit belongs to Claude Code, not to text-wall-breaker. Per the
 [Claude Code MCP docs](https://code.claude.com/docs/en/mcp.md):
 
 - `CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS` sets the threshold (default `120000`) for all
@@ -268,7 +270,7 @@ The limit belongs to Claude Code, not to pretty-prompt. Per the
 Claude Code also aborts a call whose server sends no response and no progress
 notification for an idle window: 30 minutes for a stdio server like this one
 (`CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT`, in milliseconds). While a call waits on the user,
-pretty-prompt therefore sends a progress notification every 60 seconds, so the idle
+text-wall-breaker therefore sends a progress notification every 60 seconds, so the idle
 window never ends a call to `ask`, `review` or `show` with `wait_for_acknowledge`, even
 when the page stays open for hours. A progress notification does not extend a
 wall-clock limit: `MCP_TOOL_TIMEOUT` (default about 28 hours) or a per-server `timeout`
@@ -297,7 +299,7 @@ the order they were first picked: what the user considered and gave up. In the
 > `expanded`, `changed_from` and `visits` record how the user reached an answer, not just
 > the answer, and all three are sent to the agent. Tell the people answering. To stop
 > sending `changed_from` and `visits`, set `SHARE_INTERACTION_SIGNALS = False` in
-> `src/pretty_prompt/ask.py`; the tool description then stops mentioning them too.
+> `src/text_wall_breaker/ask.py`; the tool description then stops mentioning them too.
 
 ## The `show` tool (prototype)
 
@@ -470,7 +472,7 @@ The server offers one MCP prompt, `pp-review`. It asks the agent to find the cur
 branch's base, read the diff, call `review` with `repo` and a `git_range` of
 `<merge-base>..HEAD`, and add `notes` on the most important changes. The optional `base`
 argument names the base; without it the agent uses the branch's upstream, else the default
-branch. Claude Code lists an MCP prompt as `/mcp__pretty-prompt__pp-review`, with `base` as
+branch. Claude Code lists an MCP prompt as `/mcp__text-wall-breaker__pp-review`, with `base` as
 the argument.
 
 ### Result
@@ -626,7 +628,7 @@ under the form.
 The thought-bubble icon of the live `ask` is "Thought bubble" by SeregaCthtuf, from
 [game-icons.net](https://game-icons.net/1x1/seregacthtuf/thought-bubble.html), licensed
 under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The file
-`src/pretty_prompt/assets/thought-bubble.svg` carries the same notice, and so does every
+`src/text_wall_breaker/assets/thought-bubble.svg` carries the same notice, and so does every
 page that shows the icon.
 
 ## Markdown
@@ -746,12 +748,20 @@ since the report itself is still on screen either way.
 
 ## Developing
 
-From the workspace root:
+From the repository root:
 
 ```bash
-uv run --package pretty-prompt pytest
+uv run pytest
 ```
 
 The tests drive the listener over real loopback HTTP and substitute a fake browser that
 reads the generated page and posts back, so the port/token handshake and the page's own
 markup are covered without a display.
+
+## Going public
+
+Before the repository is made public:
+
+- Scan the full history again: `gitleaks git .`.
+- Read `CLAUDE.md`, `docs/adr/` and `CONTEXT.md` for internal names and paths.
+- Decide whether rendering `mermaid` diagrams from a CDN is acceptable for outside users.

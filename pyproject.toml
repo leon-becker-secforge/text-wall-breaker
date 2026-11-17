@@ -1,8 +1,10 @@
 [project]
-name = "pretty-prompt"
-version = "0.20.0"
+name = "text-wall-breaker"
+version = "0.21.0"
 description = "MCP server that asks the user questions, or shows them results, in a browser page"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.12"
 dependencies = [
     # 2.0 renamed FastMCP to MCPServer and changed the module path; server.py targets
@@ -16,14 +18,14 @@ dependencies = [
 ]
 
 [project.scripts]
-pretty-prompt-mcp = "pretty_prompt.server:main"
+text-wall-breaker-mcp = "text_wall_breaker.server:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pretty_prompt"]
+packages = ["src/text_wall_breaker"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -31,4 +33,22 @@ testpaths = ["tests"]
 [tool.ty.src]
 include = ["src", "tests"]
 
-# ruff and the dev dependency group are configured once at the workspace root.
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+    "ty>=0.0.1a1",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "ARG", "PTH", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert on internals and use bare asserts by design.
+"tests/*" = ["S101", "ARG001", "ARG005"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["text_wall_breaker"]

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import anyio
 
-from pretty_prompt import ask as ask_module
-from pretty_prompt.ask import Option, Question
-from pretty_prompt.listener import Submission
-from pretty_prompt.results import AskResult, LiveResult, ReviewResult, ShowStatusResult
-from pretty_prompt.review import Page, _result_from_submission
-from pretty_prompt.server import server
+from text_wall_breaker import ask as ask_module
+from text_wall_breaker.ask import Option, Question
+from text_wall_breaker.listener import Submission
+from text_wall_breaker.results import AskResult, LiveResult, ReviewResult, ShowStatusResult
+from text_wall_breaker.review import Page, _result_from_submission
+from text_wall_breaker.server import server
 
 
 def declared(shape: type) -> set[str]:

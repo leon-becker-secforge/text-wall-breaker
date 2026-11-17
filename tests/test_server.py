@@ -10,16 +10,16 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import GetPromptResult, TextContent
 from test_live import make as make_live
 
-from pretty_prompt.server import (
+from text_wall_breaker.server import (
     MAX_TOOL_DESCRIPTION_CHARS,
     accent_config_problem,
     environment_problem,
     server,
 )
 
-# `pretty_prompt.server` the module; the package re-exports `server` the MCPServer under
+# `text_wall_breaker.server` the module; the package re-exports `server` the MCPServer under
 # the same name.
-server_module = importlib.import_module("pretty_prompt.server")
+server_module = importlib.import_module("text_wall_breaker.server")
 
 
 class _ProgressRecorder:
@@ -71,8 +71,8 @@ def test_no_tool_exposes_the_context_parameter():
 def _plain_linux(monkeypatch):
     """Pin the environment checks to a non-WSL Linux host with no opener override."""
     monkeypatch.setattr("sys.platform", "linux")
-    monkeypatch.setattr("pretty_prompt.opener.is_wsl", lambda: False)
-    monkeypatch.delenv("PRETTY_PROMPT_OPENER", raising=False)
+    monkeypatch.setattr("text_wall_breaker.opener.is_wsl", lambda: False)
+    monkeypatch.delenv("TEXT_WALL_BREAKER_OPENER", raising=False)
 
 
 def test_environment_is_accepted_when_both_checks_pass(monkeypatch):
@@ -102,19 +102,19 @@ def test_headless_is_refused(monkeypatch):
 
 
 def test_accent_config_is_accepted_when_unset(monkeypatch):
-    monkeypatch.delenv("PRETTY_PROMPT_ACCENT", raising=False)
+    monkeypatch.delenv("TEXT_WALL_BREAKER_ACCENT", raising=False)
     assert accent_config_problem() is None
 
 
 def test_accent_config_is_accepted_when_a_valid_hex_colour(monkeypatch):
-    monkeypatch.setenv("PRETTY_PROMPT_ACCENT", "#2563eb")
+    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "#2563eb")
     assert accent_config_problem() is None
 
 
 def test_accent_config_is_refused_when_not_a_hex_colour(monkeypatch):
-    monkeypatch.setenv("PRETTY_PROMPT_ACCENT", "blue")
+    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "blue")
     problem = accent_config_problem() or ""
-    assert "PRETTY_PROMPT_ACCENT" in problem
+    assert "TEXT_WALL_BREAKER_ACCENT" in problem
     assert "blue" in problem
 
 

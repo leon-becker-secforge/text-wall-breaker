@@ -165,7 +165,7 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
     for no reason. Without a listener, Acknowledge still shows on the page but is purely
     a local "seen" mark (see build_show_page's docstring); Save is unaffected either way.
     """
-    directory = Path(tempfile.mkdtemp(prefix="pretty-prompt-show-"))
+    directory = Path(tempfile.mkdtemp(prefix="text-wall-breaker-show-"))
     page = directory / "show.html"
 
     if not request.wait_for_acknowledge:

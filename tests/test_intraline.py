@@ -5,8 +5,8 @@ import re
 
 import pytest
 
-from pretty_prompt.diff import parse_unified_diff
-from pretty_prompt.intraline import changed_ranges, decorated_rows, mark_ranges
+from text_wall_breaker.diff import parse_unified_diff
+from text_wall_breaker.intraline import changed_ranges, decorated_rows, mark_ranges
 
 
 def text_of(row_html: str) -> str:

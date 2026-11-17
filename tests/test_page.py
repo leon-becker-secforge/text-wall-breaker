@@ -9,7 +9,7 @@ from importlib import resources
 
 import pytest
 
-from pretty_prompt.page import (
+from text_wall_breaker.page import (
     InvalidAccent,
     build_multi_page,
     build_page,
@@ -533,7 +533,7 @@ def test_save_theme_ignores_an_invalid_value(theme_state_home):
 
 
 def test_read_saved_theme_ignores_a_corrupted_file(theme_state_home):
-    path = theme_state_home / "pretty-prompt" / "theme"
+    path = theme_state_home / "text-wall-breaker" / "theme"
     path.parent.mkdir(parents=True)
     path.write_text("purple", encoding="utf-8")
     assert read_saved_theme() is None
@@ -628,7 +628,7 @@ def test_multi_page_widens_when_any_step_is_a_gallery():
 
 
 def test_long_question_widens_the_page():
-    from pretty_prompt.markdown import WIDE_QUESTION_CHARS
+    from text_wall_breaker.markdown import WIDE_QUESTION_CHARS
 
     at_limit = "x" * WIDE_QUESTION_CHARS
     over = at_limit + "x"
@@ -735,7 +735,7 @@ def test_both_pages_offer_stop_here_and_send_it_as_an_interrupt():
 
 
 def test_every_page_type_shares_one_action_row_stylesheet():
-    from pretty_prompt.page import build_review_page, build_show_page
+    from text_wall_breaker.page import build_review_page, build_show_page
 
     u = "http://127.0.0.1:1/submit"
     diff = "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x\n+y\n"
@@ -765,7 +765,7 @@ def test_wizard_segments_only_navigate_backwards():
 
 
 def test_progress_fill_is_a_block_so_it_has_a_size():
-    from pretty_prompt.page import build_review_page, build_show_page
+    from text_wall_breaker.page import build_review_page, build_show_page
 
     u = "http://127.0.0.1:1/submit"
     diff = "--- a/a.py\n+++ b/a.py\n@@ -1 +1 @@\n-x\n+y\n"
@@ -876,7 +876,7 @@ def test_the_export_script_is_valid_javascript():
     node = shutil.which("node")
     if node is None:
         pytest.skip("node is not installed")
-    asset = resources.files("pretty_prompt").joinpath("assets", "export.js")
+    asset = resources.files("text_wall_breaker").joinpath("assets", "export.js")
     result = subprocess.run(  # noqa: S603 — fixed argv: the node found above, our own asset
         [node, "--check", str(asset)], capture_output=True, text=True, check=False
     )

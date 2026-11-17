@@ -11,7 +11,7 @@ import os
 import re
 from pathlib import Path
 
-DISABLE_ENV_VAR = "PRETTY_PROMPT_GLOSSARY"
+DISABLE_ENV_VAR = "TEXT_WALL_BREAKER_GLOSSARY"
 FILE_NAMES = ("GLOSSARY.md", "CONTEXT.md")
 
 _TERM_LINE = re.compile(r"^\*\*(?P<term>[^*]+)\*\*(?:\s*\([^)]*\))?:\s*(?P<rest>.*)$")
@@ -52,7 +52,7 @@ def parse(text: str) -> list[dict[str, str]]:
 def find_file(start: Path) -> Path | None:
     """The nearest glossary file from `start` up to the enclosing git root, or None.
 
-    Nearest wins, so a library folder's own glossary beats the monorepo root's, which is
+    Nearest wins, so a subfolder's own glossary beats the repository root's, which is
     how a repo with several contexts picks the one for the folder it is working in.
     """
     for folder in (start, *start.parents):

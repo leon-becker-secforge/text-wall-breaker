@@ -2,7 +2,7 @@
 
 `find_opener` picks one, in this order:
 
-  1. `PRETTY_PROMPT_OPENER`, if set: a command line the target is appended to as its
+  1. `TEXT_WALL_BREAKER_OPENER`, if set: a command line the target is appended to as its
      last argument. It wins over everything below and skips the display check, since
      whoever set it knows their desktop better than a heuristic does.
   2. Windows: `os.startfile`, the shell's own "open with the default handler".
@@ -33,7 +33,7 @@ from pathlib import Path
 
 __all__ = ["OPENER_ENV_VAR", "BrowserUnavailable", "Opener", "find_opener", "is_wsl"]
 
-OPENER_ENV_VAR = "PRETTY_PROMPT_OPENER"
+OPENER_ENV_VAR = "TEXT_WALL_BREAKER_OPENER"
 
 # Where WSL mounts the Windows system directory by default. `appendWindowsPath = false` in
 # /etc/wsl.conf keeps it off PATH while interop still works, so `which` alone misses it.
@@ -96,7 +96,7 @@ class Opener:
         stderr = result.stderr.strip()
         if result.returncode not in (0, 1) or stderr:
             print(
-                f"pretty-prompt: {self.name} exited {result.returncode}"
+                f"text-wall-breaker: {self.name} exited {result.returncode}"
                 + (f": {stderr}" if stderr else ""),
                 file=sys.stderr,
             )
@@ -128,7 +128,7 @@ def find_opener() -> Opener | str:
         return Opener(name="explorer.exe", argv=(explorer,), check_exit=False, windows_paths=True)
     xdg_open = _on_path("xdg-open")
     if xdg_open is None:
-        return "xdg-open is not on PATH; pretty-prompt needs it to open the question page"
+        return "xdg-open is not on PATH; text-wall-breaker needs it to open the question page"
     if not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
         return (
             "neither DISPLAY nor WAYLAND_DISPLAY is set, so there is no desktop to open a page on"

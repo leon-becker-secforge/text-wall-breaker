@@ -334,7 +334,7 @@ def open_in_browser(target: Path | str) -> None:
 
 
 def _resolve_accent() -> str | None:
-    """Read `PRETTY_PROMPT_ACCENT`, or None if it's unset or unusable.
+    """Read `TEXT_WALL_BREAKER_ACCENT`, or None if it's unset or unusable.
 
     `server.main` validates the same variable at startup and refuses to run rather than
     let a typo pass silently — this is the fallback for the case that check can't cover
@@ -791,7 +791,7 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
 
         # One directory per call, removed on every exit path. Nothing outlives the call
         # it belongs to.
-        directory = Path(tempfile.mkdtemp(prefix="pretty-prompt-"))
+        directory = Path(tempfile.mkdtemp(prefix="text-wall-breaker-"))
         try:
             page = directory / "ask.html"
             page.write_text(html, encoding="utf-8")

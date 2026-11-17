@@ -7,7 +7,7 @@
 #   "rich",
 # ]
 # ///
-"""Start the pretty-prompt MCP server from this checkout and call each tool with every feature.
+"""Start the text-wall-breaker MCP server from this checkout and call each tool with every feature.
 
 Each call opens a page in the browser; calls that block (`ask`, `review`, `show` with
 `wait_for_acknowledge`) wait for the page before the next one starts. Results print to
@@ -31,7 +31,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 
-WORKSPACE = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -46,20 +46,18 @@ def status_spinner(text: str) -> Iterator[Console]:
 
 def _server(accent: str | None) -> StdioServerParameters:
     # The client passes only a handful of variables by default; the server needs
-    # DISPLAY/WAYLAND_DISPLAY and any PRETTY_PROMPT_* override to open a page. This
-    # script's own VIRTUAL_ENV would make `uv run` warn about the workspace's .venv.
+    # DISPLAY/WAYLAND_DISPLAY and any TEXT_WALL_BREAKER_* override to open a page. This
+    # script's own VIRTUAL_ENV would make `uv run` warn about the repository's .venv.
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     if accent:
-        env["PRETTY_PROMPT_ACCENT"] = accent
+        env["TEXT_WALL_BREAKER_ACCENT"] = accent
     return StdioServerParameters(
         command="uv",
         args=[
             "run",
             "--directory",
-            str(WORKSPACE),
-            "--package",
-            "pretty-prompt",
-            "pretty-prompt-mcp",
+            str(REPO),
+            "text-wall-breaker-mcp",
         ],
         env=env,
     )
@@ -473,9 +471,9 @@ async def showcase_review(client: Client, tmp: Path) -> None:
 
 
 async def _run(tools: list[str], accent: str | None) -> None:
-    with tempfile.TemporaryDirectory(prefix="pretty-prompt-showcase-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="text-wall-breaker-showcase-") as tmp:
         images = _images(Path(tmp))
-        rprint("[cyan]Starting pretty-prompt server from this checkout")
+        rprint("[cyan]Starting text-wall-breaker server from this checkout")
         async with Client(_server(accent)) as client:
             if "ask" in tools:
                 await showcase_ask(client, images)
@@ -491,7 +489,7 @@ def run(
         list[str] | None, typer.Argument(help="ask, show, review; all when omitted.")
     ] = None,
     accent: Annotated[
-        str | None, typer.Option(help="PRETTY_PROMPT_ACCENT for the server, e.g. '#2563eb'.")
+        str | None, typer.Option(help="TEXT_WALL_BREAKER_ACCENT for the server, e.g. '#2563eb'.")
     ] = None,
 ) -> None:
     """Start the server and walk each tool through its features."""

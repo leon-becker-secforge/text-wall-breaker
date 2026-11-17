@@ -8,8 +8,8 @@ import urllib.request
 
 import pytest
 
-from pretty_prompt import listener as listener_module
-from pretty_prompt.listener import LoopbackListener, SessionListener, Submission
+from text_wall_breaker import listener as listener_module
+from text_wall_breaker.listener import LoopbackListener, SessionListener, Submission
 
 
 def post(port: int, query: str, payload: object, content_type: str = "text/plain"):

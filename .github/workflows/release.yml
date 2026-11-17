@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Exercises the build on a branch. The validate job releases and publishes nothing.
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: build (dry run)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        # setup-uv stopped publishing floating major tags after v7, so this has to be an
+        # exact version: @v10 does not resolve.
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Build
+        run: uv build --out-dir dist
+
+  release:
+    name: build and release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # uv build runs the repository's own PEP 517 backend. Without this, a
+          # contents: write token sits in .git/config while that code executes.
+          persist-credentials: false
+
+      - name: Install uv
+        # setup-uv stopped publishing floating major tags after v7, so this has to be an
+        # exact version: @v10 does not resolve.
+        uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      # git permits $ ` ; | & ( ) and quotes in a ref name, and all of them match the
+      # "v*" tag filter. A tag is therefore attacker-controlled input: it is validated
+      # against a strict allowlist and passed onward only through env, never interpolated
+      # into a run block, because ${{ }} substitutes before bash parses.
+      - name: Derive the version from the tag
+        id: tag
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9][A-Za-z0-9.+!-]*$ ]]; then
+            echo "::error::Version '$version' contains characters that are not permitted"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      # Guards against tagging v0.22.0 while the manifest still says 0.21.0, which would
+      # release assets that do not match their name.
+      - name: Check the tag against the manifest version
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          declared=$(uv version --short)
+          if [ "$declared" != "$VERSION" ]; then
+            echo "::error::Tag says $VERSION, pyproject.toml says $declared"
+            exit 1
+          fi
+
+      - name: Build the wheel and sdist
+        run: uv build --out-dir dist
+
+      # scripts/changelog_section.py exits non-zero on a missing entry, so a tag without a
+      # changelog section fails here rather than releasing with an empty or wrong body.
+      - name: Build the release notes
+        env:
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: ./scripts/changelog_section.py CHANGELOG.md "$VERSION" > /tmp/release-notes.md
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "text-wall-breaker $VERSION" \
+            --notes-file /tmp/release-notes.md \
+            dist/*

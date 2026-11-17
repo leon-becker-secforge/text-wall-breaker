@@ -7,14 +7,14 @@ import urllib.request
 
 import pytest
 
-from pretty_prompt import ask as ask_module
-from pretty_prompt import listener as listener_module
-from pretty_prompt import session as session_module
-from pretty_prompt.ask import AskRequest, InvalidAsk, Option, Question, run_ask
-from pretty_prompt.listener import Submission
-from pretty_prompt.live_ask import LiveAsk
-from pretty_prompt.live_common import LiveCall, LiveError, Reply
-from pretty_prompt.page import build_multi_page, build_page
+from text_wall_breaker import ask as ask_module
+from text_wall_breaker import listener as listener_module
+from text_wall_breaker import session as session_module
+from text_wall_breaker.ask import AskRequest, InvalidAsk, Option, Question, run_ask
+from text_wall_breaker.listener import Submission
+from text_wall_breaker.live_ask import LiveAsk
+from text_wall_breaker.live_common import LiveCall, LiveError, Reply
+from text_wall_breaker.page import build_multi_page, build_page
 
 
 class FakeSession:

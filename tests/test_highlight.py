@@ -1,5 +1,5 @@
-from pretty_prompt.diff import parse_unified_diff
-from pretty_prompt.highlight import highlight_code, highlight_rows
+from text_wall_breaker.diff import parse_unified_diff
+from text_wall_breaker.highlight import highlight_code, highlight_rows
 
 DIFF = (
     "--- a/x.py\n+++ b/x.py\n@@ -1,3 +1,3 @@\n def f():\n-    return 1\n+    return 'a'  # c\n \n"

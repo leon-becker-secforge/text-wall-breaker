@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import pytest
 
-from pretty_prompt import show as show_module
-from pretty_prompt.page import build_show_page
-from pretty_prompt.show import InvalidShow, ShowRequest
+from text_wall_breaker import show as show_module
+from text_wall_breaker.page import build_show_page
+from text_wall_breaker.show import InvalidShow, ShowRequest
 
 
 def test_content_and_slides_together_are_rejected():

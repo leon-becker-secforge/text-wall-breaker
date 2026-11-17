@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from pretty_prompt.listener import Submission
-from pretty_prompt.review import (
+from text_wall_breaker.listener import Submission
+from text_wall_breaker.review import (
     InvalidReview,
     Note,
     Page,

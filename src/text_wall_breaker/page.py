@@ -10,7 +10,7 @@ no-text-wall skill (`assets/base.css`) for its `--ntw-*` colour tokens, which is
 part that generalises across a long-form report and a one-question prompt. Its
 *components* (`.card`, `.theme-toggle`, ...) do not: they are sized for report
 sections, and rendered oversized here on a first, un-reviewed pass. The addendum below
-defines pretty-prompt's own compact components against the same tokens instead of
+defines text-wall-breaker's own compact components against the same tokens instead of
 composing onto those classes. Keeping `base.css` itself byte-identical is still
 deliberate — it stays diffable against its source until this repo forks it properly —
 this page just stopped using the part of it that didn't fit.
@@ -57,7 +57,7 @@ __all__ = [
 # Read by both server.py (to validate once at startup) and ask.py (to resolve the
 # colour for each page) — defined here, not in server.py, so ask.py does not have to
 # import from the module that already imports it.
-ACCENT_ENV_VAR = "PRETTY_PROMPT_ACCENT"
+ACCENT_ENV_VAR = "TEXT_WALL_BREAKER_ACCENT"
 
 # The theme toggle only ever writes localStorage, which is scoped to a `file://` page's
 # storage partition — not guaranteed stable across browsers, profiles, or private
@@ -70,7 +70,7 @@ _THEME_STATES = ("light", "dark")
 
 def _theme_state_path() -> Path:
     base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(base) / "pretty-prompt" / "theme"
+    return Path(base) / "text-wall-breaker" / "theme"
 
 
 def read_saved_theme() -> str | None:
@@ -110,7 +110,7 @@ _DARK_TINT_ALPHA = 0.22
 
 
 class InvalidAccent(ValueError):
-    """`PRETTY_PROMPT_ACCENT` is set but is not a usable colour."""
+    """`TEXT_WALL_BREAKER_ACCENT` is set but is not a usable colour."""
 
 
 def _filename_base(title: str) -> str:
@@ -860,7 +860,7 @@ def _load_asset(name: str) -> str:
 def parse_accent(value: str) -> tuple[int, int, int]:
     """Parse a `#rrggbb` (or `rrggbb`) hex colour into its RGB components.
 
-    Raises `InvalidAccent` naming the value, so a bad `PRETTY_PROMPT_ACCENT` fails with
+    Raises `InvalidAccent` naming the value, so a bad `TEXT_WALL_BREAKER_ACCENT` fails with
     a message pointing at the setting rather than a bare `ValueError` from inside a
     string slice.
     """
@@ -1139,7 +1139,7 @@ def _deck_script(needed: bool) -> str:
     wraparound) are the same ones exercised in no-text-wall's `TEMPLATES.md` `deck`
     template; the progress bar it drives instead of that template's plain "N / total"
     span reuses `ask`'s own wizard-progress widget (`.pp-progress`) for visual
-    consistency across pretty-prompt's two multi-step surfaces.
+    consistency across text-wall-breaker's two multi-step surfaces.
     """
     if not needed:
         return ""
@@ -1185,7 +1185,7 @@ def build_page(
 
     `accent` is a `#rrggbb` hex colour overriding the built-in green, or None to use it
     as-is. Raises `InvalidAccent` if set and unparseable — callers reading it from
-    `PRETTY_PROMPT_ACCENT` are expected to validate once at startup (see
+    `TEXT_WALL_BREAKER_ACCENT` are expected to validate once at startup (see
     `server.accent_config_problem`) so this only re-raises the same problem, never
     surfaces a new one mid-call.
 

@@ -3,10 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from pretty_prompt import gitdiff
-from pretty_prompt.diff import file_status
-from pretty_prompt.gitdiff import GitDiffError, _end_revision, pages_from_git
-from pretty_prompt.review import Page
+from text_wall_breaker import gitdiff
+from text_wall_breaker.diff import file_status
+from text_wall_breaker.gitdiff import GitDiffError, _end_revision, pages_from_git
+from text_wall_breaker.review import Page
 
 
 def _git(repo: Path, *args: str) -> None:

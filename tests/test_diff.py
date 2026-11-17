@@ -4,7 +4,7 @@ import difflib
 
 import pytest
 
-from pretty_prompt.diff import (
+from text_wall_breaker.diff import (
     Gap,
     expansion_lines,
     file_status,

@@ -15,7 +15,7 @@ from pygments.lexer import Lexer
 from pygments.lexers import get_lexer_by_name, get_lexer_for_filename
 from pygments.util import ClassNotFound
 
-from pretty_prompt.diff import DiffLine
+from text_wall_breaker.diff import DiffLine
 
 # Above this a side is shown plain: lexing a generated or minified file costs more than
 # the coloring is worth.

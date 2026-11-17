@@ -11,8 +11,8 @@ import html
 import re
 from difflib import SequenceMatcher
 
-from pretty_prompt.diff import DiffLine
-from pretty_prompt.highlight import highlight_rows
+from text_wall_breaker.diff import DiffLine
+from text_wall_breaker.highlight import highlight_rows
 
 __all__ = ["changed_ranges", "decorated_rows", "mark_ranges"]
 

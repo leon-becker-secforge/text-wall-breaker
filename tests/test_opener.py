@@ -5,13 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from pretty_prompt import opener as opener_module
-from pretty_prompt.opener import BrowserUnavailable, Opener, find_opener
+from text_wall_breaker import opener as opener_module
+from text_wall_breaker.opener import BrowserUnavailable, Opener, find_opener
 
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    monkeypatch.delenv("PRETTY_PROMPT_OPENER", raising=False)
+    monkeypatch.delenv("TEXT_WALL_BREAKER_OPENER", raising=False)
     monkeypatch.setattr(opener_module, "is_wsl", lambda: False)
 
 
@@ -41,13 +41,13 @@ def test_override_wins_and_skips_the_display_check(monkeypatch):
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    monkeypatch.setenv("PRETTY_PROMPT_OPENER", "firefox --new-tab")
+    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", "firefox --new-tab")
     assert find_opener() == Opener(name="firefox", argv=("/bin/firefox", "--new-tab"))
 
 
 def test_override_appends_the_target_last(monkeypatch):
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
-    monkeypatch.setenv("PRETTY_PROMPT_OPENER", "firefox --new-tab")
+    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", "firefox --new-tab")
     runs = _record_runs(monkeypatch)
     opener = find_opener()
     assert isinstance(opener, Opener)
@@ -62,10 +62,10 @@ def test_override_appends_the_target_last(monkeypatch):
 def test_bad_override_is_refused(monkeypatch, value, reason):
     monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
-    monkeypatch.setenv("PRETTY_PROMPT_OPENER", value)
+    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", value)
     problem = find_opener()
     assert isinstance(problem, str)
-    assert "PRETTY_PROMPT_OPENER" in problem
+    assert "TEXT_WALL_BREAKER_OPENER" in problem
     assert reason in problem
 
 

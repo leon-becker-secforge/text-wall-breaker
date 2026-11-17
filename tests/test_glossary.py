@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from pretty_prompt import glossary
-from pretty_prompt.page import build_multi_page, build_page
+from text_wall_breaker import glossary
+from text_wall_breaker.page import build_multi_page, build_page
 
 SAMPLE = """# Title
 

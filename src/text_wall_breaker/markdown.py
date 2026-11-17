@@ -44,7 +44,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote
 
-from pretty_prompt.highlight import highlight_code
+from text_wall_breaker.highlight import highlight_code
 
 __all__ = ["render_inline", "render_markdown"]
 

@@ -4,10 +4,10 @@ from typing import Any
 
 import pytest
 
-from pretty_prompt.listener import LiveHandler, Submission
-from pretty_prompt.live import LiveError, LiveSession, Reply
-from pretty_prompt.live_common import LiveCall
-from pretty_prompt.review import Page, ReviewRequest
+from text_wall_breaker.listener import LiveHandler, Submission
+from text_wall_breaker.live import LiveError, LiveSession, Reply
+from text_wall_breaker.live_common import LiveCall
+from text_wall_breaker.review import Page, ReviewRequest
 
 DIFF = """--- a/a.txt
 +++ b/a.txt

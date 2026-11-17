@@ -28,7 +28,7 @@ _HUNK_COUNTS = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 
 class InvalidDiff(ValueError):
-    """`diff` text has no hunk pretty-prompt can resolve a line coordinate from."""
+    """`diff` text has no hunk text-wall-breaker can resolve a line coordinate from."""
 
 
 @dataclass(frozen=True)

@@ -165,7 +165,7 @@ class _Server(HTTPServer):
 
 
 class _Handler(BaseHTTPRequestHandler):
-    server_version = "pretty-prompt/1"
+    server_version = "text-wall-breaker/1"
 
     # Signature fixed by BaseHTTPRequestHandler; neither argument is used because the
     # whole point of the override is to drop the access log.
@@ -299,7 +299,7 @@ class _SessionServer(HTTPServer):
 
 
 class _SessionHandler(BaseHTTPRequestHandler):
-    server_version = "pretty-prompt/1"
+    server_version = "text-wall-breaker/1"
 
     def log_message(self, format: str, *args: Any) -> None:  # noqa: ARG002
         return  # see _Handler.log_message

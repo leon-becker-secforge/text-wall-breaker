@@ -10,10 +10,10 @@ from typing import Any
 
 import pytest
 
-from pretty_prompt import ask as ask_module
-from pretty_prompt import listener as listener_module
-from pretty_prompt import session as session_module
-from pretty_prompt.ask import (
+from text_wall_breaker import ask as ask_module
+from text_wall_breaker import listener as listener_module
+from text_wall_breaker import session as session_module
+from text_wall_breaker.ask import (
     AskRequest,
     BrowserUnavailable,
     InvalidAsk,
@@ -25,12 +25,12 @@ from pretty_prompt.ask import (
 
 
 def test_resolve_accent_is_none_when_unset(monkeypatch):
-    monkeypatch.delenv("PRETTY_PROMPT_ACCENT", raising=False)
+    monkeypatch.delenv("TEXT_WALL_BREAKER_ACCENT", raising=False)
     assert _resolve_accent() is None
 
 
 def test_resolve_accent_returns_a_valid_value(monkeypatch):
-    monkeypatch.setenv("PRETTY_PROMPT_ACCENT", "#2563eb")
+    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "#2563eb")
     assert _resolve_accent() == "#2563eb"
 
 
@@ -38,7 +38,7 @@ def test_resolve_accent_falls_back_to_none_when_invalid(monkeypatch):
     # server.main() is the gate that refuses to start over a bad value — this is the
     # fallback for run_ask being called directly (as the rest of this file does),
     # bypassing that gate.
-    monkeypatch.setenv("PRETTY_PROMPT_ACCENT", "not-a-colour")
+    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "not-a-colour")
     assert _resolve_accent() is None
 
 
@@ -756,7 +756,7 @@ def test_a_prefilled_option_is_not_changed_from_when_kept(browser):
 
 
 def test_long_first_paragraph_gets_a_hint():
-    from pretty_prompt.ask import LONG_QUESTION_CHARS, _long_question_hint
+    from text_wall_breaker.ask import LONG_QUESTION_CHARS, _long_question_hint
 
     long = Question(question="x" * (LONG_QUESTION_CHARS + 1), options=[Option(id="a", label="A")])
     short = Question(question="Short?\n\n" + "y" * 500, options=[Option(id="a", label="A")])
@@ -970,7 +970,7 @@ def test_an_interrupted_ask_counts_a_reorder_as_an_answer(browser):
 
 
 def test_rank_markup_escapes_labels_and_tier_names():
-    from pretty_prompt.page import build_multi_page
+    from text_wall_breaker.page import build_multi_page
 
     page = build_multi_page(
         questions=[
