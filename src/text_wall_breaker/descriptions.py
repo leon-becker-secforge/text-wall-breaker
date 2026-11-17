@@ -97,7 +97,8 @@ Save is client-side only. With `wait_for_acknowledge` it returns
 `{"acknowledged": true}` or, if the tab is closed, `{"abandoned": true}`.
 
 Otherwise returns `{"opened": true, "path": "..."}` (`path` only for a one-off tab).
-`{"not_delivered": true}`: the page never loaded."""
+`{"not_delivered": true, "reason": "..."}`: the page never loaded; `reason` says why it
+likely failed and whether a retry is worth it."""
 
 REVIEW_DESCRIPTION = """Have the user review a diff in a local browser page, one file per page;
 blocks until submit, cancel, or the tab is closed. For a reaction that reduces to a choice, use
@@ -125,8 +126,8 @@ line, each prefixed `+`, `-` or a space. A text selection adds `quote`, the sele
 part. Cancel returns the same shape plus `"cancelled": true`,
 keeping what was entered, since a cancel may be deliberate after a partial pass.
 The same shape plus `"abandoned": true`: the tab was closed first; comments are
-those entered so far. `{"not_delivered": true}`: the page
-never loaded.
+those entered so far. `{"not_delivered": true,
+"reason": "..."}`: the page never loaded; `reason` says why and whether to retry.
 
 `{"live": {"session": id}}`: the user started a live session (or you set `live`):
 call `live` now, as `instruction` says."""

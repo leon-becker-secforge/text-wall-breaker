@@ -25,7 +25,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from .ask import BrowserUnavailable, open_in_browser
+from .ask import NOT_DELIVERED, BrowserUnavailable, open_in_browser
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
     ACCENT_ENV_VAR,
@@ -150,7 +150,7 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
         # show_in_tab opens or reloads the tab, so no click can race this.
         session.mark_report(request.title)
     if not session.show_in_tab(generation, open_in_browser):
-        return {"not_delivered": True}
+        return dict(NOT_DELIVERED)
     if not request.wait_for_acknowledge:
         return {"opened": True}
     submission = session.wait_for_answer()
@@ -186,7 +186,7 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
-            return {"not_delivered": True}
+            return dict(NOT_DELIVERED)
     return _result_from_submission(submission)
 
 

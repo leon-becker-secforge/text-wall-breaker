@@ -22,7 +22,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .ask import BrowserUnavailable, open_in_browser
+from .ask import NOT_DELIVERED, BrowserUnavailable, open_in_browser
 from .diff import (
     DiffLine,
     InvalidDiff,
@@ -45,9 +45,6 @@ from .render import rendered_view
 from .session import get_shared_session
 
 __all__ = ["BrowserUnavailable", "InvalidReview", "Note", "Page", "ReviewRequest", "run_review"]
-
-# The page never loaded, so nobody saw it — same reasoning as ask.NOT_DELIVERED.
-NOT_DELIVERED: dict[str, Any] = {"not_delivered": True}
 
 # Key of `run_review`'s result when a live session starts instead of a report: its value
 # is the generation of the page on screen, and the shared tab stays claimed.
@@ -425,7 +422,7 @@ def _run_review_reusing_tab(
         )
     )
     if not session.show_in_tab(generation, open_in_browser):
-        return NOT_DELIVERED
+        return dict(NOT_DELIVERED)
     if live:
         return {LIVE_START: generation}
 
@@ -455,7 +452,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
-            return NOT_DELIVERED
+            return dict(NOT_DELIVERED)
         progress = listener.progress()
 
     return _result_from_submission(request.pages, submission, progress, request.expansion())

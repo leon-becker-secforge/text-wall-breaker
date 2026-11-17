@@ -169,15 +169,15 @@ def test_wsl_refusal_names_the_path_setting(monkeypatch, tmp_path):
     ("returncode", "stderr", "logged"),
     [(0, "", False), (1, "", False), (1, "access denied", True), (2, "", True)],
 )
-def test_an_unchecked_openers_failure_is_logged(monkeypatch, capsys, returncode, stderr, logged):
+def test_an_unchecked_openers_failure_is_logged(monkeypatch, caplog, returncode, stderr, logged):
     monkeypatch.setattr(
         "subprocess.run",
         lambda argv, **kw: subprocess.CompletedProcess(argv, returncode, stdout="", stderr=stderr),
     )
     Opener(name="explorer.exe", argv=("/bin/explorer.exe",), check_exit=False).open("http://x/")
-    err = capsys.readouterr().err
-    assert ("explorer.exe exited" in err) is logged
-    assert (stderr in err) if stderr else True
+    warnings = " ".join(r.getMessage() for r in caplog.records if r.levelname == "WARNING")
+    assert ("explorer.exe exited" in warnings) is logged
+    assert (stderr in warnings) if stderr else True
 
 
 def test_failing_exit_status_is_browser_unavailable(monkeypatch):

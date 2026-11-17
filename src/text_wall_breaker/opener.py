@@ -31,6 +31,8 @@ import webbrowser
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from .log import logger
+
 __all__ = ["OPENER_ENV_VAR", "BrowserUnavailable", "Opener", "find_opener", "is_wsl"]
 
 OPENER_ENV_VAR = "TEXT_WALL_BREAKER_OPENER"
@@ -80,6 +82,13 @@ class Opener:
             return
         arg = _windows_path(target) if self.windows_paths else str(target)
         result = _run([*self.argv, arg], self.name)
+        logger.info(
+            "opener %s %s exited %s%s",
+            self.name,
+            [*self.argv, arg],
+            result.returncode,
+            f": {result.stderr.strip()}" if result.stderr.strip() else "",
+        )
         if self.check_exit and result.returncode != 0:
             detail = result.stderr.strip() or f"exit status {result.returncode}"
             raise BrowserUnavailable(f"{self.name} failed: {detail}")
@@ -95,10 +104,11 @@ class Opener:
         """
         stderr = result.stderr.strip()
         if result.returncode not in (0, 1) or stderr:
-            print(
-                f"text-wall-breaker: {self.name} exited {result.returncode}"
-                + (f": {stderr}" if stderr else ""),
-                file=sys.stderr,
+            logger.warning(
+                "opener %s exited %s%s",
+                self.name,
+                result.returncode,
+                f": {stderr}" if stderr else "",
             )
 
 

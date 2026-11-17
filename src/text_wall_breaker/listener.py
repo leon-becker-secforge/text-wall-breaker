@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 
+from .log import logger
 from .page import save_theme
 
 __all__ = ["LoopbackListener", "SessionListener", "Submission"]
@@ -278,6 +279,11 @@ class LoopbackListener:
             if now > self._last_activity + ABANDON_SECONDS:
                 return None
             if not self._seen and now > started + DELIVERY_SECONDS:
+                logger.warning(
+                    "one-off page never requested within %ss on port %s",
+                    DELIVERY_SECONDS,
+                    self.port,
+                )
                 return None
             self._httpd.handle_request()
         return self._submission
@@ -575,10 +581,22 @@ class SessionListener:
         is the cheaper mistake.
         """
         if self.tab_opened and self._wait_served(generation, REUSE_GRACE_SECONDS):
+            logger.info("generation %s picked up by the open tab", generation)
             return True
+        logger.info("opening %s for generation %s", self.page_url, generation)
         open_tab(self.page_url)
         self.tab_opened = True
-        return self._wait_served(generation, DELIVERY_SECONDS)
+        served = self._wait_served(generation, DELIVERY_SECONDS)
+        if served:
+            logger.info("generation %s served", generation)
+        else:
+            logger.warning(
+                "generation %s not served within %ss: no request reached %s",
+                generation,
+                DELIVERY_SECONDS,
+                self.page_url,
+            )
+        return served
 
     def publish(self, build_html: Callable[[int], str]) -> int:
         """Swap in the next question's page, built from the generation it will carry.

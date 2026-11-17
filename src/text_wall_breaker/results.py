@@ -43,6 +43,7 @@ class ReviewResult(TypedDict, total=False):
     cancelled: bool
     abandoned: bool
     not_delivered: bool
+    reason: str
     live: dict[str, str]
     instruction: str
 
@@ -53,6 +54,7 @@ class ShowResult(TypedDict, total=False):
     acknowledged: bool
     abandoned: bool
     not_delivered: bool
+    reason: str
 
 
 class ShowStatusResult(TypedDict, total=False):

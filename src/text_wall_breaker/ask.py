@@ -77,7 +77,12 @@ SHARE_INTERACTION_SIGNALS = True
 # not treat it like an `abandoned` one. See listener.DELIVERY_SECONDS.
 NOT_DELIVERED: dict[str, Any] = {
     "not_delivered": True,
-    "reason": "the page never loaded in a browser within the delivery window",
+    "reason": (
+        "the browser opener ran without an error, but no browser loaded the page within "
+        "the delivery window (about 30s): the browser may be on another display, profile "
+        "or machine, or blocked 127.0.0.1. Fall back to text; retry only if the browser "
+        "was just starting. Details: ~/.local/state/text-wall-breaker/text-wall-breaker.log"
+    ),
 }
 
 

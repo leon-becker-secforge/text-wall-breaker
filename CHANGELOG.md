@@ -7,8 +7,17 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [0.21.0] - 2026-11-17
 
+### Added
+
+- A log file at `$XDG_STATE_HOME/text-wall-breaker/text-wall-breaker.log` (default
+  `~/.local/state/text-wall-breaker/`), rotated at 1 MB. It records the opener's command and
+  exit status, each page's delivery and each timeout. `TEXT_WALL_BREAKER_LOG` sets the level
+  or `off`. Opener traces that went to stderr now go here.
+
 ### Changed
 
+- `review` and `show` return a `reason` with `not_delivered`, as `ask` already did, and
+  the reason now says the opener ran without error and whether a retry is worth it.
 - **Breaking:** renamed from `pretty-prompt` to `text-wall-breaker`. The distribution is
   `text-wall-breaker`, the module `text_wall_breaker`, the console script
   `text-wall-breaker-mcp`. An MCP client registers the server under a new name, so tool

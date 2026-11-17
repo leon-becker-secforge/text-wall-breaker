@@ -43,6 +43,8 @@ from .gitdiff import GitDiffError, pages_from_git
 from .listener import SessionListener
 from .live import ATTACH_INSTRUCTION, LiveSession, RepoSource
 from .live_common import LiveCall, LiveError, Reply, no_such_session
+from .log import configure as configure_logging
+from .log import logger
 from .opener import find_opener
 from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .results import AskResult, LiveResult, ReviewResult, ShowResult, ShowStatusResult
@@ -522,6 +524,8 @@ def main() -> None:
         if problem is not None:
             print(f"text-wall-breaker: {problem}", file=sys.stderr)
             raise SystemExit(2)
+    path = configure_logging()
+    logger.info("server start, log %s", path)
     server.run(transport="stdio")
 
 
