@@ -1155,7 +1155,7 @@ def _ask_live_assets(live: str) -> tuple[str, str]:
     """The stylesheet and `<script>` of the live discussion, or two empty strings if "off".
 
     The bubble icon is "Thought bubble" by SeregaCthtuf (game-icons.net, CC BY 3.0); its
-    file carries the attribution, and so does the README.
+    file carries the attribution, and so does NOTICE.
     """
     if live == "off":
         return "", ""
