@@ -29,6 +29,7 @@ every answer, the stopped-at one included.
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import shutil
 import tempfile
@@ -143,6 +144,9 @@ class Option(BaseModel):
     ] = False
 
 
+_OPTIONS_JSON_IN_TEXT = re.compile(r'"(?:options|label)"\s*:')
+
+
 class Question(BaseModel):
     """One question on a page: the single-question shape, reused for `questions`."""
 
@@ -203,6 +207,14 @@ class Question(BaseModel):
             raise InvalidAsk(
                 f"{label}: options is empty and allow_free_text is false, so it would "
                 "have no way to answer; supply options, or set allow_free_text"
+            )
+        if not self.options and _OPTIONS_JSON_IN_TEXT.search(self.question):
+            # Only the combination: a question that quotes JSON, or an empty option
+            # list on its own, stays valid.
+            raise InvalidAsk(
+                f"{label}: options is empty but question contains option JSON "
+                '(`"options":` or `"label":`); pass options as the `options` '
+                "argument, not inside question"
             )
         recommended = sum(1 for option in self.options if option.recommended)
         if recommended > 1 and not self.multi_select:

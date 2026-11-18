@@ -5,6 +5,12 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+### Changed
+
+- `ask` rejects a question with no `options` that contains `"options":` or `"label":`.
+  The page used to open with no choices and the JSON as text. An empty option list alone,
+  or JSON quoted next to real options, is still accepted.
+
 ## [0.21.0] - 2026-11-17
 
 ### Added

@@ -48,6 +48,24 @@ def test_empty_options_without_free_text_is_rejected():
         request.validated()
 
 
+@pytest.mark.parametrize("fragment", ['"options": [{"id": "a"}]', '{"label": "A"}'])
+def test_option_json_in_question_without_options_is_rejected(fragment):
+    request = AskRequest(question=f"Pick one {fragment}", allow_free_text=True)
+    with pytest.raises(InvalidAsk, match="option JSON"):
+        request.validated()
+
+
+def test_option_json_in_question_with_options_is_accepted():
+    AskRequest(
+        question='Explain the `"options":` key',
+        options=[Option(id="a", label="A")],
+    ).validated()
+
+
+def test_question_without_options_and_without_json_is_accepted():
+    AskRequest(question="Describe the options you prefer", allow_free_text=True).validated()
+
+
 def test_several_recommended_options_are_allowed_with_multi_select():
     AskRequest(
         question="q",
