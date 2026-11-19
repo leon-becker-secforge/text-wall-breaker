@@ -186,20 +186,32 @@ def repo_root(repo: str) -> Path:
     """The top of the work tree `repo` is in: what `git diff` paths are relative to.
 
     `repo` itself when git cannot say, so a caller still gets a directory to resolve in.
-    Raises GitDiffError when the work tree is not `repo` or a folder above it: the repo's
-    own `core.worktree` can name any directory, and the review would show its files.
+    Raises GitDiffError when the work tree is not the one git finds from its own top: the
+    repo's `core.worktree` can name any directory, a parent folder included, and the
+    review would show the files its index names there (`~/.ssh/id_rsa` from a repo in
+    `~/Downloads`). Linked worktrees and submodules pass, since git finds their git
+    directory again from their top.
     """
     directory = Path(repo).expanduser()
     try:
-        completed = _git(directory, "rev-parse", "--show-toplevel", text=True)
+        completed = _git(directory, "rev-parse", "--show-toplevel", "--absolute-git-dir", text=True)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return directory
-    top = completed.stdout.strip()
-    if completed.returncode != 0 or not top:
+    lines = completed.stdout.splitlines()
+    if completed.returncode != 0 or len(lines) != 2 or not lines[0]:
         return directory
-    if not directory.resolve().is_relative_to(Path(top).resolve()):
+    top, git_dir = Path(lines[0]), lines[1]
+    if not directory.resolve().is_relative_to(top.resolve()) or _git_dir_of(top) != git_dir:
         raise GitDiffError(f"the repo's work tree is outside it: {top}")
-    return Path(top)
+    return top
+
+
+def _git_dir_of(top: Path) -> str | None:
+    try:
+        completed = _git(top, "rev-parse", "--absolute-git-dir", text=True)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    return completed.stdout.strip() if completed.returncode == 0 else None
 
 
 def pages_from_git(

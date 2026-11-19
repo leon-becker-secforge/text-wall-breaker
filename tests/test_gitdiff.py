@@ -225,6 +225,25 @@ def test_a_work_tree_outside_the_repo_is_refused(repo, tmp_path_factory):
         pages_from_git(str(repo), None, None, 3)
 
 
+def test_a_work_tree_in_a_parent_folder_is_refused(tmp_path):
+    (tmp_path / "secret.txt").write_text("TOP-SECRET\n")
+    repo = tmp_path / "downloaded"
+    repo.mkdir()
+    _git(repo, "init", "-q")
+    _git(repo, "config", "core.worktree", str(tmp_path))
+    _git(repo, "add", str(tmp_path / "secret.txt"))
+    with pytest.raises(GitDiffError, match="work tree is outside"):
+        pages_from_git(str(repo), None, None, 3)
+
+
+def test_a_linked_worktree_and_a_subfolder_are_accepted(repo, tmp_path_factory):
+    (repo / "sub").mkdir()
+    assert gitdiff.repo_root(str(repo / "sub")) == repo
+    linked = tmp_path_factory.mktemp("linked") / "wt"
+    _git(repo, "worktree", "add", "-q", str(linked))
+    assert gitdiff.repo_root(str(linked)) == linked
+
+
 def test_a_filter_name_with_a_space_is_blanked_whole(repo):
     _git(repo, "config", "filter.a b.clean", "cat")
     blanks = gitdiff._filter_blanks(repo)
