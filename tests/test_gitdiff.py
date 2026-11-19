@@ -217,6 +217,33 @@ def test_attributes_from_outside_the_tree_run_no_filter(repo, tmp_path_factory, 
     assert sorted(p.name for p in markers.iterdir()) == []
 
 
+def test_a_submodule_runs_no_command_of_its_own_config(repo, tmp_path_factory):
+    markers = tmp_path_factory.mktemp("markers")
+    sub = repo / "sub"
+    sub.mkdir()
+    _git(sub, "init", "-q")
+    (sub / "f.txt").write_text("one\n")
+    _git(sub, "add", ".")
+    _git(sub, "commit", "-q", "-m", "sub")
+    (repo / ".gitmodules").write_text('[submodule "sub"]\n\tpath = sub\n\turl = ./sub\n')
+    _git(repo, "add", ".gitmodules", "sub")
+    _git(repo, "commit", "-q", "-m", "add sub")
+    # The superproject's own config asks for submodule diffs; the submodule's config
+    # then names a filter (through info/attributes) and an external diff.
+    _git(repo, "config", "diff.submodule", "diff")
+    _git(sub, "config", "filter.zz.clean", f"sh -c 'touch {markers}/clean; cat'")
+    _git(sub, "config", "diff.external", f"sh -c 'touch {markers}/external'")
+    (sub / ".git" / "info").mkdir(exist_ok=True)
+    (sub / ".git" / "info" / "attributes").write_text("*.txt filter=zz\n")
+    (sub / "f.txt").write_text("two\n")
+    (repo / "a.txt").write_text("one\nTWO\nTHREE\n")
+
+    pages = pages_from_git(str(repo), None, None, 3)
+
+    assert [page["path"] for page in pages] == ["a.txt"]
+    assert sorted(p.name for p in markers.iterdir()) == []
+
+
 def test_a_missing_object_is_never_fetched_from_the_repos_remote(repo, tmp_path_factory):
     markers = tmp_path_factory.mktemp("markers")
     _git(repo, "config", "core.repositoryformatversion", "1")

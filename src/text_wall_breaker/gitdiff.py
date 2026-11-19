@@ -42,6 +42,7 @@ MAX_TOTAL_BYTES = 4 * 1024 * 1024
 #   git 2.40), the attributes file is /dev/null, and every filter driver the config
 #   names is blanked (`_filter_blanks`), which also covers info/attributes.
 # - diff drivers (textconv, external diff): --no-textconv --no-ext-diff on `git diff`.
+# - submodules, diffed by a child git under their own config: --ignore-submodules=all.
 # - a missing object of a partial clone, fetched through the repo's own remote URL
 #   (`ext::<command>`): no transport is allowed, and lazy fetching is off (git 2.44).
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
@@ -224,6 +225,9 @@ def pages_from_git(
             "--no-color",
             "--no-ext-diff",
             "--no-textconv",
+            # A submodule diff runs a child git with the submodule's own config, which
+            # none of the options here reach.
+            "--ignore-submodules=all",
             "--find-renames",
             f"-U{context_lines}",
             revision,
