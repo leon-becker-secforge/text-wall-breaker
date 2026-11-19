@@ -10,6 +10,7 @@ from importlib import resources
 
 import pytest
 
+from text_wall_breaker import page as page_module
 from text_wall_breaker.page import (
     InvalidAccent,
     ReviewNote,
@@ -1038,6 +1039,22 @@ def test_every_page_has_a_nonce_csp_that_covers_each_of_its_scripts(name):
     assert tags
     assert all(f'nonce="{nonce.group(1)}"' in tag for tag in tags)
     assert '<meta name="referrer" content="no-referrer">' in html
+
+
+def test_a_script_tag_that_slipped_in_gets_no_nonce():
+    # Should agent text ever reach the page unescaped, its <script> must not run.
+    @page_module._fresh_nonce
+    def build() -> str:
+        return page_module._document(
+            '<html><head></head><body>__CONTENT__<script nonce="__NONCE__"></script></body>',
+            {"__CONTENT__": "<script>steal()</script>"},
+        )
+
+    html = build()
+    nonce = re.search(r"'nonce-([^']+)'", html)
+    assert nonce
+    assert "<script>steal()</script>" in html
+    assert html.count(f'nonce="{nonce.group(1)}"') == 1
 
 
 def test_pages_build_from_templates_read_at_import(monkeypatch):

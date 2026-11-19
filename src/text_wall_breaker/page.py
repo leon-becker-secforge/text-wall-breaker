@@ -21,12 +21,15 @@ that comes from the caller (option labels, ids) is escaped at the point of inter
 
 from __future__ import annotations
 
+import functools
 import html
 import json
 import os
 import re
 import secrets
 from bisect import bisect_right
+from collections.abc import Callable
+from contextvars import ContextVar
 from importlib import resources
 from pathlib import Path
 from typing import NotRequired, TypedDict
@@ -193,6 +196,29 @@ def _render_deck(
     return content_html, "\n\n".join(raw_parts)
 
 
+# The nonce of the page being built: every script tag this module writes carries it, and
+# the page's CSP runs no other. Set by `_fresh_nonce` around each page builder.
+_nonce: ContextVar[str] = ContextVar("nonce")
+
+
+def _fresh_nonce[**P](build: Callable[P, str]) -> Callable[P, str]:
+    @functools.wraps(build)
+    def with_nonce(*args: P.args, **kwargs: P.kwargs) -> str:
+        token = _nonce.set(secrets.token_urlsafe(16))
+        try:
+            return build(*args, **kwargs)
+        finally:
+            _nonce.reset(token)
+
+    return with_nonce
+
+
+def _script(body: str) -> str:
+    """An inline script of the page being built. `</` is escaped so the body cannot end it."""
+    return f'<script nonce="{_nonce.get()}">\n{body.replace("</", "<\\/")}\n</script>'
+
+
+@_fresh_nonce
 def build_show_page(
     *,
     content: str = "",
@@ -738,9 +764,10 @@ def _review_files_script(needed: bool) -> str:
     """
     if not needed:
         return ""
-    return "<script>\n" + _load_asset("review_files.js") + "</script>"
+    return _script(_load_asset("review_files.js"))
 
 
+@_fresh_nonce
 def build_review_page(
     *,
     pages: list[ReviewPage],
@@ -791,11 +818,7 @@ def build_review_page(
     asset_base_url = asset_base_url_for(status_url)
     header_html = _render_review_header(header, pages, asset_base_url)
     content_html = _render_review_pages(pages, asset_base_url, with_files=with_files)
-    live_script = (
-        "<script>\n" + _load_asset("live.js").replace("</", "<\\/") + "\n</script>"
-        if live != "off"
-        else ""
-    )
+    live_script = _script(_load_asset("live.js")) if live != "off" else ""
 
     return _document(
         _load_asset("review.html"),
@@ -830,21 +853,15 @@ def _fill(template: str, values: dict[str, str]) -> str:
     return _PLACEHOLDER.sub(lambda m: values.get(m.group(0), m.group(0)), template)
 
 
-# Script tags that run: plain inline ones and the mermaid loader. A JSON data block
-# (`type="application/json"`) never executes, so it needs no nonce.
-_SCRIPT_TAG = re.compile(r"<script(?=>| src=)")
-
-
 def _document(template: str, values: dict[str, str]) -> str:
     """A page's final HTML: `template` filled, then locked down by a CSP.
 
-    Only `<script>` tags with this page's nonce run, so an attribute or tag that agent
-    text manages to smuggle in stays inert. Agent text reaches the page HTML-escaped,
-    so every literal `<script` left in the document is one this module wrote.
+    Only script tags carrying this page's nonce run: the template's own (`__NONCE__`) and
+    those `_script` wrote. Text from the agent is never one of them, whatever it smuggles in.
     Images: the page's own origin (`/asset`), `file:` (a page opened from disk) and
     inline data. Requests: only the listener the page's submit URL names, or none.
     """
-    nonce = secrets.token_urlsafe(16)
+    nonce = _nonce.get()
     submit_url = json.loads(values.get("__SUBMIT_URL__", "null"))
     connect = "'none'"
     if isinstance(submit_url, str):
@@ -865,8 +882,7 @@ def _document(template: str, values: dict[str, str]) -> str:
         f'<head>\n<meta http-equiv="Content-Security-Policy" content="{policy}">\n'
         '<meta name="referrer" content="no-referrer">'
     )
-    filled = _fill(template, values).replace("<head>", head, 1)
-    return _SCRIPT_TAG.sub(f'<script nonce="{nonce}"', filled)
+    return _fill(template, {**values, "__NONCE__": nonce}).replace("<head>", head, 1)
 
 
 def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
@@ -875,11 +891,9 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
         return "", ""
     return (
         _load_asset("glossary.css"),
-        "<script>\nwindow.__PP_GLOSSARY__ = "
-        + _js_string(glossary)
-        + ";\n"
-        + _load_asset("glossary.js").replace("</", "<\\/")
-        + "\n</script>",
+        _script(
+            "window.__PP_GLOSSARY__ = " + _js_string(glossary) + ";\n" + _load_asset("glossary.js")
+        ),
     )
 
 
@@ -1205,8 +1219,8 @@ def _mermaid_script(needed: bool) -> str:
     if not needed:
         return ""
     return (
-        f'<script src="{_MERMAID_SRC}" integrity="{_MERMAID_INTEGRITY}" '
-        'crossorigin="anonymous"></script>\n<script>\n' + _load_asset("mermaid.js") + "</script>"
+        f'<script nonce="{_nonce.get()}" src="{_MERMAID_SRC}" integrity="{_MERMAID_INTEGRITY}" '
+        'crossorigin="anonymous"></script>\n' + _script(_load_asset("mermaid.js"))
     )
 
 
@@ -1222,12 +1236,12 @@ def _deck_script(needed: bool) -> str:
     """
     if not needed:
         return ""
-    return "<script>\n" + _load_asset("deck.js") + "</script>"
+    return _script(_load_asset("deck.js"))
 
 
 def _export_script() -> str:
     """The `<script>` of the export button, on every page that takes an answer."""
-    return "<script>\n" + _load_asset("export.js").replace("</", "<\\/") + "\n</script>"
+    return _script(_load_asset("export.js"))
 
 
 def _ask_live_assets(live: str) -> tuple[str, str]:
@@ -1241,9 +1255,10 @@ def _ask_live_assets(live: str) -> tuple[str, str]:
     script = _load_asset("ask_live.js").replace(
         "__ICON__", json.dumps(_load_asset("thought-bubble.svg"))
     )
-    return _load_asset("ask_live.css"), "<script>\n" + script.replace("</", "<\\/") + "\n</script>"
+    return _load_asset("ask_live.css"), _script(script)
 
 
+@_fresh_nonce
 def build_page(
     *,
     question: str,
@@ -1539,6 +1554,7 @@ def _render_header(header: str, asset_base_url: str | None = None) -> str:
     )
 
 
+@_fresh_nonce
 def build_multi_page(
     *,
     questions: list[dict[str, object]],
