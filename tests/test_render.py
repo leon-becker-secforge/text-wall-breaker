@@ -205,6 +205,13 @@ def test_a_dropped_element_hides_nothing_after_it(dropped):
     assert "fallback" not in html  # an object's content goes with it
 
 
+def test_a_file_cannot_take_the_pages_ids_or_classes():
+    cleaner = render_module._Cleaner([], "a.adoc", None, None)
+    cleaner.feed('<div id="pp-form" class="paragraph pp-option is-sel deck-slide">x</div>')
+    cleaner.close()
+    assert "".join(cleaner.out) == '<div class="paragraph">x</div>'
+
+
 MERMAID_MD = "# T\n\n```mermaid\ngraph TD\n  A-->B\n```\n\n```python\nprint(1)\n```"
 
 

@@ -153,7 +153,17 @@ _TAGS = {
     "span", "strong", "sub", "summary", "sup", "table", "tbody", "td", "tfoot", "th", "thead",
     "tr", "tt", "u", "ul",
 }  # fmt: skip
-_ATTRS = {"class", "id", "title", "colspan", "rowspan", "start", "type", "alt", "data-first"}
+# No `id`: it could shadow an element the page script looks up by id, and no in-page link
+# survives cleaning to use one.
+_ATTRS = {"title", "colspan", "rowspan", "start", "type", "alt", "data-first"}
+# Class prefixes the page's own styles and script select on; a file must not borrow them.
+_PAGE_CLASS_PREFIXES = ("pp-", "is-", "has-", "deck-")
+
+
+def _file_classes(value: str) -> str:
+    return " ".join(c for c in value.split() if not c.startswith(_PAGE_CLASS_PREFIXES))
+
+
 _VOID = {"br", "col", "hr", "img"}
 _DROP_WITH_CONTENT = {"script", "style", "iframe", "object", "embed", "template"}
 
@@ -193,6 +203,8 @@ class _Cleaner(HTMLParser):
                 mark = len(self._marks)
                 self._marks.append((int(value), len(self.out)))
                 kept.append(f'data-first="{int(value)}"')
+            elif name == "class" and (classes := _file_classes(value)):
+                kept.append(f'class="{escape(classes, quote=True)}"')
             elif name in _ATTRS and name != "data-first":
                 kept.append(f'{name}="{escape(value, quote=True)}"')
             elif name == "href" and value.lower().startswith(_LINK_SCHEMES):
