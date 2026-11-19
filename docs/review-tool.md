@@ -41,6 +41,11 @@ the agent's context and pasted back. `git_range` is what `git diff` takes (`main
 comment on and are skipped. A renamed file is one page under its new path (a rename
 without edits shows a single hunk line saying so), and comments and `notes` use that path.
 
+`repo` needs git 2.40 or newer. The repo is not trusted: the diff runs with `core.fsmonitor`
+off and without the repo's `.gitattributes`, so no filter, textconv or diff driver from the
+repo's config runs. A file whose attributes mark it binary or set its line endings is
+therefore diffed as plain text.
+
 Each file carries a status letter in the file list and above its diff: `A` added (green),
 `M` modified (amber), `D` deleted (red), `R` renamed (gray; its tooltip and the list filter
 know the old path). For `repo` it comes from git's header lines; for `pages` from the diff

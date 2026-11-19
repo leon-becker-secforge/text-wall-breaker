@@ -161,3 +161,19 @@ def test_a_file_that_changed_since_the_diff_is_not_expandable(repo, monkeypatch)
     monkeypatch.setattr(gitdiff, "_read_new_side", lambda d, r, p: b"something else entirely\n")
     pages = pages_from_git(str(repo), "HEAD~1..HEAD", None, 3)
     assert all("text" not in page for page in pages)
+
+
+@pytest.mark.parametrize("git_range", [None, "HEAD~1..HEAD", "HEAD~1"])
+def test_the_repo_config_runs_no_command(repo, tmp_path_factory, git_range):
+    markers = tmp_path_factory.mktemp("markers")
+    _git(repo, "config", "core.fsmonitor", f"touch {markers}/fsmonitor; echo")
+    _git(repo, "config", "filter.x.clean", f"touch {markers}/clean; cat")
+    _git(repo, "config", "filter.x.process", f"touch {markers}/process")
+    _git(repo, "config", "diff.x.textconv", f"touch {markers}/textconv; cat")
+    (repo / ".gitattributes").write_text("* filter=x diff=x\n")
+    (repo / "a.txt").write_text("one\nTWO\nTHREE\n")
+
+    pages = pages_from_git(str(repo), git_range, None, 3)
+
+    assert pages
+    assert sorted(p.name for p in markers.iterdir()) == []

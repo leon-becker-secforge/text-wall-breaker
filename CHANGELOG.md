@@ -16,6 +16,9 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - `ask` and `show` pages fill their template in one pass, as `review` already did. A
   template placeholder name inside a question, option, title or report was substituted
   again, which let the text close an HTML attribute and add a script handler.
+- `review` with `repo` no longer runs commands named in the repo's config:
+  `core.fsmonitor` is off and attributes come from the empty tree, so no filter or diff
+  driver runs. `repo` now needs git 2.40 or newer.
 
 ## [0.21.0] - 2026-11-17
 

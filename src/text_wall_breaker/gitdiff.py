@@ -33,6 +33,13 @@ _RENAME_ONLY_HUNK = "@@ -0,0 +0,0 @@ renamed without changes\n"
 MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 4 * 1024 * 1024
 
+# The repo may be untrusted, and its own config and .gitattributes can name commands git
+# runs while diffing the working tree: core.fsmonitor, and filter drivers via attributes.
+# Reading attributes from the empty tree turns every filter (and diff driver) off;
+# --attr-source needs git 2.40.
+_EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+_NO_REPO_COMMANDS = ("-c", "core.fsmonitor=false", f"--attr-source={_EMPTY_TREE}")
+
 
 class GitDiffError(ValueError):
     """The git source cannot be turned into pages."""
@@ -97,7 +104,7 @@ def _read_new_side(directory: Path, revision: str, path: str) -> bytes | None:
             return None
     if end.startswith("-"):
         return None
-    command = ["git", "-C", str(directory), "show", f"{end}:{path}"]
+    command = ["git", "-C", str(directory), *_NO_REPO_COMMANDS, "show", f"{end}:{path}"]
     try:
         completed = subprocess.run(  # noqa: S603 - fixed argv, no shell; end cannot start with "-"
             command, capture_output=True, timeout=_GIT_TIMEOUT_SECONDS, check=False
@@ -143,6 +150,7 @@ def pages_from_git(
         "git",
         "-C",
         str(directory),
+        *_NO_REPO_COMMANDS,
         "-c",
         "core.quotepath=off",
         "diff",
@@ -171,6 +179,8 @@ def pages_from_git(
     except subprocess.TimeoutExpired as exc:
         raise GitDiffError(f"git diff took over {_GIT_TIMEOUT_SECONDS}s") from exc
     if completed.returncode != 0:
+        if "attr-source" in completed.stderr:
+            raise GitDiffError("git 2.40 or newer is needed to diff without running repo commands")
         raise GitDiffError(f"git diff failed: {completed.stderr.strip()}")
 
     starts = [match.start() for match in _FILE_HEADER.finditer(completed.stdout)]
