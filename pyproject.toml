@@ -21,7 +21,7 @@ dependencies = [
 text-wall-breaker-mcp = "text_wall_breaker.server:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.33.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]

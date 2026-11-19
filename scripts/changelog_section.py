@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "typer",
+#   "typer==0.29.2",
 # ]
 # ///
 """Print one version's section from a Keep a Changelog-style CHANGELOG.md.
