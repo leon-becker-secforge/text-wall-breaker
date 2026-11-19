@@ -1,3 +1,4 @@
+import contextlib
 import subprocess
 from pathlib import Path
 
@@ -158,7 +159,7 @@ def test_a_renamed_file_is_one_page_under_its_new_path(tmp_path):
 
 
 def test_a_file_that_changed_since_the_diff_is_not_expandable(repo, monkeypatch):
-    monkeypatch.setattr(gitdiff, "_read_new_side", lambda d, r, p: b"something else entirely\n")
+    monkeypatch.setattr(gitdiff, "_read_new_side", lambda d, r, p, b: b"something else entirely\n")
     pages = pages_from_git(str(repo), "HEAD~1..HEAD", None, 3)
     assert all("text" not in page for page in pages)
 
@@ -194,4 +195,43 @@ def test_the_repo_config_runs_no_command(repo, tmp_path_factory, git_range):
     pages = pages_from_git(str(repo), git_range, None, 3)
 
     assert pages
+    assert sorted(p.name for p in markers.iterdir()) == []
+
+
+@pytest.mark.parametrize("where", ["info", "attributes_file"])
+@pytest.mark.parametrize("key", ["clean", "process"])
+def test_attributes_from_outside_the_tree_run_no_filter(repo, tmp_path_factory, where, key):
+    markers = tmp_path_factory.mktemp("markers")
+    _git(repo, "config", f"filter.x.{key}", f"sh -c 'touch {markers}/{key}; cat'")
+    if where == "info":
+        (repo / ".git" / "info").mkdir(exist_ok=True)
+        (repo / ".git" / "info" / "attributes").write_text("* filter=x\n")
+    else:
+        (repo / ".git" / "myattrs").write_text("* filter=x\n")
+        _git(repo, "config", "core.attributesFile", str(repo / ".git" / "myattrs"))
+    (repo / "a.txt").write_text("one\nTWO\nTHREE\n")
+
+    # Refusing the repo is as good as diffing it safely.
+    with contextlib.suppress(GitDiffError):
+        pages_from_git(str(repo), None, None, 3)
+    assert sorted(p.name for p in markers.iterdir()) == []
+
+
+def test_a_missing_object_is_never_fetched_from_the_repos_remote(repo, tmp_path_factory):
+    markers = tmp_path_factory.mktemp("markers")
+    _git(repo, "config", "core.repositoryformatversion", "1")
+    _git(repo, "config", "extensions.partialClone", "origin")
+    _git(repo, "config", "remote.origin.url", f"ext::sh -c touch% {markers}/fetched")
+    _git(repo, "config", "remote.origin.promisor", "true")
+    _git(repo, "config", "protocol.ext.allow", "always")
+    blob = subprocess.run(  # noqa: S603
+        ["git", "-C", str(repo), "rev-parse", "HEAD~1:a.txt"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    (repo / ".git" / "objects" / blob[:2] / blob[2:]).unlink()
+
+    with pytest.raises(GitDiffError):
+        pages_from_git(str(repo), "HEAD~1..HEAD", None, 3)
     assert sorted(p.name for p in markers.iterdir()) == []

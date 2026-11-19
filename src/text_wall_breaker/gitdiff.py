@@ -13,6 +13,7 @@ are simply not expandable.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -33,12 +34,25 @@ _RENAME_ONLY_HUNK = "@@ -0,0 +0,0 @@ renamed without changes\n"
 MAX_FILE_BYTES = 512 * 1024
 MAX_TOTAL_BYTES = 4 * 1024 * 1024
 
-# The repo may be untrusted, and its own config and .gitattributes can name commands git
-# runs while diffing the working tree: core.fsmonitor, and filter drivers via attributes.
-# Reading attributes from the empty tree turns every filter (and diff driver) off;
-# --attr-source needs git 2.40.
+# The repo may be untrusted: its config can name commands git runs while it diffs. Each
+# way in is shut separately, since git has no "run nothing from this repo" switch:
+# - core.fsmonitor: off.
+# - filter drivers, selected by .gitattributes, $GIT_DIR/info/attributes or
+#   core.attributesFile: in-tree attributes come from the empty tree (--attr-source,
+#   git 2.40), the attributes file is /dev/null, and every filter driver the config
+#   names is blanked (`_filter_blanks`), which also covers info/attributes.
+# - diff drivers (textconv, external diff): --no-textconv --no-ext-diff on `git diff`.
+# - a missing object of a partial clone, fetched through the repo's own remote URL
+#   (`ext::<command>`): no transport is allowed, and lazy fetching is off (git 2.44).
 _EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-_NO_REPO_COMMANDS = ("-c", "core.fsmonitor=false", f"--attr-source={_EMPTY_TREE}")
+_NO_REPO_COMMANDS = (
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.attributesFile=/dev/null",
+    f"--attr-source={_EMPTY_TREE}",
+)
+_GIT_ENV = {"GIT_ALLOW_PROTOCOL": "", "GIT_NO_LAZY_FETCH": "1", "GIT_TERMINAL_PROMPT": "0"}
 
 
 class GitDiffError(ValueError):
@@ -88,7 +102,47 @@ def _end_revision(revision: str) -> str | None:
     return end or "HEAD"
 
 
-def _read_new_side(directory: Path, revision: str, path: str) -> bytes | None:
+def _git(directory: Path, *args: str, text: bool = False) -> subprocess.CompletedProcess:
+    """Run git in `directory` with every repo-named command shut off (see above).
+
+    Raises FileNotFoundError and subprocess.TimeoutExpired like `subprocess.run`.
+    """
+    command = ["git", "-C", str(directory), *_NO_REPO_COMMANDS, *args]
+    env = {**os.environ, **_GIT_ENV}
+    # Fixed argv, no shell; callers keep a leading "-" out of revisions.
+    if text:
+        # A file that is not UTF-8 still diffs; its bytes show as U+FFFD.
+        return subprocess.run(  # noqa: S603
+            command,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_GIT_TIMEOUT_SECONDS,
+            check=False,
+            env=env,
+        )
+    return subprocess.run(  # noqa: S603
+        command, capture_output=True, timeout=_GIT_TIMEOUT_SECONDS, check=False, env=env
+    )
+
+
+def _filter_blanks(directory: Path) -> list[str]:
+    """`-c` options that blank every filter driver the repo's config (any scope) names."""
+    completed = _git(directory, "config", "--name-only", "--get-regexp", r"^filter\.", text=True)
+    options: list[str] = []
+    for name in dict.fromkeys(
+        key.split(".", 1)[1].rsplit(".", 1)[0] for key in completed.stdout.split()
+    ):
+        # `-c` splits at the first "=", so a driver named with one cannot be blanked.
+        if "=" in name:
+            raise GitDiffError(f"the repo's config has a filter git cannot skip: {name!r}")
+        for key in ("clean", "smudge", "process"):
+            options += ["-c", f"filter.{name}.{key}="]
+        options += ["-c", f"filter.{name}.required=false"]
+    return options
+
+
+def _read_new_side(directory: Path, revision: str, path: str, blanks: list[str]) -> bytes | None:
     """The file's bytes on the diff's new side, or None if it cannot be read safely."""
     end = _end_revision(revision)
     if end is None:
@@ -104,19 +158,18 @@ def _read_new_side(directory: Path, revision: str, path: str) -> bytes | None:
             return None
     if end.startswith("-"):
         return None
-    command = ["git", "-C", str(directory), *_NO_REPO_COMMANDS, "show", f"{end}:{path}"]
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell; end cannot start with "-"
-            command, capture_output=True, timeout=_GIT_TIMEOUT_SECONDS, check=False
-        )
+        completed = _git(directory, *blanks, "show", f"{end}:{path}")
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
     return completed.stdout if completed.returncode == 0 else None
 
 
-def _expandable_text(directory: Path, revision: str, path: str, diff: str) -> str | None:
+def _expandable_text(
+    directory: Path, revision: str, path: str, diff: str, blanks: list[str]
+) -> str | None:
     """The new side's text if it is small, text, and exactly what `diff` was made from."""
-    data = _read_new_side(directory, revision, path)
+    data = _read_new_side(directory, revision, path, blanks)
     if data is None or len(data) > MAX_FILE_BYTES or b"\x00" in data:
         return None
     try:
@@ -132,11 +185,8 @@ def repo_root(repo: str) -> Path:
     `repo` itself when git cannot say, so a caller still gets a directory to resolve in.
     """
     directory = Path(repo).expanduser()
-    command = ["git", "-C", str(directory), *_NO_REPO_COMMANDS, "rev-parse", "--show-toplevel"]
     try:
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
-            command, capture_output=True, text=True, timeout=_GIT_TIMEOUT_SECONDS, check=False
-        )
+        completed = _git(directory, "rev-parse", "--show-toplevel", text=True)
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return directory
     top = completed.stdout.strip()
@@ -163,33 +213,23 @@ def pages_from_git(
     if not revision or revision.startswith("-"):
         raise GitDiffError(f"invalid git_range: {git_range!r}")
 
-    command = [
-        "git",
-        "-C",
-        str(directory),
-        *_NO_REPO_COMMANDS,
-        "-c",
-        "core.quotepath=off",
-        "diff",
-        "--no-color",
-        "--no-ext-diff",
-        "--no-textconv",
-        "--find-renames",
-        f"-U{context_lines}",
-        revision,
-        "--",
-        *(paths or []),
-    ]
     try:
-        # A file that is not UTF-8 still diffs; its bytes show as U+FFFD instead of
-        # failing the whole call.
-        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell; range cannot start with "-"
-            command,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=_GIT_TIMEOUT_SECONDS,
-            check=False,
+        blanks = _filter_blanks(directory)
+        completed = _git(
+            directory,
+            *blanks,
+            "-c",
+            "core.quotepath=off",
+            "diff",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--find-renames",
+            f"-U{context_lines}",
+            revision,
+            "--",
+            *(paths or []),
+            text=True,
         )
     except FileNotFoundError as exc:
         raise GitDiffError("git is not installed") from exc
@@ -214,7 +254,7 @@ def pages_from_git(
             pages.append({"path": path, "diff": chunk.rstrip("\n") + "\n" + _RENAME_ONLY_HUNK})
         elif path is not None and "\n@@ " in chunk:
             page = {"path": path, "diff": chunk}
-            text = _expandable_text(top, revision, path, chunk)
+            text = _expandable_text(top, revision, path, chunk, blanks)
             if text is not None and len(text.encode("utf-8")) <= budget:
                 budget -= len(text.encode("utf-8"))
                 page["text"] = text
