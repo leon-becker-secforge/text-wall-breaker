@@ -22,7 +22,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .ask import NOT_DELIVERED, BrowserUnavailable, open_in_browser
+from .ask import BrowserUnavailable, not_delivered, open_in_browser
 from .diff import (
     DiffLine,
     InvalidDiff,
@@ -422,7 +422,7 @@ def _run_review_reusing_tab(
         )
     )
     if not session.show_in_tab(generation, open_in_browser):
-        return dict(NOT_DELIVERED)
+        return not_delivered()
     if live:
         return {LIVE_START: generation}
 
@@ -452,7 +452,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
-            return dict(NOT_DELIVERED)
+            return not_delivered()
         progress = listener.progress()
 
     return _result_from_submission(request.pages, submission, progress, request.expansion())

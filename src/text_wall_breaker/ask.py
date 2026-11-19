@@ -46,6 +46,7 @@ from .glossary import load as load_glossary
 from .listener import LoopbackListener, SessionListener, Submission
 from .live_ask import ASK_ATTACH_INSTRUCTION, LiveAsk
 from .live_common import LiveError
+from .log import LOG_ENV_VAR, active_log
 from .markdown import LONG_QUESTION_CHARS, first_paragraph
 from .opener import BrowserUnavailable, find_opener
 from .page import (
@@ -74,17 +75,21 @@ __all__ = [
 # nor mentioned in the tool description. `expanded` predates it and is not covered.
 SHARE_INTERACTION_SIGNALS = True
 
+
 # The page never loaded, so nobody saw the question: the agent should fall back at once,
 # not treat it like an `abandoned` one. See listener.DELIVERY_SECONDS.
-NOT_DELIVERED: dict[str, Any] = {
-    "not_delivered": True,
-    "reason": (
-        "the browser opener ran without an error, but no browser loaded the page within "
-        "the delivery window (about 30s): the browser may be on another display, profile "
-        "or machine, or blocked 127.0.0.1. Fall back to text; retry only if the browser "
-        "was just starting. Details: ~/.local/state/text-wall-breaker/text-wall-breaker.log"
-    ),
-}
+def not_delivered() -> dict[str, Any]:
+    path = active_log()
+    details = f"Details: {path}" if path else f"No log is kept ({LOG_ENV_VAR} is off or failed)."
+    return {
+        "not_delivered": True,
+        "reason": (
+            "the browser opener ran without an error, but no browser loaded the page within "
+            "the delivery window (about 30s): the browser may be on another display, profile "
+            "or machine, or blocked 127.0.0.1. Fall back to text; retry only if the browser "
+            f"was just starting. {details}"
+        ),
+    }
 
 
 class InvalidAsk(ValueError):
@@ -773,7 +778,7 @@ def _run_ask_reusing_tab(
     # An already-open tab picks up the new content on its own (see page.py's
     # startReusePolling); show_in_tab only opens one if it doesn't.
     if not session.show_in_tab(generation, open_in_browser):
-        return NOT_DELIVERED
+        return not_delivered()
     if request.live:
         return _start_live(request, steps, session, generation)
 
@@ -817,7 +822,7 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
         finally:
             shutil.rmtree(directory, ignore_errors=True)
         if not listener.page_seen:
-            return NOT_DELIVERED
+            return not_delivered()
         progress = listener.progress()
 
     return _answer_from_submission(
@@ -890,7 +895,6 @@ def _long_question_hint(steps: list[Question]) -> str | None:
 
 def run_ask(request: AskRequest) -> dict[str, Any]:
     """`_run_ask`, plus a `hint` on the result if a question's first paragraph is long."""
-    # A copy: NOT_DELIVERED is a shared constant, and `hint` must never stick to it.
     result = dict(_run_ask(request))
     # A resume carries no questions of its own to judge, and a page nobody saw says
     # nothing about its wording.

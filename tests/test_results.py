@@ -28,9 +28,9 @@ def test_ask_answers_use_only_declared_keys():
     interrupted = ask_module._interrupted(
         [step], {"answers": [raw], "interrupted": 0}, multi=True, header=""
     )
-    assert set(single) | set(multi) | set(interrupted) | set(ask_module.NOT_DELIVERED) <= declared(
-        AskResult
-    )
+    assert set(single) | set(multi) | set(interrupted) | set(
+        ask_module.not_delivered()
+    ) <= declared(AskResult)
     assert set(interrupted["answers"][0]) <= declared(AskResult) | {"interrupted"}
 
 

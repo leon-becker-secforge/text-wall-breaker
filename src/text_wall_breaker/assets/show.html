@@ -119,9 +119,35 @@ __ACK_BUTTON__
           clone.querySelectorAll(selector).forEach(function (el) { el.remove(); });
         }
       );
-      download(FILENAME_BASE + '.html', 'text/html', '<!doctype html>\n' + clone.outerHTML);
+      // An /asset URL carries the session token, and stops loading once the server is
+      // gone: the saved file gets each such image inlined, or no src at all.
+      var assets = Array.prototype.filter.call(clone.querySelectorAll('img'), function (img) {
+        return (img.getAttribute('src') || '').indexOf('/asset?') !== -1;
+      });
+      Promise.all(assets.map(inlineImage)).then(function () {
+        download(FILENAME_BASE + '.html', 'text/html', '<!doctype html>\n' + clone.outerHTML);
+      });
       saveMenu.hidden = true;
     });
+  }
+
+  function inlineImage(img) {
+    return fetch(img.getAttribute('src'))
+      .then(function (res) { return res.ok ? res.blob() : null; })
+      .then(function (blob) {
+        if (!blob) return null;
+        return new Promise(function (resolve) {
+          var reader = new FileReader();
+          reader.onload = function () { resolve(reader.result); };
+          reader.onerror = function () { resolve(null); };
+          reader.readAsDataURL(blob);
+        });
+      })
+      .catch(function () { return null; })
+      .then(function (dataUrl) {
+        if (dataUrl) img.setAttribute('src', dataUrl);
+        else img.removeAttribute('src');
+      });
   }
 
   var ackBtn = document.getElementById('pp-ack');

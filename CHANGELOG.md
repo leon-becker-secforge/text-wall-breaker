@@ -10,6 +10,14 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - `ask` rejects a question with no `options` that contains `"options":` or `"label":`.
   The page used to open with no choices and the JSON as text. An empty option list alone,
   or JSON quoted next to real options, is still accepted.
+- The log file is rotated when the server starts instead of while it writes: every MCP
+  client session runs its own server on the same file. An unknown `TEXT_WALL_BREAKER_LOG`
+  level is reported on stderr.
+- The `not_delivered` reason names the log file actually in use, or says no log is kept.
+
+### Fixed
+
+- A `file://` image whose path is percent-encoded (`a%20b.png`) loads in a reused tab.
 
 ### Security
 
@@ -27,10 +35,10 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - `GET /asset` serves only images a rendered page references, refuses symlinks, and sends
   `nosniff`, a sandbox CSP and no CORS header. It used to serve any image-named file,
   including a symlink to any file.
-
-### Fixed
-
-- A `file://` image whose path is percent-encoded (`a%20b.png`) loads in a reused tab.
+- The session token is redacted from the log, and the log file and its directory are
+  created private to the user (`0600`/`0700`; an existing directory is tightened).
+- A `show` report saved as HTML gets its local images inlined, so the file no longer
+  carries the session token in their URLs.
 
 ## [0.21.0] - 2026-11-17
 
