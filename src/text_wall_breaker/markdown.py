@@ -57,6 +57,8 @@ _SAFE_SCHEMES = ("http://", "https://", "file://", "mailto:", "data:image/")
 
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 _FENCE = re.compile(r"^```\s*([A-Za-z0-9_+-]*)\s*$")
+# Only a bare fence closes one: a ```python line inside a block is an example's opening.
+_FENCE_CLOSE = re.compile(r"^```\s*$")
 _BULLET = re.compile(r"^([ \t]*)[-*]\s+(.*)$")
 _ORDERED = re.compile(r"^([ \t]*)\d+[.)]\s+(.*)$")
 _QUOTE = re.compile(r"^>\s?(.*)$")
@@ -108,11 +110,13 @@ _INLINE = re.compile(
     rf"|\[(?P<link_text>[^\]]*)\]\((?P<link_url>{_URL_BODY})\)"
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
     # first: a non-greedy close would otherwise strand the trailing marker as text.
-    r"|\*\*(?P<b_text>.+?)\*\*(?![*_])"
+    # `*` and `**` need text against both markers, as CommonMark's flanking rule asks:
+    # `2 * 3 * 4` is arithmetic, not emphasis.
+    r"|\*\*(?P<b_text>\S(?:.*?\S)?)\*\*(?![*_])"
     # `_` only delimits at a word boundary, as in CommonMark: identifiers like set_mode
     # in running prose must not turn into emphasis. `*` still works intraword.
     r"|(?<!\w)__(?P<ub_text>.+?)__(?![*\w])"
-    r"|\*(?P<i_text>.+?)\*"
+    r"|\*(?P<i_text>[^\s*](?:.*?[^\s*])?)\*"
     r"|(?<!\w)_(?P<ui_text>.+?)_(?!\w)"
     r"|(?P<s>~~)(?P<s_text>.+?)(?P=s)",
     re.DOTALL,
@@ -350,7 +354,7 @@ def _expand_literal_newlines(lines: list[str]) -> list[str]:
     out: list[str] = []
     in_fence = False
     for line in lines:
-        if _FENCE.match(line.strip()):
+        if (_FENCE_CLOSE if in_fence else _FENCE).match(line.strip()):
             in_fence = not in_fence
             out.append(line)
             continue
@@ -482,7 +486,7 @@ def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
             index += 1
             # An unterminated fence runs to the end of the input rather than erroring —
             # a truncated prompt should still render everything before the break.
-            while index < len(lines) and not _FENCE.match(lines[index].strip()):
+            while index < len(lines) and not _FENCE_CLOSE.match(lines[index].strip()):
                 body.append(lines[index])
                 index += 1
             if language == "diff":

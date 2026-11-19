@@ -95,6 +95,18 @@ def test_nested_emphasis():
     assert render_inline("**a *b***") == "<strong>a <em>b</em></strong>"
 
 
+@pytest.mark.parametrize("text", ["2 * 3 * 4", "2 ** 3 ** 4", "f(*args, **kwargs)", "* x *"])
+def test_a_marker_with_space_on_its_inner_side_is_not_emphasis(text):
+    assert render_inline(text) == text
+
+
+def test_a_fence_line_with_a_language_inside_a_block_does_not_close_it():
+    html = render_markdown("```\nfoo\n```python\nbar\n```\nafter")
+    assert html.count("<pre") == 1
+    assert "```python\nbar" in html
+    assert "<p>after</p>" in html
+
+
 # An agent writes identifiers like set_mode in running prose far more often than it
 # means underscore emphasis mid-word, so `_` only delimits at a word boundary (as in
 # CommonMark); `*` still works intraword.

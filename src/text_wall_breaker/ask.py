@@ -111,7 +111,7 @@ class Option(BaseModel):
     ]
     label: Annotated[
         str,
-        Field(description="Short plain text, shown as is (no Markdown)."),
+        Field(description="Short text; inline Markdown (bold, code, links) renders."),
     ]
     caveat: Annotated[
         str | None,

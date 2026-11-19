@@ -1035,10 +1035,8 @@ def _render_options(
         option_id = html.escape(str(option["id"]), quote=True)
         raw_label = str(option["label"])
         label = html.escape(raw_label, quote=True)
-        # Inline rendering only — same reasoning as the caveat below: block syntax (a
-        # leading `>`, a heading) has nowhere sensible to go in a one-line title, so it
-        # stays literal text instead of breaking the row. Bold/code/links/etc. do render,
-        # where previously they silently didn't, unlike everywhere else in the document.
+        # Inline rendering only: block syntax (a leading `>`, a heading) has nowhere to go
+        # in a one-line title, so it stays literal text instead of breaking the row.
         label_html = render_inline(raw_label, asset_base_url=asset_base_url)
         body = option.get("body")
         # aria-label, not reliance on the wrapping element, because the long-body case
@@ -1383,7 +1381,8 @@ def _render_rank(
     ids = list(by_id)
 
     def label(option_id: str) -> str:
-        return html.escape(str(by_id[option_id].get("label", "")))
+        # Inline Markdown, as an option label of a pick question renders.
+        return render_inline(str(by_id[option_id].get("label", "")), asset_base_url=asset_base_url)
 
     if not isinstance(rank, list):
         sent = prefill.get("order")

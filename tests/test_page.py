@@ -408,6 +408,14 @@ def test_option_label_leading_quote_marker_stays_literal():
     assert '<span class="pp-option-label">&gt; quoted title</span>' in body
 
 
+def test_a_rank_label_renders_inline_markdown_like_a_pick_label():
+    html = build_multi_page(
+        questions=[{"question": "q", "rank": True, "options": [{"id": "a", "label": "`x` **y**"}]}],
+        submit_url=_SUBMIT,
+    )
+    assert '<div class="pp-option-label"><code>x</code> <strong>y</strong></div>' in html
+
+
 def test_caveat_comes_before_a_short_inline_body():
     body = _body(_page(options=[_option(body="Short body.", caveat="Needs Q3.")]))
     assert body.index(_CAVEAT_DIV) < body.index('<div class="pp-option-body">')

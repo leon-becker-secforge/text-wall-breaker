@@ -41,6 +41,12 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   page's file list and in the comments' attribution.
 - `review` with `repo` set to a subdirectory of a work tree keeps context expansion and
   rendered-view images: file paths are resolved from the work tree's top.
+- `*` and `**` need text against both markers, so `2 * 3 * 4` and `f(*args, **kwargs)` stay
+  as written instead of turning partly italic.
+- Only a bare ```` ``` ```` closes a code block; a ```` ```python ```` line inside one is
+  content, so a Markdown example with its own fence renders whole.
+- A ranking's labels render inline Markdown, as option labels of a pick question already
+  did; the `label` description and `docs/ask-tool.md` said plain text.
 - A resumed `ask` keeps the glossary `project` of the ask it reopens, and `resume` rejects
   `live` and `project` as it already rejected the other arguments, instead of ignoring them.
 

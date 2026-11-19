@@ -21,9 +21,9 @@ run beside an `ask` is described in [The `live` tool](live-tool.md).
 }
 ```
 
-`question` and each option's `body` are Markdown. `label` is short plain text and is not
-rendered as Markdown. `id` is what comes back in the answer, so an answer stays stable
-when a label is reworded.
+`question` and each option's `body` are Markdown. `label` is short text with inline
+Markdown only (bold, code, links), in a pick question and in a ranking alike. `id` is what
+comes back in the answer, so an answer stays stable when a label is reworded.
 
 `options` may be empty only when `allow_free_text` is true; otherwise the page would
 have no way to answer and the call is rejected before anything opens.
