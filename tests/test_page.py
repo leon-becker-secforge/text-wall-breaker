@@ -98,7 +98,7 @@ def test_review_placeholders_in_the_diff_text_stay_text():
         status_url="http://127.0.0.1:1/status",
         live="on",
     )
-    scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+    scripts = re.findall(r"<script[^>]*>(.*?)</script>", html, re.S)
     assert sum("window.ppLive = {" in s for s in scripts) == 1
     assert "__LIVE_SCRIPT__" in html
 
@@ -317,7 +317,7 @@ def test_long_body_collapses_behind_a_drawer():
 
 
 def test_an_image_collapses_a_body_regardless_of_length():
-    body = _body(_page(options=[_option(body="![x](https://example.com/x.png)")]))
+    body = _body(_page(options=[_option(body="![x](file:///tmp/x.png)")]))
     assert _DRAWER_CLOSED_TAG in body
 
 
@@ -573,7 +573,7 @@ def test_every_page_carries_a_lightbox_and_zoom_listener():
 
 
 def test_one_image_option_does_not_trigger_gallery_mode():
-    body = _body(_page(options=[_option(id="a", body="![x](https://example.com/a.png)")]))
+    body = _body(_page(options=[_option(id="a", body="![x](file:///tmp/a.png)")]))
     assert "pp-options-gallery" not in body
     # A single image is still shown behind a drawer, same as any other long body.
     assert '<details class="pp-option-drawer" data-option-id="a">' in body
@@ -583,8 +583,8 @@ def test_two_image_options_trigger_gallery_mode():
     body = _body(
         _page(
             options=[
-                _option(id="a", body="![x](https://example.com/a.png)"),
-                _option(id="b", body="![y](https://example.com/b.png)"),
+                _option(id="a", body="![x](file:///tmp/a.png)"),
+                _option(id="b", body="![y](file:///tmp/b.png)"),
             ]
         )
     )
@@ -592,15 +592,15 @@ def test_two_image_options_trigger_gallery_mode():
     # Gallery mode never drawers an image behind a click. Scoped to the markup, not the
     # script — the script's own drawer-querying selector is a `pp-option-drawer` literal
     # regardless of whether the page has any.
-    markup = body.split("<script>", 1)[0]
+    markup = body.split("<script", 1)[0]
     assert "pp-option-drawer" not in markup
 
 
 def test_gallery_widens_the_page():
     html = _page(
         options=[
-            _option(id="a", body="![x](https://example.com/a.png)"),
-            _option(id="b", body="![y](https://example.com/b.png)"),
+            _option(id="a", body="![x](file:///tmp/a.png)"),
+            _option(id="b", body="![y](file:///tmp/b.png)"),
         ]
     )
     assert '<main class="pp-wide">' in html
@@ -619,8 +619,8 @@ def test_multi_page_widens_when_any_step_is_a_gallery():
             {
                 "question": "second",
                 "options": [
-                    _option(id="a", body="![x](https://example.com/a.png)"),
-                    _option(id="b", body="![y](https://example.com/b.png)"),
+                    _option(id="a", body="![x](file:///tmp/a.png)"),
+                    _option(id="b", body="![y](file:///tmp/b.png)"),
                 ],
             },
         ]
@@ -974,3 +974,74 @@ def test_show_placeholders_in_agent_text_stay_text(placeholder, deck):
         html = build_show_page(content=content, title=text, submit_url=_SUBMIT, status_url=_STATUS)
     assert _event_attrs(html) == []
     assert placeholder in html
+
+
+_MERMAID = "```mermaid\ngraph TD; A-->B\n```"
+
+
+def _every_page() -> dict[str, str]:
+    return {
+        "ask": build_page(
+            question=_MERMAID,
+            options=[],
+            multi_select=False,
+            allow_free_text=True,
+            live="on",
+            submit_url=_SUBMIT,
+            status_url=_STATUS,
+        ),
+        "multi": build_multi_page(
+            questions=[{"question": _MERMAID, "options": []}],
+            live="on",
+            submit_url=_SUBMIT,
+            status_url=_STATUS,
+        ),
+        "show": build_show_page(content=_MERMAID, submit_url=_SUBMIT, status_url=_STATUS),
+        "deck": build_show_page(slides=[_MERMAID, "b"], submit_url=_SUBMIT, status_url=_STATUS),
+        "review": build_review_page(
+            pages=[{"path": "a.md", "diff": "@@ -1 +1 @@\n-a\n+b\n"}],
+            submit_url=_SUBMIT,
+            status_url=_STATUS,
+            live="on",
+        ),
+    }
+
+
+def _csp(html: str) -> str:
+    match = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
+    assert match, "no CSP meta tag"
+    return match.group(1)
+
+
+@pytest.mark.parametrize("name", ["ask", "multi", "show", "deck", "review"])
+def test_every_page_has_a_nonce_csp_that_covers_each_of_its_scripts(name):
+    html = _every_page()[name]
+    policy = _csp(html)
+    assert "default-src 'none'" in policy
+    script_src = next(part for part in policy.split(";") if "script-src" in part)
+    assert "'unsafe-inline'" not in script_src
+    nonce = re.search(r"'nonce-([^']+)'", script_src)
+    assert nonce
+    tags = re.findall(r"<script\b[^>]*>", html)
+    assert tags
+    assert all(f'nonce="{nonce.group(1)}"' in tag for tag in tags)
+    assert '<meta name="referrer" content="no-referrer">' in html
+
+
+def test_each_page_gets_its_own_nonce():
+    first, second = (_csp(build_show_page(content="x")) for _ in range(2))
+    assert first != second
+
+
+@pytest.mark.parametrize("name", ["ask", "show"])
+def test_mermaid_is_loaded_with_subresource_integrity(name):
+    tag = re.search(r'<script[^>]*src="[^"]*mermaid[^"]*"[^>]*>', _every_page()[name])
+    assert tag
+    assert 'integrity="sha384-' in tag.group(0)
+    assert 'crossorigin="anonymous"' in tag.group(0)
+
+
+def test_the_wizard_loads_mermaid_with_subresource_integrity_too():
+    html = _every_page()["multi"]
+    assert "script.integrity = " in html
+    assert '"sha384-' in html

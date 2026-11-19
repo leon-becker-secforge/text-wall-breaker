@@ -315,7 +315,7 @@ def test_a_mermaid_fence_in_the_rendered_view_loads_the_diagram_script():
     assert '<pre data-first="3" data-last="6" class="mermaid">' in html
     assert "cdn.jsdelivr.net/npm/mermaid@" in html
     plain = _md_html("docs/a.md", {"docs/a.md": "\n".join(MD_NEW) + "\n"})
-    assert "cdn.jsdelivr.net" not in plain
+    assert '<script src="https://cdn.jsdelivr.net' not in plain
 
 
 def test_the_sidebar_and_the_header_show_how_each_file_changed():

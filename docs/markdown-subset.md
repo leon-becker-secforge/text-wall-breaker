@@ -44,10 +44,17 @@ bare (`/...` or `~/...`):
 ```
 
 A relative path renders as text: the server cannot know which directory it is relative to.
+So does a remote (`http`/`https`) image: loading it would tell its server that the page was
+opened, and from where.
 
 There is no separate images field and no base64 inlining. The page is opened from disk,
 so `file://` resolves directly. URLs are restricted to `http`, `https`, `file`, `mailto`
 and `data:image/`; anything else, `javascript:` above all, renders as text.
+
+Every page carries a Content-Security-Policy: only the page's own scripts run (each
+carries a per-page nonce), mermaid loads only as the pinned file with its integrity hash,
+images come from the page's own server, `file:` or `data:`, and requests go only to the
+loopback listener.
 
 An `ask` or `show` page widens itself automatically when its content carries a
 ` ```diff `/` ```code ` fence or a table — the same content shapes that would otherwise

@@ -163,6 +163,12 @@ def test_image_file_url_is_percent_decoded_for_the_asset_route():
     assert out == '<img src="http://h/asset?t=k&amp;path=%2Ftmp%2Fa%20b.png" alt="a">'
 
 
+@pytest.mark.parametrize("url", ["https://e.test/beacon.png", "http://e.test/x.png"])
+def test_a_remote_image_stays_text(url):
+    # Loading it would tell that server the page was opened, and from where.
+    assert render_inline(f"![a]({url})") == f"![a]({url})"
+
+
 def test_image_relative_and_link_paths_stay_text():
     assert render_inline("![a](x.png)") == "![a](x.png)"
     assert render_inline("![a](//evil.test/x.png)") == "![a](//evil.test/x.png)"

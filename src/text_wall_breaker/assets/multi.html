@@ -58,6 +58,7 @@ __STEPS__
   var STATUS_URL = __STATUS_URL__;
   var GENERATION = __GENERATION__;
   var MERMAID_SRC = __MERMAID_SRC__;
+  var MERMAID_INTEGRITY = __MERMAID_INTEGRITY__;
 
   // Any image (a gallery thumbnail or one in an option/question body) expands full-size
   // on click — a thumbnail is otherwise too small to actually compare against another.
@@ -403,6 +404,8 @@ __STEPS__
     if (window.mermaid) { run(); return; }
     var script = document.createElement('script');
     script.src = MERMAID_SRC;
+    script.integrity = MERMAID_INTEGRITY;
+    script.crossOrigin = 'anonymous';
     script.onload = function () {
       var dark = document.documentElement.dataset.theme
         ? document.documentElement.dataset.theme === 'dark'

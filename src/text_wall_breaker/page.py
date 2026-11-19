@@ -25,6 +25,7 @@ import html
 import json
 import os
 import re
+import secrets
 from bisect import bisect_right
 from importlib import resources
 from pathlib import Path
@@ -226,7 +227,7 @@ def build_show_page(
         raw_content = content
     wide = _needs_wide_layout(content_html)
 
-    return _fill(
+    return _document(
         _load_asset("show.html"),
         {
             "__CSS__": css,
@@ -782,7 +783,7 @@ def build_review_page(
         else ""
     )
 
-    return _fill(
+    return _document(
         _load_asset("review.html"),
         {
             "__CSS__": css,
@@ -813,6 +814,40 @@ def _fill(template: str, values: dict[str, str]) -> str:
     holds the placeholders as text, and got scripts injected into its rows.
     """
     return _PLACEHOLDER.sub(lambda m: values.get(m.group(0), m.group(0)), template)
+
+
+# Script tags that run: plain inline ones and the mermaid loader. A JSON data block
+# (`type="application/json"`) never executes, so it needs no nonce.
+_SCRIPT_TAG = re.compile(r"<script(?=>| src=)")
+
+
+def _document(template: str, values: dict[str, str]) -> str:
+    """A page's final HTML: `template` filled, then locked down by a CSP.
+
+    Only `<script>` tags with this page's nonce run, so an attribute or tag that agent
+    text manages to smuggle in stays inert. Agent text reaches the page HTML-escaped,
+    so every literal `<script` left in the document is one this module wrote.
+    Images: the page's own origin (`/asset`), `file:` (a page opened from disk) and
+    inline data. Requests: the loopback listener only.
+    """
+    nonce = secrets.token_urlsafe(16)
+    policy = "; ".join(
+        (
+            "default-src 'none'",
+            f"script-src 'nonce-{nonce}' {_MERMAID_SRC}",
+            "style-src 'unsafe-inline'",
+            "img-src 'self' data: blob: file:",
+            "connect-src http://127.0.0.1:*",
+            "base-uri 'none'",
+            "form-action 'none'",
+        )
+    )
+    head = (
+        f'<head>\n<meta http-equiv="Content-Security-Policy" content="{policy}">\n'
+        '<meta name="referrer" content="no-referrer">'
+    )
+    filled = _fill(template, values).replace("<head>", head, 1)
+    return _SCRIPT_TAG.sub(f'<script nonce="{nonce}"', filled)
 
 
 def _load_base_css() -> str:
@@ -1090,6 +1125,8 @@ def _theme_attr(theme: str | None) -> str:
 # avoids and a CDN load reintroduces. See page.py's module docstring for why a CDN was
 # chosen here anyway over vendoring the ~3.5MB bundle.
 _MERMAID_SRC = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
+# Subresource integrity for exactly that file; its sha256 matches jsDelivr's own listing.
+_MERMAID_INTEGRITY = "sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2"
 
 
 def _needs_mermaid(*fragments: str) -> bool:
@@ -1127,9 +1164,8 @@ def _mermaid_script(needed: bool) -> str:
     if not needed:
         return ""
     return (
-        f'<script src="{_MERMAID_SRC}"></script>\n<script>\n'
-        + _load_asset("mermaid.js")
-        + "</script>"
+        f'<script src="{_MERMAID_SRC}" integrity="{_MERMAID_INTEGRITY}" '
+        'crossorigin="anonymous"></script>\n<script>\n' + _load_asset("mermaid.js") + "</script>"
     )
 
 
@@ -1250,7 +1286,7 @@ def build_page(
     question_block = (
         f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>'
     )
-    return _fill(
+    return _document(
         _load_asset("ask.html"),
         {
             "__CSS__": css,
@@ -1530,7 +1566,7 @@ def build_multi_page(
         or _needs_wide_layout(steps_html, header_html)
     )
 
-    return _fill(
+    return _document(
         _load_asset("multi.html"),
         {
             "__CSS__": css,
@@ -1547,6 +1583,7 @@ def build_multi_page(
             "__STATUS_URL__": _js_string(status_url),
             "__GENERATION__": _js_string(generation),
             "__MERMAID_SRC__": _js_string(_MERMAID_SRC),
+            "__MERMAID_INTEGRITY__": _js_string(_MERMAID_INTEGRITY),
             "__LIVE_MODE__": _js_string(live),
             "__LIVE_SCRIPT__": live_script,
             "__EXPORT_SCRIPT__": _export_script(),

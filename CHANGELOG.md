@@ -39,6 +39,9 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   created private to the user (`0600`/`0700`; an existing directory is tightened).
 - A `show` report saved as HTML gets its local images inlined, so the file no longer
   carries the session token in their URLs.
+- Every page carries a Content-Security-Policy with a per-page script nonce and a
+  `no-referrer` policy, and loads mermaid with subresource integrity. `ask` and `show` no
+  longer load remote images, which told their server the page was opened.
 
 ## [0.21.0] - 2026-11-17
 

@@ -211,7 +211,8 @@ def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
     if match.group("img_url") is not None:
         url = _safe_url(_image_url(match.group("img_url")))
         alt = _escape(match.group("img_alt"))
-        if url is None:
+        # A remote image would tell its server the page was opened, and from where.
+        if url is None or url.lower().startswith(("http://", "https://")):
             return _escape(match.group(0))
         src = _image_src(url, asset_base_url)
         return f'<img src="{_escape(src)}" alt="{alt}">'
