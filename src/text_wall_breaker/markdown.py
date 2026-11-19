@@ -110,8 +110,8 @@ _URL_BODY = r"(?:[^\s()]++|\([^\s()]*+\))++"
 # tried once instead of once per backtick at every shorter length (quadratic).
 #
 # Bracketed text holds no `[`: a run of `[` with no `]` would otherwise make each one scan
-# to the end of the line. Underscore spans are capped for the same reason, since a `_`
-# that cannot close (`_a _a _a`) scans on to the end.
+# to the end of the line. Emphasis spans are capped at 1000 characters for the same
+# reason, since a marker that cannot close (`_a _a _a`, `*a *a *a`) scans on to the end.
 _INLINE = re.compile(
     r"(?<!`)(?P<tick>`++)(?P<code>.+?)(?<!`)(?P=tick)(?!`)"
     r"|!badge\[(?P<badge_text>[^\[\]]*)\]\((?P<badge_value>[A-Za-z]+)\)"
@@ -122,11 +122,11 @@ _INLINE = re.compile(
     # `*` and `**` need text against both markers, as CommonMark's flanking rule asks:
     # `2 * 3 * 4` is arithmetic, not emphasis. The optional tail is lazy (`??`), or a
     # one-character span would run on to the next marker: `*a* and *b*`.
-    r"|\*\*(?P<b_text>\S(?:.*?\S)??)\*\*(?![*_])"
+    r"|\*\*(?P<b_text>\S(?:.{0,1000}?\S)??)\*\*(?![*_])"
     # `_` only delimits at a word boundary, as in CommonMark: identifiers like set_mode
     # in running prose must not turn into emphasis. `*` still works intraword.
     r"|(?<!\w)__(?P<ub_text>.{1,1000}?)__(?![*\w])"
-    r"|\*(?P<i_text>[^\s*](?:.*?[^\s*])??)\*"
+    r"|\*(?P<i_text>[^\s*](?:.{0,1000}?[^\s*])??)\*"
     r"|(?<!\w)_(?P<ui_text>.{1,1000}?)_(?!\w)"
     r"|(?P<s>~~)(?P<s_text>.+?)(?P=s)",
     re.DOTALL,

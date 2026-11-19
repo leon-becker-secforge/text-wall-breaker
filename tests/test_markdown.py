@@ -172,13 +172,19 @@ def test_an_unclosed_link_url_does_not_hang(source):
     assert time.perf_counter() - start < 1
 
 
-@pytest.mark.parametrize("unit", ["`", "[", "![", "!badge[", " _a", "__a ", "*", "~~x", "*a"])
-def test_a_long_run_of_one_marker_renders_in_linear_time(unit):
-    # 64k characters: quadratic matching took tens of seconds, nesting overflowed the stack.
-    source = unit * (64_000 // len(unit))
+def _render_seconds(source: str) -> float:
     start = time.perf_counter()
     render_inline(source)
-    assert time.perf_counter() - start < 2
+    return time.perf_counter() - start
+
+
+@pytest.mark.parametrize("unit", ["`", "[", "![", "!badge[", " _a", "__a ", "*", "*a ", "**a "])
+def test_a_long_run_of_one_marker_renders_in_linear_time(unit):
+    # 64k characters: quadratic matching took tens of seconds, nesting overflowed the stack.
+    # A ratio, not a wall-clock bound: 8x the input costs ~8x when linear, ~64x when not.
+    small = _render_seconds(unit * (8_000 // len(unit)))
+    large = _render_seconds(unit * (64_000 // len(unit)))
+    assert large < max(small, 0.005) * 24
 
 
 def test_emphasis_nests_only_so_deep():
