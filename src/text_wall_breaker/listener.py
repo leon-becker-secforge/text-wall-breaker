@@ -220,9 +220,13 @@ class _ThreadedServer(ThreadingHTTPServer):
     #
     # Past the cap a newcomer evicts the oldest connection that has not shown the token,
     # rather than being refused: otherwise any local process holding _MAX_CONNECTIONS
-    # sockets open (each read resets the socket timeout) would lock the tab out.
+    # sockets open (each read resets the socket timeout) would lock the tab out. A process
+    # opening connections faster than the tab sends a request line can still evict the
+    # tab's own fresh ones; that is a flood, which no loopback server outlasts.
     daemon_threads = True
     block_on_close = False
+    # The default backlog of 5 drops a page's burst of connections under any load.
+    request_queue_size = 64
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
