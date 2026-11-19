@@ -126,7 +126,7 @@ def _handle_submit_payload(
     raw: bytes,
     respond: Callable[[int, bytes], None],
     deliver: Callable[[Submission, object], bool],
-    progress: Callable[[dict[str, Any]], None] | None = None,
+    progress: Callable[[dict[str, Any], object], None] | None = None,
     live: Callable[[dict[str, Any]], tuple[int, dict[str, Any]]] | None = None,
 ) -> None:
     """Parse one POST /submit body and act on it via `respond`/`deliver`.
@@ -167,7 +167,7 @@ def _handle_submit_payload(
         # the submission; a listener with nowhere to keep it just acknowledges it.
         data = payload.get("data")
         if progress is not None and isinstance(data, dict):
-            progress(data)
+            progress(data, payload.get("generation"))
         respond(204, b"")
         return
     if kind == "live":
@@ -297,6 +297,7 @@ class LoopbackListener:
 
     def __init__(self, token: str) -> None:
         self._token = token
+        self._lock = threading.Lock()
         self._submission: Submission | None = None
         self._progress: dict[str, Any] | None = None
         self._last_activity = time.monotonic()
@@ -319,10 +320,14 @@ class LoopbackListener:
 
     def deliver(self, submission: Submission, generation: object = None) -> bool:  # noqa: ARG002
         # One page per listener, so the page's generation has nothing to tell apart.
-        self._submission = submission
-        return True
+        # Handlers run on threads: the first answer wins, a second one gets 409.
+        with self._lock:
+            if self._submission is not None:
+                return False
+            self._submission = submission
+            return True
 
-    def set_progress(self, data: dict[str, Any]) -> None:
+    def set_progress(self, data: dict[str, Any], generation: object = None) -> None:  # noqa: ARG002
         self._progress = data
 
     def progress(self) -> dict[str, Any] | None:
@@ -628,7 +633,7 @@ class SessionListener:
             with self._state_lock:
                 if self._served_generation >= generation:
                     return True
-            if time.monotonic() > deadline:
+            if time.monotonic() > deadline or _cancelled():
                 return False
             time.sleep(0.05)
 
@@ -706,9 +711,13 @@ class SessionListener:
                 "open": self._open,
             }
 
-    def set_progress(self, data: dict[str, Any]) -> None:
+    def set_progress(self, data: dict[str, Any], generation: object = None) -> None:
+        # Only the current, open page's report becomes the `resume` draft: another tab's
+        # answers would be mapped onto this question's steps. A live session still gets
+        # every report; it re-anchors one from an older page itself.
         with self._state_lock:
-            self._progress = data
+            if generation == self._generation and self._open:
+                self._progress = data
         live = self.live
         if live is not None:
             live.on_progress(data)
@@ -731,10 +740,12 @@ class SessionListener:
             self._submission = submission
             if submission.kind == "acknowledge" and self._report is not None:
                 self._report["state"] = "acknowledged"
+            # Inside the lock: a publish between storing and signalling would clear the
+            # submission and then wake the new page's wait with nothing to read.
+            self._answered.set()
         live = self.live
         if live is not None:
             live.on_submission(submission)
-        self._answered.set()
         return True
 
     def wait_for_answer(self) -> Submission | None:

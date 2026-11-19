@@ -304,6 +304,35 @@ def test_an_answer_after_the_call_ended_is_refused(session):
     assert _answer(session, generation) == 409
 
 
+def test_only_the_current_pages_progress_becomes_the_draft(session):
+    first = session.publish(lambda generation: "<html>")
+    second = session.publish(lambda generation: "<html>")
+    url = f"http://127.0.0.1:{session.port}/submit?t=tok"
+    fetch(url, {"kind": "progress", "data": {"mine": True}, "generation": second})
+    assert (
+        fetch(url, {"kind": "progress", "data": {"stale": True}, "generation": first}).status == 204
+    )
+    assert session.progress() == {"mine": True}
+
+
+def test_a_second_answer_to_a_one_off_page_is_refused():
+    with LoopbackListener("tok") as listener:
+        assert listener.deliver(Submission("submit", {"selected": ["a"]}))
+        assert not listener.deliver(Submission("submit", {"selected": ["b"]}))
+        assert listener._submission == Submission("submit", {"selected": ["a"]})
+
+
+def test_an_interrupted_call_stops_waiting_for_its_tab(session, monkeypatch):
+    monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 30.0)
+    generation = session.publish(lambda generation: "<html>")
+    cancel = threading.Event()
+    cancel.set()
+    started = time.monotonic()
+    with listener_module.cancellable(cancel):
+        assert not session.show_in_tab(generation, lambda url: None)
+    assert time.monotonic() - started < 2
+
+
 def test_an_idle_connection_does_not_block_the_session(session):
     with _idle_connection(session.port):
         assert fetch(f"http://127.0.0.1:{session.port}/status?t=tok", timeout=2).status == 200
