@@ -1,4 +1,4 @@
-"""Assembly of the HTML page one `ask` or `show` call opens.
+"""Assembly of the HTML page one `ask`, `show` or `review` call opens.
 
 The page is otherwise self-contained: styles are inlined, and the only network traffic
 is the one POST back to the listener. The one deliberate exception is a page containing a
@@ -199,7 +199,7 @@ def build_show_page(
     `LoopbackListener`, left at their defaults for a plain unlistened page.
     """
     css = (
-        _load_base_css()
+        _load_asset("base.css")
         + _load_asset("actions.css")
         + _load_asset("show.css")
         + _load_asset("tokens.css")
@@ -573,8 +573,7 @@ def _render_review_pages(
     "Page", not "Slide" — see `_review_deck_script`.
     """
     # A single page has nothing to navigate between: the file list would be inert chrome
-    # around the one diff, so it is skipped rather than rendered and left doing nothing
-    # (caught by Operator on a one-page review).
+    # around the one diff, so it is skipped rather than rendered and left doing nothing.
     files_html = _render_review_files(pages) if with_files else ""
     slide_parts = []
     for index, page in enumerate(pages):
@@ -748,7 +747,7 @@ def build_review_page(
     """
     with_files = len(pages) > 1 or live != "off"
     css = (
-        _load_base_css()
+        _load_asset("base.css")
         + _load_asset("actions.css")
         + _load_asset("review.css")
         + _load_asset("tokens.css")
@@ -833,10 +832,6 @@ def _document(template: str, values: dict[str, str]) -> str:
     )
     filled = _fill(template, values).replace("<head>", head, 1)
     return _SCRIPT_TAG.sub(f'<script nonce="{nonce}"', filled)
-
-
-def _load_base_css() -> str:
-    return _load_asset("base.css")
 
 
 def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
@@ -1245,7 +1240,7 @@ def build_page(
     glossary_css, glossary_script = _glossary_assets(glossary)
     live_script += glossary_script
     css = (
-        _load_base_css()
+        _load_asset("base.css")
         + _load_asset("actions.css")
         + _load_asset("ask.css")
         + _load_asset("tokens.css")
@@ -1514,7 +1509,7 @@ def build_multi_page(
 ) -> str:
     """Return the complete HTML document for an `ask` call carrying several questions.
 
-    Prototype: a sibling of `build_page` rather than a generalisation of it, so the
+    A sibling of `build_page` rather than a generalisation of it, so the
     well-exercised single-question page and its wire format (`{selected, free_text,
     expanded}`) stay exactly as they were. Each entry of `questions` takes the same keys
     `build_page` takes for one question (`question`, `options`, `multi_select`,
@@ -1535,7 +1530,7 @@ def build_multi_page(
     glossary_css, glossary_script = _glossary_assets(glossary)
     live_script += glossary_script
     css = (
-        _load_base_css()
+        _load_asset("base.css")
         + _load_asset("actions.css")
         + _load_asset("ask.css")
         + _load_asset("tokens.css")

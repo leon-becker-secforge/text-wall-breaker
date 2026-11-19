@@ -354,9 +354,9 @@ def open_in_browser(target: Path | str) -> None:
     opener.open(target)
 
 
-def _check_question_ids(questions: list[Question], taken: set[str] | None = None) -> None:
-    """Raise `InvalidAsk` if a question id repeats within `questions` or in `taken`."""
-    seen = set(taken or ())
+def _check_question_ids(questions: list[Question]) -> None:
+    """Raise `InvalidAsk` if a question id repeats within `questions`."""
+    seen: set[str] = set()
     for index, question in enumerate(questions):
         if question.id is None:
             continue

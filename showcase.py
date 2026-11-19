@@ -64,9 +64,7 @@ def _server(accent: str | None) -> StdioServerParameters:
 
 
 def _payload(structured: dict[str, Any] | None) -> dict[str, Any]:
-    # MCPServer wraps a dict return under "result" in structured content.
-    structured = structured or {}
-    return structured.get("result", structured)
+    return structured or {}
 
 
 async def _call(client: Client, step: str, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:

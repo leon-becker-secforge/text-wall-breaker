@@ -1,9 +1,10 @@
-"""Single-shot loopback listener for one `ask` round trip.
+"""Loopback listeners the pages talk back to the agent through.
 
-The page is opened from a `file://` URL, so it cannot talk back to the agent except over
-the network. This binds an ephemeral port on 127.0.0.1 *before* the page is written, so
-the port and a per-call token can be baked into the page's submit URL. The page POSTs
-once; this returns that submission and closes.
+`LoopbackListener` serves one call's one-off page, opened from a `file://` URL: it binds
+an ephemeral port on 127.0.0.1 *before* the page is written, so the port and a per-call
+token can be baked into the page's submit URL, and closes once the page has answered.
+`SessionListener` serves the shared tab over `http://`, one page after another, for as
+long as the process runs.
 
 The token is the whole of the authentication. A `file://` page reports its origin as
 `null`, so an Origin check cannot distinguish our page from any other local page that
@@ -179,10 +180,10 @@ def _handle_submit_payload(
         status, body = live(data)
         respond(status, json.dumps(body).encode("utf-8"))
         return
-    # "submit"/"cancel"/"interrupt" are ask's answer kinds; "acknowledge" is show's —
-    # see show.run_show; "live_start" is review's Start live session. All are "the one
-    # submission this listener exists to collect", handled identically from here on;
-    # only the caller distinguishes them by `Submission.kind`.
+    # "submit"/"cancel"/"interrupt" are ask's answer kinds; "acknowledge" is show's (see
+    # show.run_show); "live_start" is the Start live session button of ask and review.
+    # All are "the one submission this listener exists to collect", handled identically
+    # from here on; only the caller distinguishes them by `Submission.kind`.
     if kind not in ("submit", "cancel", "interrupt", "acknowledge", "live_start"):
         respond(400, b'{"error":"unknown kind"}')
         return
@@ -441,7 +442,7 @@ class _SessionHandler(_BaseHandler):
 
 
 class LiveHandler(Protocol):
-    """What a live review session (live.LiveSession) offers this listener."""
+    """What a live session (`live.LiveSession`, `live_ask.LiveAsk`) offers this listener."""
 
     def poll(self, *, restore: bool) -> dict[str, Any]: ...
     def handle(self, data: dict[str, Any]) -> tuple[int, dict[str, Any]]: ...
@@ -491,7 +492,7 @@ class SessionListener:
         # `holds_unread_report` tells a report still on screen from one whose tab closed.
         self._report: dict[str, str] | None = None
         self._last_poll = 0.0
-        # The live review session holding this tab, if any; it holds the claim too.
+        # The live session holding this tab, if any; it holds the claim too.
         self.live: LiveHandler | None = None
         # Port 0 lets the OS pick a free port, same reasoning as LoopbackListener.
         self._httpd = _SessionServer(("127.0.0.1", 0), _SessionHandler)
@@ -636,8 +637,8 @@ class SessionListener:
 
         Reuses the tab opened earlier if it picks the page up by itself, which an open
         tab does within REUSE_GRACE_SECONDS. Otherwise that tab is gone, so `open_tab`
-        opens a new one. Trusting `tab_opened` alone, as this once did, published every
-        later page into a tab the user had already closed. A tab the browser throttles
+        opens a new one: `tab_opened` alone cannot tell, since the user may have closed
+        that tab. A tab the browser throttles
         hard in the background may miss the grace and get a second tab beside it, which
         is the cheaper mistake.
         """

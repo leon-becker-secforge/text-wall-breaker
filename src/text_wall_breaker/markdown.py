@@ -84,8 +84,7 @@ _BADGE_VALUES = ("success", "warning", "danger", "info")
 # A link/image URL: runs of non-space-non-paren characters, or a single parenthesised
 # group of such characters — one level of nesting, enough for a URL like a Wikipedia
 # disambiguation link (`.../a_(b)`) to keep its own parens without closing the markdown
-# syntax early. `[^)\s]+` used to stop at the first `)`, truncating the href and leaking
-# the rest of the URL as sibling text.
+# syntax early.
 #
 # Possessive (`++`, `*+`): the nested `(?:[^\s()]+|...)+` backtracked exponentially when
 # the closing `)` never came, so a link like `[t](https://...` with 30 characters after

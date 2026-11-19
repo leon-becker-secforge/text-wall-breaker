@@ -53,7 +53,6 @@ ATTACH_INSTRUCTION = (
     "code and pass refresh=true. Use wait=false to acknowledge before long work."
 )
 
-_POLL_SECONDS = POLL_SECONDS
 
 # Older generations kept for re-anchoring a late progress report. A page reloads within
 # seconds of a refresh, so only the last few can still report.
@@ -412,7 +411,7 @@ class LiveSession(Reaper):
                     if self._session.idle_seconds() > ABANDON_SECONDS:
                         self._abandoned = True
                         return self._finish(refresh_dropped=False)
-                    self._cond.wait(_POLL_SECONDS)
+                    self._cond.wait(POLL_SECONDS)
             finally:
                 self._blocking = False
                 self._since = time.monotonic()
