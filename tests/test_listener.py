@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import socket
 import threading
 import time
 import urllib.error
@@ -242,3 +243,54 @@ def test_publishing_anything_else_clears_the_report_status(session):
     assert session.report_status() == {"state": "unacknowledged", "title": "Report"}
     session.publish(lambda generation: "<html>")
     assert session.report_status() == {"state": "none"}
+
+
+def _idle_connection(port: int) -> socket.socket:
+    """A connection that sends nothing, as a browser's speculative preconnect does."""
+    return socket.create_connection(("127.0.0.1", port))
+
+
+def test_an_idle_connection_does_not_block_the_session(session):
+    with _idle_connection(session.port):
+        url = f"http://127.0.0.1:{session.port}/status?t=tok"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            assert response.status == 200
+
+
+def test_an_idle_connection_does_not_hold_off_abandonment():
+    with LoopbackListener("tok") as listener, _idle_connection(listener.port):
+        listener.mark_seen()
+        thread, result = wait_in_thread(listener)
+        thread.join(timeout=3)
+        assert not thread.is_alive()
+        assert result == [None]
+
+
+def test_a_post_without_the_token_is_no_activity(monkeypatch):
+    monkeypatch.setattr(listener_module, "_POLL_SECONDS", 0.05)
+    with LoopbackListener("tok") as listener:
+        listener.mark_seen()
+        started = time.monotonic()
+        thread, result = wait_in_thread(listener)
+        time.sleep(0.3)
+        with pytest.raises(urllib.error.HTTPError):
+            post(listener.port, "?t=wrong", {"kind": "probe"})
+        # Counted as activity, the post would move abandonment from 0.5 s to past 0.8 s.
+        thread.join(timeout=max(0.0, started + 0.7 - time.monotonic()))
+        assert result == [None]
+
+
+def test_a_session_post_without_the_token_is_no_activity(session):
+    session.note_activity()
+    time.sleep(0.2)
+    with pytest.raises(urllib.error.HTTPError):
+        post(session.port, "?t=wrong", {"kind": "probe"})
+    assert session.idle_seconds() >= 0.2
+
+
+@pytest.mark.parametrize(("length", "status"), [("abc", 400), (str(2 << 20), 413)])
+def test_a_bad_content_length_gets_an_error_status(session, length, status):
+    with socket.create_connection(("127.0.0.1", session.port)) as conn:
+        conn.sendall(f"POST /submit?t=tok HTTP/1.0\r\nContent-Length: {length}\r\n\r\n".encode())
+        conn.settimeout(3)
+        assert conn.recv(64).split(b" ")[1] == str(status).encode()

@@ -19,6 +19,11 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - `review` with `repo` no longer runs commands named in the repo's config:
   `core.fsmonitor` is off and attributes come from the empty tree, so no filter or diff
   driver runs. `repo` now needs git 2.40 or newer.
+- The page listener serves each connection on its own thread with a 10 s socket timeout.
+  One idle connection, such as a browser preconnect, stalled every page and kept a call
+  from ever counting as abandoned.
+- A request without the session token no longer counts as page activity, so it cannot keep
+  an abandoned call alive.
 
 ## [0.21.0] - 2026-11-17
 

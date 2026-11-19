@@ -12,7 +12,7 @@ This mirrors the contract in no-text-wall's `INTERACTIVE.md`, which the page's s
 script is adapted from.
 
 There is no deadline for an answer. A call ends when the page is *abandoned*: it sends
-nothing for ABANDON_SECONDS. Every request the handler sees bumps that clock, and an open
+nothing for ABANDON_SECONDS. Every token-matched request bumps that clock, and an open
 page sends a heartbeat every few seconds (hidden or not), so only a closed tab, a dead
 browser or a sleeping machine stops it. The clock starts when the page first renders, not
 when `xdg-open` returned.
@@ -26,7 +26,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlsplit
@@ -159,14 +159,23 @@ def _handle_submit_payload(
     respond(200, b'{"ok":true}')
 
 
-class _Server(HTTPServer):
+class _ThreadedServer(ThreadingHTTPServer):
+    # One thread per connection, so a connection that never sends a request (a browser's
+    # speculative preconnect) cannot stall the others or the caller's deadline loop.
+    daemon_threads = True
+    block_on_close = False
+
+
+class _Server(_ThreadedServer):
     """An HTTPServer that carries the listener its handler reports to."""
 
     listener: LoopbackListener
 
 
-class _Handler(BaseHTTPRequestHandler):
+class _BaseHandler(BaseHTTPRequestHandler):
     server_version = "text-wall-breaker/1"
+    # Socket timeout: an idle connection is dropped instead of holding its thread.
+    timeout = 10
 
     # Signature fixed by BaseHTTPRequestHandler; neither argument is used because the
     # whole point of the override is to drop the access log.
@@ -175,34 +184,53 @@ class _Handler(BaseHTTPRequestHandler):
         # protocol stream, so the access log is dropped entirely.
         return
 
-    @property
-    def listener(self) -> LoopbackListener:
-        return cast("_Server", self.server).listener
+    def _read_body(self) -> bytes | None:
+        """The request body, or None after answering 400/413 for an unusable length."""
+        try:
+            length = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            length = -1
+        if length < 0:
+            self._respond(400, b'{"error":"bad content-length"}')
+            return None
+        if length > _MAX_BODY_BYTES:
+            # Unread, so the connection must not be reused for another request.
+            self.close_connection = True
+            self._respond(413, b'{"error":"body too large"}')
+            return None
+        return self.rfile.read(length) if length else b""
 
-    def _drain_body(self) -> bytes:
-        # Always read the body, even on a path about to reject: leaving it on the wire
-        # desyncs the keep-alive connection and breaks the *next* request with a 400.
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        if length <= 0 or length > _MAX_BODY_BYTES:
-            return b""
-        return self.rfile.read(length)
-
-    def _respond(self, status: int, body: bytes = b"") -> None:
+    def _respond(
+        self,
+        status: int,
+        body: bytes = b"",
+        content_type: str = "application/json",
+        *,
+        cors: bool = True,
+    ) -> None:
         self.send_response(status)
-        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        # Without an explicit allow-origin the browser treats the response as opaque and
-        # the page's `res.ok` check can never see it — so a rejected token would look
-        # identical to a successful submit from inside the page.
-        self.send_header("Access-Control-Allow-Origin", "*")
+        if cors:
+            # Without an explicit allow-origin the browser treats the response as opaque
+            # and the page's `res.ok` check can never see it — so a rejected token would
+            # look identical to a successful submit from inside the page.
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         if body:
             self.wfile.write(body)
 
+
+class _Handler(_BaseHandler):
+    @property
+    def listener(self) -> LoopbackListener:
+        return cast("_Server", self.server).listener
+
     def do_POST(self) -> None:
         listener = self.listener
-        listener.note_activity()
-        raw = self._drain_body()
+        raw = self._read_body()
+        if raw is None:
+            return
 
         parts = urlsplit(self.path)
         if parts.path != "/submit":
@@ -214,6 +242,7 @@ class _Handler(BaseHTTPRequestHandler):
             self._respond(403, b'{"error":"bad token"}')
             return
 
+        listener.note_activity()
         listener.mark_seen()
         _handle_submit_payload(raw, self._respond, listener.deliver, listener.set_progress)
 
@@ -298,38 +327,16 @@ class LoopbackListener:
         self.close()
 
 
-class _SessionServer(HTTPServer):
+class _SessionServer(_ThreadedServer):
     """An HTTPServer that carries the session its handler reports to."""
 
     session: SessionListener
 
 
-class _SessionHandler(BaseHTTPRequestHandler):
-    server_version = "text-wall-breaker/1"
-
-    def log_message(self, format: str, *args: Any) -> None:  # noqa: ARG002
-        return  # see _Handler.log_message
-
+class _SessionHandler(_BaseHandler):
     @property
     def session(self) -> SessionListener:
         return cast("_SessionServer", self.server).session
-
-    def _drain_body(self) -> bytes:
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        if length <= 0 or length > _MAX_BODY_BYTES:
-            return b""
-        return self.rfile.read(length)
-
-    def _respond(
-        self, status: int, body: bytes = b"", content_type: str = "application/json"
-    ) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        if body:
-            self.wfile.write(body)
 
     def _token_ok(self, query: str) -> bool:
         return self.session.token_matches(parse_qs(query).get("t", [""])[0])
@@ -367,8 +374,9 @@ class _SessionHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         session = self.session
-        session.note_activity()
-        raw = self._drain_body()
+        raw = self._read_body()
+        if raw is None:
+            return
 
         parts = urlsplit(self.path)
         if parts.path != "/submit":
@@ -377,6 +385,7 @@ class _SessionHandler(BaseHTTPRequestHandler):
         if not self._token_ok(parts.query):
             self._respond(403, b'{"error":"bad token"}')
             return
+        session.note_activity()
 
         _handle_submit_payload(
             raw, self._respond, session.deliver, session.set_progress, session.handle_live
