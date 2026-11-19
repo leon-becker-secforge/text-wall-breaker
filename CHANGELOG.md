@@ -11,6 +11,12 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   The page used to open with no choices and the JSON as text. An empty option list alone,
   or JSON quoted next to real options, is still accepted.
 
+### Security
+
+- `ask` and `show` pages fill their template in one pass, as `review` already did. A
+  template placeholder name inside a question, option, title or report was substituted
+  again, which let the text close an HTML attribute and add a script handler.
+
 ## [0.21.0] - 2026-11-17
 
 ### Added

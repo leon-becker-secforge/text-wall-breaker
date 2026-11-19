@@ -226,22 +226,24 @@ def build_show_page(
         raw_content = content
     wide = _needs_wide_layout(content_html)
 
-    return (
-        _load_asset("show.html")
-        .replace("__CSS__", css)
-        .replace("__THEME_ATTR__", _theme_attr(theme))
-        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if wide else "")
-        .replace("__TITLE__", html.escape(title, quote=True))
-        .replace("__CONTENT__", content_html)
-        .replace("__DECK_SCRIPT__", _deck_script(slides is not None))
-        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(content_html)))
-        .replace("__SAVE_BUTTON__", save_html)
-        .replace("__ACK_BUTTON__", ack_html)
-        .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__STATUS_URL__", _js_string(status_url))
-        .replace("__GENERATION__", _js_string(generation))
-        .replace("__RAW_CONTENT__", _js_string(raw_content))
-        .replace("__FILENAME_BASE__", _js_string(_filename_base(title)))
+    return _fill(
+        _load_asset("show.html"),
+        {
+            "__CSS__": css,
+            "__THEME_ATTR__": _theme_attr(theme),
+            "__MAIN_EXTRA__": ' class="pp-wide"' if wide else "",
+            "__TITLE__": html.escape(title, quote=True),
+            "__CONTENT__": content_html,
+            "__DECK_SCRIPT__": _deck_script(slides is not None),
+            "__MERMAID__": _mermaid_script(_needs_mermaid(content_html)),
+            "__SAVE_BUTTON__": save_html,
+            "__ACK_BUTTON__": ack_html,
+            "__SUBMIT_URL__": _js_string(submit_url),
+            "__STATUS_URL__": _js_string(status_url),
+            "__GENERATION__": _js_string(generation),
+            "__RAW_CONTENT__": _js_string(raw_content),
+            "__FILENAME_BASE__": _js_string(_filename_base(title)),
+        },
     )
 
 
@@ -1245,26 +1247,28 @@ def build_page(
         or _needs_wide_layout(question_html, options_html)
     )
 
-    return (
-        _load_asset("ask.html")
-        .replace("__CSS__", css)
-        .replace("__THEME_ATTR__", _theme_attr(theme))
-        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if wide else "")
-        .replace("__TITLE__", html.escape(title, quote=True))
-        .replace(
-            "__QUESTION_BLOCK__",
-            f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>',
-        )
-        .replace("__OPTIONS__", options_html)
-        .replace("__FREE_TEXT__", free_text)
-        .replace("__HINT__", html.escape(hint, quote=True))
-        .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__STATUS_URL__", _js_string(status_url))
-        .replace("__GENERATION__", _js_string(generation))
-        .replace("__LIVE_MODE__", _js_string(live))
-        .replace("__LIVE_SCRIPT__", live_script)
-        .replace("__EXPORT_SCRIPT__", _export_script())
-        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(question_html, options_html)))
+    question_block = (
+        f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>'
+    )
+    return _fill(
+        _load_asset("ask.html"),
+        {
+            "__CSS__": css,
+            "__THEME_ATTR__": _theme_attr(theme),
+            "__MAIN_EXTRA__": ' class="pp-wide"' if wide else "",
+            "__TITLE__": html.escape(title, quote=True),
+            "__QUESTION_BLOCK__": question_block,
+            "__OPTIONS__": options_html,
+            "__FREE_TEXT__": free_text,
+            "__HINT__": html.escape(hint, quote=True),
+            "__SUBMIT_URL__": _js_string(submit_url),
+            "__STATUS_URL__": _js_string(status_url),
+            "__GENERATION__": _js_string(generation),
+            "__LIVE_MODE__": _js_string(live),
+            "__LIVE_SCRIPT__": live_script,
+            "__EXPORT_SCRIPT__": _export_script(),
+            "__MERMAID__": _mermaid_script(_needs_mermaid(question_html, options_html)),
+        },
     )
 
 
@@ -1526,24 +1530,26 @@ def build_multi_page(
         or _needs_wide_layout(steps_html, header_html)
     )
 
-    return (
-        _load_asset("multi.html")
-        .replace("__CSS__", css)
-        .replace("__THEME_ATTR__", _theme_attr(theme))
-        .replace("__MAIN_EXTRA__", ' class="pp-wide"' if wide else "")
-        .replace("__TITLE__", html.escape(title, quote=True))
-        .replace("__HEADER__", header_html)
-        .replace("__STEPS__", steps_html)
-        .replace("__INITIAL_LABEL__", html.escape(initial_label, quote=True))
-        .replace("__SEGMENTS__", segments_html)
-        .replace("__INITIAL_NEXT_LABEL__", initial_next)
-        .replace("__SUBMIT_URL__", _js_string(submit_url))
-        .replace("__STEP_COUNT__", str(total))
-        .replace("__STATUS_URL__", _js_string(status_url))
-        .replace("__GENERATION__", _js_string(generation))
-        .replace("__MERMAID_SRC__", _js_string(_MERMAID_SRC))
-        .replace("__LIVE_MODE__", _js_string(live))
-        .replace("__LIVE_SCRIPT__", live_script)
-        .replace("__EXPORT_SCRIPT__", _export_script())
-        .replace("__MERMAID__", _mermaid_script(_needs_mermaid(header_html, steps_html)))
+    return _fill(
+        _load_asset("multi.html"),
+        {
+            "__CSS__": css,
+            "__THEME_ATTR__": _theme_attr(theme),
+            "__MAIN_EXTRA__": ' class="pp-wide"' if wide else "",
+            "__TITLE__": html.escape(title, quote=True),
+            "__HEADER__": header_html,
+            "__STEPS__": steps_html,
+            "__INITIAL_LABEL__": html.escape(initial_label, quote=True),
+            "__SEGMENTS__": segments_html,
+            "__INITIAL_NEXT_LABEL__": initial_next,
+            "__SUBMIT_URL__": _js_string(submit_url),
+            "__STEP_COUNT__": str(total),
+            "__STATUS_URL__": _js_string(status_url),
+            "__GENERATION__": _js_string(generation),
+            "__MERMAID_SRC__": _js_string(_MERMAID_SRC),
+            "__LIVE_MODE__": _js_string(live),
+            "__LIVE_SCRIPT__": live_script,
+            "__EXPORT_SCRIPT__": _export_script(),
+            "__MERMAID__": _mermaid_script(_needs_mermaid(header_html, steps_html)),
+        },
     )

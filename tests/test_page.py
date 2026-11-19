@@ -5,6 +5,7 @@ import json
 import re
 import shutil
 import subprocess
+from html.parser import HTMLParser
 from importlib import resources
 
 import pytest
@@ -881,3 +882,95 @@ def test_the_export_script_is_valid_javascript():
         [node, "--check", str(asset)], capture_output=True, text=True, check=False
     )
     assert result.returncode == 0, result.stderr
+
+
+def _placeholders(template: str) -> list[str]:
+    text = resources.files("text_wall_breaker").joinpath("assets", template).read_text()
+    return sorted(set(re.findall(r"__[A-Z_]+__", text)))
+
+
+class _EventAttrs(HTMLParser):
+    """Collects `on*` attributes: what text breaking out of an attribute turns into."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.found: list[tuple[str, str]] = []
+
+    def handle_starttag(self, tag, attrs):
+        self.found += [(tag, name) for name, _ in attrs if name.startswith("on")]
+
+
+def _event_attrs(html: str) -> list[tuple[str, str]]:
+    parser = _EventAttrs()
+    parser.feed(html)
+    return parser.found
+
+
+def _breakout(placeholder: str) -> str:
+    """Agent text that gains an `onfocus` attribute if `placeholder` is substituted."""
+    return f"{placeholder} zz autofocus onfocus=f() yy="
+
+
+_SUBMIT = "http://127.0.0.1:1/submit?t=T"
+_STATUS = "http://127.0.0.1:1/status?t=T"
+
+
+@pytest.mark.parametrize("placeholder", _placeholders("ask.html"))
+def test_ask_placeholders_in_agent_text_stay_text(placeholder):
+    text = _breakout(placeholder)
+    html = build_page(
+        question=f"`{text}`",
+        options=[{"id": text, "label": text, "body": f"`{text}`"}],
+        multi_select=False,
+        allow_free_text=True,
+        free_text_prefill=text,
+        title=text,
+        live="on",
+        submit_url=_SUBMIT,
+        status_url=_STATUS,
+    )
+    assert _event_attrs(html) == []
+    assert html.count(placeholder) >= 4
+
+
+@pytest.mark.parametrize("placeholder", _placeholders("multi.html"))
+def test_multi_placeholders_in_agent_text_stay_text(placeholder):
+    text = _breakout(placeholder)
+    picked: dict[str, object] = {
+        "id": text,
+        "question": f"`{text}`",
+        "options": [{"id": text, "label": text}],
+        "multi_select": False,
+        "allow_free_text": True,
+    }
+    ranked: dict[str, object] = {
+        "id": "r",
+        "question": "q",
+        "rank": [text],
+        "options": [{"id": text, "label": text}],
+    }
+    html = build_multi_page(
+        questions=[picked, ranked],
+        header=f"`{text}`",
+        title=text,
+        live="on",
+        submit_url=_SUBMIT,
+        status_url=_STATUS,
+    )
+    assert _event_attrs(html) == []
+    assert html.count(placeholder) >= 4
+
+
+@pytest.mark.parametrize("placeholder", _placeholders("show.html"))
+@pytest.mark.parametrize("deck", [False, True])
+def test_show_placeholders_in_agent_text_stay_text(placeholder, deck):
+    text = _breakout(placeholder)
+    content = f"`{text}` [x](http://h/{placeholder})"
+    if deck:
+        html = build_show_page(
+            slides=[content], header=f"`{text}`", title=text, submit_url=_SUBMIT, status_url=_STATUS
+        )
+    else:
+        html = build_show_page(content=content, title=text, submit_url=_SUBMIT, status_url=_STATUS)
+    assert _event_attrs(html) == []
+    assert placeholder in html
