@@ -7,17 +7,18 @@ which imports `ask.py`: the shared parts cannot sit in `live.py`.
 from __future__ import annotations
 
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from .listener import ABANDON_SECONDS, LiveHandler
+from .listener import ABANDON_SECONDS, LiveHandler, Submission
 
 __all__ = [
     "POLL_SECONDS",
+    "LiveBase",
     "LiveCall",
     "LiveError",
-    "Reaper",
     "Reply",
     "Tab",
     "no_such_session",
@@ -49,9 +50,9 @@ class Tab(Protocol):
     def close(self) -> None: ...
 
 
-class Reaper:
-    """Closes a live session's listener: after the call that ends it, or once its tab is
-    gone with no call waiting.
+class LiveBase:
+    """What a live review and a live ask do alike: wait for the operator, and close the
+    session's listener after the call that ends it, or once its tab is gone.
 
     A wait notices abandonment itself; the reaper thread covers an agent that never calls
     again, whose session would otherwise hold a thread and a socket until the process
@@ -62,10 +63,49 @@ class Reaper:
     _cond: threading.Condition
     _session: Tab
     _busy: bool
+    _blocking: bool
+    _since: float
     _done: bool
     _closed: bool
     _abandoned: bool
     _version: int
+    _final: Submission | None
+    _inbox: list[dict[str, Any]]
+
+    def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]:
+        raise NotImplementedError
+
+    def _take_inbox(self) -> list[dict[str, Any]]:
+        messages, self._inbox = self._inbox, []
+        return messages
+
+    def _wait(self, request: LiveCall, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        """The call's answer: what the operator sent, or the session's end; with `extra`."""
+        extra = extra or {}
+        with self._cond:
+            if not request.wait:
+                return {"posted": True, "messages": self._take_inbox(), **extra}
+            self._blocking = True
+            self._since = time.monotonic()
+            self._version += 1
+            try:
+                while True:
+                    # Before anything is taken: the caller is gone, so a message or the
+                    # result taken now would be lost. The next call gets them.
+                    if request.cancel is not None and request.cancel.is_set():
+                        raise LiveError("the call was cancelled")
+                    if self._final is not None:
+                        return {**self._finish(refresh_dropped=False), **extra}
+                    if self._inbox:
+                        return {"messages": self._take_inbox(), **extra}
+                    if self._session.idle_seconds() > ABANDON_SECONDS:
+                        self._abandoned = True
+                        return {**self._finish(refresh_dropped=False), **extra}
+                    self._cond.wait(POLL_SECONDS)
+            finally:
+                self._blocking = False
+                self._since = time.monotonic()
+                self._version += 1
 
     def _start_reaper(self) -> None:
         self._reaper_stop = threading.Event()

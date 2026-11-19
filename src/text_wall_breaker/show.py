@@ -123,8 +123,7 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
     on a call that isn't waiting still reaches the session, it's just that nothing reads
     it back out (the next `publish()` discards it, same as an ignored probe).
     """
-    submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
-    status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
+    submit_url, status_url = session.submit_url, session.status_url
 
     _own_tab_title.value = None
     generation = session.publish(
@@ -194,7 +193,7 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
 
     token = secrets.token_hex(16)
     with LoopbackListener(token) as listener:
-        submit_url = f"http://127.0.0.1:{listener.port}/submit?t={token}"
+        submit_url = listener.submit_url
         html = _build_html(request, submit_url=submit_url)
         page.write_text(html, encoding="utf-8")
         try:

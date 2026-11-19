@@ -699,8 +699,7 @@ def _start_live(
     caller must not release it.
     """
     multi = request.questions is not None
-    submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
-    status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
+    submit_url, status_url = session.submit_url, session.status_url
 
     def prepare_refresh(
         question: str | None, options: list[Any] | None
@@ -761,8 +760,7 @@ def _run_ask_reusing_tab(
     request: AskRequest, steps: list[Question], session: SessionListener
 ) -> dict[str, Any]:
     """Answer `request` on `session`'s already-claimed, possibly already-open tab."""
-    submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
-    status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
+    submit_url, status_url = session.submit_url, session.status_url
 
     generation = session.publish(
         lambda generation: _build_html(
@@ -808,7 +806,7 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
     # Bind before writing: the page needs the port baked into its submit URL, and a port
     # chosen any other way is a race against whatever else is starting on this machine.
     with LoopbackListener(token) as listener:
-        submit_url = f"http://127.0.0.1:{listener.port}/submit?t={token}"
+        submit_url = listener.submit_url
         html = _build_html(request, steps, submit_url=submit_url)
 
         # One directory per call, removed on every exit path. Nothing outlives the call

@@ -16,12 +16,11 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from .listener import ABANDON_SECONDS, Submission
+from .listener import Submission
 from .live_common import (
-    POLL_SECONDS,
+    LiveBase,
     LiveCall,
     LiveError,
-    Reaper,
     Reply,
     Tab,
     no_such_session,
@@ -48,7 +47,7 @@ type Refresher = Callable[
 ]
 
 
-class LiveAsk(Reaper):
+class LiveAsk(LiveBase):
     """State of one live `ask`, shared by the page's requests and the agent's calls."""
 
     def __init__(
@@ -193,33 +192,6 @@ class LiveAsk(Reaper):
             with self._cond:
                 self._busy = False
 
-    def _wait(self, request: LiveCall, extra: dict[str, Any]) -> dict[str, Any]:
-        wait = request.wait
-        with self._cond:
-            if not wait:
-                return {"posted": True, "messages": self._take_inbox(), **extra}
-            self._blocking = True
-            self._since = time.monotonic()
-            self._version += 1
-            try:
-                while True:
-                    # Before anything is taken: the caller is gone, so a message or the
-                    # result taken now would be lost. The next call gets them.
-                    if request.cancel is not None and request.cancel.is_set():
-                        raise LiveError("the call was cancelled")
-                    if self._final is not None:
-                        return {**self._finish(), **extra}
-                    if self._inbox:
-                        return {"messages": self._take_inbox(), **extra}
-                    if self._session.idle_seconds() > ABANDON_SECONDS:
-                        self._abandoned = True
-                        return {**self._finish(), **extra}
-                    self._cond.wait(POLL_SECONDS)
-            finally:
-                self._blocking = False
-                self._since = time.monotonic()
-                self._version += 1
-
     def _refresh(self, question: str | None, options: list[Any] | None) -> list[str]:
         """Republish the page with a new question or options; the option ids picked that
         no longer exist. The page reloads itself and keeps what survives."""
@@ -245,10 +217,6 @@ class LiveAsk(Reaper):
     def _post(self, reply: Reply) -> None:
         text = reply.text.strip()
         self._chat.append({"from": "agent", "text": text, "html": render_markdown(text)})
-
-    def _take_inbox(self) -> list[dict[str, Any]]:
-        messages, self._inbox = self._inbox, []
-        return messages
 
     def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]:
         result = self._build_result(self._final)

@@ -265,8 +265,8 @@ def build_live_html(request: ReviewRequest, session: SessionListener, generation
     """The page of a live session's `generation`, on the shared tab."""
     return _build_html(
         request,
-        submit_url=f"http://127.0.0.1:{session.port}/submit?t={session.token}",
-        status_url=f"http://127.0.0.1:{session.port}/status?t={session.token}",
+        submit_url=session.submit_url,
+        status_url=session.status_url,
         generation=generation,
         live="on",
     )
@@ -423,8 +423,7 @@ def _run_review_reusing_tab(
     request: ReviewRequest, session: SessionListener, *, live: bool
 ) -> dict[str, Any]:
     """Review `request` on `session`'s already-claimed, possibly already-open tab."""
-    submit_url = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
-    status_url = f"http://127.0.0.1:{session.port}/status?t={session.token}"
+    submit_url, status_url = session.submit_url, session.status_url
 
     generation = session.publish(
         lambda generation: _build_html(
@@ -454,7 +453,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
     token = secrets.token_hex(16)
 
     with LoopbackListener(token) as listener:
-        submit_url = f"http://127.0.0.1:{listener.port}/submit?t={token}"
+        submit_url = listener.submit_url
         html = _build_html(request, submit_url=submit_url)
 
         directory = Path(tempfile.mkdtemp(prefix="text-wall-breaker-review-"))

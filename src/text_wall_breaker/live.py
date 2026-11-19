@@ -23,12 +23,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from .diff import DiffLine, parse_unified_diff
-from .listener import ABANDON_SECONDS, Submission
+from .listener import Submission
 from .live_common import (
-    POLL_SECONDS,
+    LiveBase,
     LiveCall,
     LiveError,
-    Reaper,
     Reply,
     Tab,
     no_such_session,
@@ -111,7 +110,7 @@ def _nearest(rows: list[DiffLine], side: str, line: int) -> dict[str, Any] | Non
     return {"side": row.side, "line": row.line}
 
 
-class LiveSession(Reaper):
+class LiveSession(LiveBase):
     """State of one live session, shared by the page's requests and the agent's calls."""
 
     def __init__(
@@ -387,32 +386,6 @@ class LiveSession(Reaper):
             with self._cond:
                 self._busy = False
 
-    def _wait(self, request: LiveCall) -> dict[str, Any]:
-        with self._cond:
-            if not request.wait:
-                return {"posted": True, "messages": self._take_inbox()}
-            self._blocking = True
-            self._since = time.monotonic()
-            self._version += 1
-            try:
-                while True:
-                    # Before anything is taken: the caller is gone, so a message or the
-                    # result taken now would be lost. The next call gets them.
-                    if request.cancel is not None and request.cancel.is_set():
-                        raise LiveError("the call was cancelled")
-                    if self._final is not None:
-                        return self._finish(refresh_dropped=False)
-                    if self._inbox:
-                        return {"messages": self._take_inbox()}
-                    if self._session.idle_seconds() > ABANDON_SECONDS:
-                        self._abandoned = True
-                        return self._finish(refresh_dropped=False)
-                    self._cond.wait(POLL_SECONDS)
-            finally:
-                self._blocking = False
-                self._since = time.monotonic()
-                self._version += 1
-
     def _check_reply(self, reply: Reply) -> None:
         if not reply.text.strip():
             raise LiveError("a reply needs text")
@@ -428,10 +401,6 @@ class LiveSession(Reaper):
         thread = self._threads[reply.to]
         thread["messages"].append(entry)
         thread["done"] = reply.done
-
-    def _take_inbox(self) -> list[dict[str, Any]]:
-        messages, self._inbox = self._inbox, []
-        return messages
 
     def _refresh(
         self,
@@ -518,7 +487,7 @@ class LiveSession(Reaper):
             kept.append(note)
         return kept + list(notes or [])
 
-    def _finish(self, *, refresh_dropped: bool) -> dict[str, Any]:
+    def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]:
         request = self._request
         progress = {
             "comments": self._comments,

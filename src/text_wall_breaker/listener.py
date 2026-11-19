@@ -321,6 +321,10 @@ class LoopbackListener:
         self._httpd.listener = self
 
     @property
+    def submit_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/submit?t={self._token}"
+
+    @property
     def port(self) -> int:
         return int(self._httpd.server_address[1])
 
@@ -598,6 +602,14 @@ class SessionListener:
     @property
     def page_url(self) -> str:
         return f"http://127.0.0.1:{self.port}/?t={self._token}"
+
+    @property
+    def submit_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/submit?t={self._token}"
+
+    @property
+    def status_url(self) -> str:
+        return f"http://127.0.0.1:{self.port}/status?t={self._token}"
 
     @property
     def asset_base_url(self) -> str:
