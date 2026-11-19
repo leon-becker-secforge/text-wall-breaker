@@ -1,9 +1,12 @@
-"""An MCP server that asks the user questions in a browser page."""
+"""An MCP server that asks the user questions in a browser page.
+
+The server itself is `text_wall_breaker.server`; it is not imported here, so importing any
+other module does not build it.
+"""
 
 from __future__ import annotations
 
 from .ask import AskRequest, BrowserUnavailable, InvalidAsk, Option, Question, run_ask
-from .server import environment_problem, main, server
 
 __all__ = [
     "AskRequest",
@@ -11,8 +14,5 @@ __all__ = [
     "InvalidAsk",
     "Option",
     "Question",
-    "environment_problem",
-    "main",
     "run_ask",
-    "server",
 ]

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import threading
 import time
 
@@ -11,6 +10,7 @@ from mcp.types import GetPromptResult, TextContent
 from support import make_live_review as make_live
 from support import wait_until
 
+import text_wall_breaker.server as server_module
 from text_wall_breaker.listener import LoopbackListener, SessionListener
 from text_wall_breaker.server import (
     MAX_TOOL_DESCRIPTION_CHARS,
@@ -18,10 +18,6 @@ from text_wall_breaker.server import (
     environment_problem,
     server,
 )
-
-# `text_wall_breaker.server` the module; the package re-exports `server` the MCPServer under
-# the same name.
-server_module = importlib.import_module("text_wall_breaker.server")
 
 
 class _ProgressRecorder:
