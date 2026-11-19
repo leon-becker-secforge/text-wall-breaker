@@ -276,6 +276,17 @@ def test_a_note_that_cannot_be_shown_is_refused(fields):
         _request(_note(**fields)).validated()
 
 
+def test_a_validated_request_checks_its_notes_once(monkeypatch):
+    request = ReviewRequest(pages=[Page(path="a.py", diff="@@ -1 +1 @@\n-a\n+b\n")]).validated()
+
+    def again():
+        raise AssertionError("notes checked again")
+
+    monkeypatch.setattr(request, "_checked_notes", again)
+    assert request.validated() is request
+    assert request.page_notes() == {}
+
+
 def test_two_pages_with_one_path_are_refused():
     diff = "@@ -1 +1 @@\n-a\n+b\n"
     request = ReviewRequest(pages=[Page(path="a.py", diff=diff), Page(path="a.py", diff=diff)])

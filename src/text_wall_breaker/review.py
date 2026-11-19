@@ -19,7 +19,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .ask import BrowserUnavailable, not_delivered, open_in_browser
 from .diff import (
@@ -116,8 +116,13 @@ class ReviewRequest(BaseModel):
     files: dict[str, str] = {}
     # The repository the `repo` source diffed: where a rendered view finds its images.
     root: str | None = None
+    # Notes as page data, once checked: validating parses every diff, and the tool, the
+    # run and the page builder all ask. A request is not changed after it is built.
+    _notes: dict[str, list[ReviewNote]] | None = PrivateAttr(default=None)
 
     def validated(self) -> ReviewRequest:
+        if self._notes is not None:
+            return self
         if not self.pages:
             raise InvalidReview("pages is empty; give pages, or repo to diff a git repository")
         seen: set[str] = set()
@@ -137,6 +142,11 @@ class ReviewRequest(BaseModel):
         old-side line that is not deleted, a wrong path) raises: a note the operator can
         never see would silently lose the agent's reasoning.
         """
+        if self._notes is None:
+            self._notes = self._checked_notes()
+        return self._notes
+
+    def _checked_notes(self) -> dict[str, list[ReviewNote]]:
         rows = {
             page.path: [
                 (row.side, row.line)

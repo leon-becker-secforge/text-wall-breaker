@@ -403,15 +403,13 @@ async def review(
         files=files,
         root=repo,
     )
-    try:
-        validated = request.validated()
-    except InvalidReview as exc:
-        raise ToolError(str(exc)) from exc
 
     def start_live(session: SessionListener, generation: int) -> dict[str, Any]:
+        # Called by run_review, after it validated `request` (off the event loop, as
+        # validating parses every diff).
         started = LiveSession(
             session,
-            validated,
+            request,
             source,
             build_html=lambda req, generation: build_live_html(req, session, generation),
             load_repo=_load_repo,
