@@ -26,7 +26,7 @@ def test_ask_answers_use_only_declared_keys():
     single = ask_module._extract_answer(step, raw)
     multi = ask_module._extract_answer(step, raw, multi=True)
     interrupted = ask_module._interrupted(
-        [step], {"answers": [raw], "interrupted": 0}, multi=True, header=""
+        [step], {"answers": [raw], "interrupted": 0}, multi=True, header="", project=None
     )
     assert set(single) | set(multi) | set(interrupted) | set(
         ask_module.not_delivered()

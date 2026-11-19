@@ -41,6 +41,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   page's file list and in the comments' attribution.
 - `review` with `repo` set to a subdirectory of a work tree keeps context expansion and
   rendered-view images: file paths are resolved from the work tree's top.
+- A resumed `ask` keeps the glossary `project` of the ask it reopens, and `resume` rejects
+  `live` and `project` as it already rejected the other arguments, instead of ignoring them.
 
 ### Security
 

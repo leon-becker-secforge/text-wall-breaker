@@ -312,6 +312,8 @@ class AskRequest(BaseModel):
                 or self.options
                 or self.questions is not None
                 or self.header.strip()
+                or self.live
+                or self.project is not None
             ):
                 raise InvalidAsk("resume reopens an earlier ask and takes nothing else")
             return self
@@ -550,13 +552,14 @@ _DRAFT_TTL_SECONDS = 3600.0
 _DRAFT_LIMIT = 20
 
 
-@dataclass
+@dataclass(slots=True, kw_only=True)
 class _Draft:
     steps: list[Question]
     header: str
     multi: bool
     answers: list[Any]
     saved: float
+    project: str | None
 
 
 _drafts: dict[str, _Draft] = {}
@@ -564,7 +567,12 @@ _drafts_lock = threading.Lock()
 
 
 def _save_draft(
-    steps: list[Question], header: str, *, multi: bool, progress: dict[str, Any] | None
+    steps: list[Question],
+    header: str,
+    *,
+    multi: bool,
+    progress: dict[str, Any] | None,
+    project: str | None,
 ) -> str | None:
     """Keep the answer a page last reported, returning its `resume` id.
 
@@ -583,7 +591,9 @@ def _save_draft(
             del _drafts[key]
         while len(_drafts) >= _DRAFT_LIMIT:
             del _drafts[next(iter(_drafts))]
-        _drafts[draft_id] = _Draft(list(steps), header, multi, raw, now)
+        _drafts[draft_id] = _Draft(
+            steps=list(steps), header=header, multi=multi, answers=raw, saved=now, project=project
+        )
     return draft_id
 
 
@@ -616,7 +626,7 @@ def _resumed_request(request: AskRequest) -> AskRequest:
             )
         )
     if draft.multi:
-        return AskRequest(questions=steps, header=draft.header)
+        return AskRequest(questions=steps, header=draft.header, project=draft.project)
     only = steps[0]
     return AskRequest(
         question=only.question,
@@ -624,6 +634,7 @@ def _resumed_request(request: AskRequest) -> AskRequest:
         multi_select=only.multi_select,
         allow_free_text=only.allow_free_text,
         free_text=only.free_text,
+        project=draft.project,
     )
 
 
@@ -641,14 +652,20 @@ def _unanswered(
     *,
     multi: bool,
     progress: dict[str, Any] | None,
+    project: str | None,
 ) -> dict[str, Any]:
     """`result` (cancelled or abandoned), plus a `resume` id if there is a draft to resume."""
-    draft_id = _save_draft(steps, header, multi=multi, progress=progress)
+    draft_id = _save_draft(steps, header, multi=multi, progress=progress, project=project)
     return {**result, "resume": draft_id} if draft_id else result
 
 
 def _interrupted(
-    steps: list[Question], data: dict[str, Any], *, multi: bool, header: str
+    steps: list[Question],
+    data: dict[str, Any],
+    *,
+    multi: bool,
+    header: str,
+    project: str | None,
 ) -> dict[str, Any]:
     """The answer to an ask the user stopped at one question.
 
@@ -667,7 +684,7 @@ def _interrupted(
     answers = answers[: max([stop, *entered]) + 1]
     answers[stop]["interrupted"] = True
     result: dict[str, Any] = {"answers": answers}
-    draft_id = _save_draft(steps, header, multi=True, progress=data)
+    draft_id = _save_draft(steps, header, multi=True, progress=data, project=project)
     if draft_id:
         result["resume"] = draft_id
     return result
@@ -680,13 +697,15 @@ def _answer_from_submission(
     multi: bool,
     header: str = "",
     progress: dict[str, Any] | None = None,
+    project: str | None = None,
 ) -> dict[str, Any]:
+    keep = {"multi": multi, "progress": progress, "project": project}
     if submission is None:
-        return _unanswered({"abandoned": True}, steps, header, multi=multi, progress=progress)
+        return _unanswered({"abandoned": True}, steps, header, **keep)
     if submission.kind == "cancel":
-        return _unanswered({"cancelled": True}, steps, header, multi=multi, progress=progress)
+        return _unanswered({"cancelled": True}, steps, header, **keep)
     if submission.kind == "interrupt":
-        return _interrupted(steps, submission.data, multi=multi, header=header)
+        return _interrupted(steps, submission.data, multi=multi, header=header, project=project)
     if not multi:
         return _extract_answer(steps[0], submission.data)
     return {"answers": _extract_answers(steps, submission.data.get("answers"))}
@@ -752,6 +771,7 @@ def _start_live(
             multi=multi,
             header=request.header,
             progress=session.progress(),
+            project=request.project,
         ),
         prepare_refresh=prepare_refresh,
     )
@@ -798,6 +818,7 @@ def _run_ask_reusing_tab(
         multi=request.questions is not None,
         header=request.header,
         progress=session.progress(),
+        project=request.project,
     )
 
 
@@ -831,6 +852,7 @@ def _run_ask_with_new_tab(request: AskRequest, steps: list[Question]) -> dict[st
         multi=request.questions is not None,
         header=request.header,
         progress=progress,
+        project=request.project,
     )
 
 

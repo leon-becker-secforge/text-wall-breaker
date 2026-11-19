@@ -772,9 +772,21 @@ def test_an_ask_with_nothing_entered_has_no_resume_id(browser):
     assert run_ask(AskRequest(question="q", options=_a_b())) == {"cancelled": True}
 
 
-def test_resume_takes_nothing_else():
+@pytest.mark.parametrize("extra", [{"question": "q"}, {"live": True}, {"project": "."}])
+def test_resume_takes_nothing_else(extra):
     with pytest.raises(InvalidAsk, match="takes nothing else"):
-        AskRequest(resume="x", question="q").validated()
+        AskRequest(resume="x", **extra).validated()
+
+
+def test_a_resumed_ask_keeps_its_glossary_project(browser, tmp_path):
+    (tmp_path / "GLOSSARY.md").write_text("**Widget**: a small part.\n")
+    browser(lambda page: _cancel_after({"selected": ["a"], "free_text": ""}))
+    resume = run_ask(AskRequest(question="Which Widget?", options=_a_b(), project=str(tmp_path)))[
+        "resume"
+    ]
+    fake = browser(lambda page: {"kind": "cancel", "data": {}})
+    run_ask(AskRequest(resume=resume))
+    assert "a small part." in fake.page
 
 
 def test_a_prefilled_option_is_not_changed_from_when_kept(browser):
