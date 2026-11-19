@@ -402,11 +402,9 @@ async def review(
         root=repo,
     )
     try:
-        request.validated()
+        validated = request.validated()
     except InvalidReview as exc:
         raise ToolError(str(exc)) from exc
-
-    validated = request.validated()
 
     def start_live(session: SessionListener, generation: int) -> dict[str, Any]:
         started = LiveSession(

@@ -37,6 +37,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   sending heartbeats.
 - An `<object>` with any element inside, an `<embed>` or an `<object/>` in an AsciiDoc
   passthrough no longer hides the rest of the file from `review`'s rendered view.
+- `review` rejects two pages with the same path; the second replaced the first in the
+  page's file list and in the comments' attribution.
 
 ### Security
 

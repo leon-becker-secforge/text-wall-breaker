@@ -121,8 +121,13 @@ class ReviewRequest(BaseModel):
     def validated(self) -> ReviewRequest:
         if not self.pages:
             raise InvalidReview("pages is empty; give pages, or repo to diff a git repository")
+        seen: set[str] = set()
         for index, page in enumerate(self.pages):
             page.validated(label=f"pages[{index}]")
+            # Comments, notes and the page's file list are all keyed by path.
+            if page.path in seen:
+                raise InvalidReview(f"pages[{index}]: duplicate path {page.path!r}")
+            seen.add(page.path)
         self.page_notes()
         return self
 

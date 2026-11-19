@@ -276,6 +276,13 @@ def test_a_note_that_cannot_be_shown_is_refused(fields):
         _request(_note(**fields)).validated()
 
 
+def test_two_pages_with_one_path_are_refused():
+    diff = "@@ -1 +1 @@\n-a\n+b\n"
+    request = ReviewRequest(pages=[Page(path="a.py", diff=diff), Page(path="a.py", diff=diff)])
+    with pytest.raises(InvalidReview, match=r"pages\[1\]: duplicate path 'a.py'"):
+        request.validated()
+
+
 # Rendered view: a Markdown/AsciiDoc page gets one, of the whole file when its text is
 # known, else of what the diff shows.
 MD_OLD = ["# T", "", "one", "", "two"]
