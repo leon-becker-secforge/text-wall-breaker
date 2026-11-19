@@ -162,11 +162,7 @@ class LiveAsk(Reaper):
         try:
             return self._call(request)
         finally:
-            # Outside `_cond`: closing waits for the listener, whose handlers take it.
-            with self._cond:
-                close, self._closed = self._done and not self._closed, self._closed or self._done
-            if close:
-                self._session.close()
+            self._close_if_done()
 
     def _call(self, request: LiveCall) -> dict[str, Any]:
         if request.has_review_arguments():

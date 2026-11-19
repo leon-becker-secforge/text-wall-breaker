@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import get_type_hints
+
 import anyio
 
 from text_wall_breaker import ask as ask_module
@@ -11,7 +13,8 @@ from text_wall_breaker.server import server
 
 
 def declared(shape: type) -> set[str]:
-    return set(shape.__annotations__)
+    # get_type_hints, not __annotations__: those miss the keys a TypedDict inherits.
+    return set(get_type_hints(shape))
 
 
 def test_every_tool_publishes_an_output_schema():

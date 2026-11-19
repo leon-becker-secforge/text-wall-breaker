@@ -349,15 +349,16 @@ def test_an_idle_connection_does_not_hold_off_abandonment():
 
 def test_a_post_without_the_token_is_no_activity(monkeypatch):
     monkeypatch.setattr(listener_module, "_POLL_SECONDS", 0.05)
+    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 1.0)
     with LoopbackListener("tok") as listener:
         listener.mark_seen()
         started = time.monotonic()
         thread, result = wait_in_thread(listener)
-        time.sleep(0.3)
+        time.sleep(0.6)
         with pytest.raises(urllib.error.HTTPError):
             post(listener.port, "?t=wrong", {"kind": "probe"})
-        # Counted as activity, the post would move abandonment from 0.5 s to past 0.8 s.
-        thread.join(timeout=max(0.0, started + 0.7 - time.monotonic()))
+        # Counted as activity, the post would move abandonment from 1 s to past 1.6 s.
+        thread.join(timeout=max(0.0, started + 1.3 - time.monotonic()))
         assert result == [None]
 
 

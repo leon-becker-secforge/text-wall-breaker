@@ -399,7 +399,13 @@ class _SessionHandler(_BaseHandler):
 
         if parts.path in ("", "/"):
             page = session.serve_page()
-            self._respond(200, page, content_type="text/html; charset=utf-8")
+            # Not kept on disk: a page holds the token in its URLs, and the answers typed.
+            self._respond(
+                200,
+                page,
+                content_type="text/html; charset=utf-8",
+                headers=(("Cache-Control", "no-store"),),
+            )
             return
         if parts.path == "/status":
             body = json.dumps(session.status()).encode("utf-8")

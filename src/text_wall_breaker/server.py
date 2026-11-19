@@ -512,7 +512,8 @@ async def live(
         result = await _blocking(ctx, partial(target.call, call), cancel=cancel)
     except (LiveError, GitDiffError) as exc:
         raise ToolError(str(exc)) from exc
-    # Its keys are checked against LiveResult by tests/test_results.py, as for the others.
+    # Unchecked, like the other tools' results: a key LiveResult lacks is dropped from the
+    # structured result, so new keys must be declared there.
     return cast(LiveResult, result)
 
 
@@ -529,6 +530,22 @@ def _reject_unknown_arguments() -> None:
 _reject_unknown_arguments()
 
 
+def python_warning(version: tuple[int, int, int] | None = None) -> str | None:
+    """Why this Python is unsafe for review's AsciiDoc view, or None.
+
+    CVE-2025-6069: `html.parser` is quadratic on crafted input before 3.12.12 / 3.13.6.
+    A warning, not a refusal: only a hostile `.adoc` passthrough reaches it, as a DoS.
+    """
+    major, minor, micro = version or sys.version_info[:3]
+    fixed = {12: 12, 13: 6}.get(minor)
+    if major == 3 and fixed is not None and micro < fixed:
+        return (
+            f"Python 3.{minor}.{micro} has CVE-2025-6069 (html.parser slowdown); "
+            f"3.{minor}.{fixed} or newer fixes it"
+        )
+    return None
+
+
 def main() -> None:
     for problem in (environment_problem(), accent_config_problem()):
         if problem is not None:
@@ -536,6 +553,9 @@ def main() -> None:
             raise SystemExit(2)
     path = configure_logging()
     logger.info("server start, log %s", path)
+    if (warning := python_warning()) is not None:
+        print(f"text-wall-breaker: {warning}", file=sys.stderr)
+        logger.warning(warning)
     server.run(transport="stdio")
 
 

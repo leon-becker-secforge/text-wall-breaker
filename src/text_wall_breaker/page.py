@@ -280,10 +280,9 @@ def _render_review_gap(gap: Gap) -> str:
     """The bar standing for a hidden stretch of unchanged lines, expanded by the script.
 
     A divider with a pill: the middle shows the whole stretch, the step buttons ten lines
-    from the hunk above (down) or below (up) — picked over a hunk-style bar and a fold in
-    a three-variant prototype. A top gap has no hunk above and an end gap none below, so
-    each has only the step that makes sense; a stretch of ten or fewer lines has no steps
-    since the middle does the same.
+    from the hunk above (down) or below (up). A top gap has no hunk above and an end gap
+    none below, so each has only the step that makes sense; a stretch of ten or fewer
+    lines has no steps since the middle does the same.
     """
     size = gap.size
     many = "" if size > _GAP_STEP else " hidden"
@@ -557,9 +556,9 @@ def _render_review_header(
 ) -> str:
     """The top of the page: one slim row, the agent's header folded under "Details".
 
-    Picked over a card and a document layout in a three-variant prototype. The row holds the
-    header's leading heading (or "Review") and chips with the file, comment and note counts;
-    the comment count is kept live by the page script. The rest of the header is behind a
+    The row holds the header's leading heading (or "Review") and chips with the file,
+    comment and note counts; the comment count is kept live by the page script. The rest
+    of the header is behind a
     fold when there is a heading to stand in for it, and open when there is not, so nothing
     is hidden without a title to say what it is.
     """
@@ -840,16 +839,21 @@ def _document(template: str, values: dict[str, str]) -> str:
     text manages to smuggle in stays inert. Agent text reaches the page HTML-escaped,
     so every literal `<script` left in the document is one this module wrote.
     Images: the page's own origin (`/asset`), `file:` (a page opened from disk) and
-    inline data. Requests: the loopback listener only.
+    inline data. Requests: only the listener the page's submit URL names, or none.
     """
     nonce = secrets.token_urlsafe(16)
+    submit_url = json.loads(values.get("__SUBMIT_URL__", "null"))
+    connect = "'none'"
+    if isinstance(submit_url, str):
+        parts = urlsplit(submit_url)
+        connect = f"{parts.scheme}://{parts.netloc}"
     policy = "; ".join(
         (
             "default-src 'none'",
             f"script-src 'nonce-{nonce}' {_MERMAID_SRC}",
             "style-src 'unsafe-inline'",
             "img-src 'self' data: blob: file:",
-            "connect-src http://127.0.0.1:*",
+            f"connect-src {connect}",
             "base-uri 'none'",
             "form-action 'none'",
         )

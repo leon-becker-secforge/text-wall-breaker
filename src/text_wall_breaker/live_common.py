@@ -50,11 +50,13 @@ class Tab(Protocol):
 
 
 class Reaper:
-    """Closes a live session's listener once its tab is gone, with no call waiting.
+    """Closes a live session's listener: after the call that ends it, or once its tab is
+    gone with no call waiting.
 
-    A wait notices abandonment itself; this covers an agent that never calls again, whose
-    session would otherwise hold a thread and a socket until the process ends. The
-    session stays registered: the agent's next call still gets the abandoned result.
+    A wait notices abandonment itself; the reaper thread covers an agent that never calls
+    again, whose session would otherwise hold a thread and a socket until the process
+    ends. The session stays registered: the agent's next call still gets the abandoned
+    result.
     """
 
     _cond: threading.Condition
@@ -66,13 +68,25 @@ class Reaper:
     _version: int
 
     def _start_reaper(self) -> None:
+        self._reaper_stop = threading.Event()
         threading.Thread(target=self._reap_loop, daemon=True).start()
 
     def _reap_loop(self) -> None:
-        stop = threading.Event()
-        while not stop.wait(REAP_SECONDS):
+        while not self._reaper_stop.wait(REAP_SECONDS):
             if self._reap():
                 return
+
+    def _close_if_done(self) -> None:
+        """After a call: close the listener once the session has ended.
+
+        Outside `_cond`: closing waits for the listener, whose handlers take it.
+        """
+        with self._cond:
+            close = self._done and not self._closed
+            self._closed |= close
+        if close:
+            self._reaper_stop.set()
+            self._session.close()
 
     def _reap(self) -> bool:
         """Close the listener if the tab is gone; True once there is nothing to watch."""

@@ -277,8 +277,8 @@ class AskRequest(BaseModel):
 
     Either the top-level `question`/`options`/`multi_select`/`allow_free_text` (one
     question) or `questions` (several, on one page) is set — never both. See
-    `page.build_multi_page` for why the multi-question path is a separate prototype
-    rather than a generalisation of the single-question one.
+    `page.build_multi_page` for why the multi-question page is a separate builder rather
+    than a generalisation of the single-question one.
     """
 
     question: str = ""

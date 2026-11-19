@@ -217,7 +217,8 @@ class _Cleaner(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if self._skip:
-            if tag in _DROP_WITH_CONTENT:
+            # `embed` never opened a skip, so its stray end tag must not close one.
+            if tag in _DROP_WITH_CONTENT and tag != "embed":
                 self._skip -= 1
             return
         if tag not in _TAGS or tag in _VOID:

@@ -191,6 +191,7 @@ def test_asciidoc_output_is_cleaned():
         "<embed src=x>",
         "<object/>",
         "<script>a</script>",
+        "<object><embed></embed><p>fallback</p></object>",
     ],
 )
 def test_a_dropped_element_hides_nothing_after_it(dropped):
@@ -201,6 +202,7 @@ def test_a_dropped_element_hides_nothing_after_it(dropped):
     assert "<p>before</p>" in html
     assert "<p>after</p>" in html
     assert "<object" not in html and "<embed" not in html and "<script" not in html
+    assert "fallback" not in html  # an object's content goes with it
 
 
 MERMAID_MD = "# T\n\n```mermaid\ngraph TD\n  A-->B\n```\n\n```python\nprint(1)\n```"
