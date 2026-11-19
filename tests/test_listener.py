@@ -250,6 +250,15 @@ def _idle_connection(port: int) -> socket.socket:
     return socket.create_connection(("127.0.0.1", port))
 
 
+@pytest.mark.parametrize("host", ["evil.example", "localhost:{port}", "127.0.0.1"])
+def test_a_request_for_another_host_is_refused_even_with_the_token(session, host):
+    with socket.create_connection(("127.0.0.1", session.port)) as conn:
+        request = f"GET /status?t=tok HTTP/1.0\r\nHost: {host.format(port=session.port)}\r\n\r\n"
+        conn.sendall(request.encode())
+        conn.settimeout(3)
+        assert conn.recv(64).split(b" ")[1] == b"421"
+
+
 def test_a_page_no_tab_loaded_is_no_longer_open(session, monkeypatch):
     # The caller reports not_delivered and stops waiting: a tab that loads late must say
     # the question is closed instead of taking an answer nobody reads.

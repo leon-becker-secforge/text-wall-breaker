@@ -222,6 +222,18 @@ class _BaseHandler(BaseHTTPRequestHandler):
         # protocol stream, so the access log is dropped entirely.
         return
 
+    def _foreign_host(self) -> bool:
+        """Answer 421 and return True unless the request names this listener as its Host.
+
+        A page of another site that rebinds its own name to 127.0.0.1 reaches this port
+        with that name as its Host; the token already stops it, this stops it earlier.
+        """
+        if self.headers.get("Host") == f"127.0.0.1:{self.connection.getsockname()[1]}":
+            return False
+        self.close_connection = True
+        self._respond(421, b'{"error":"misdirected request"}', cors=False)
+        return True
+
     def _read_body(self) -> bytes | None:
         """The request body, or None after answering 400/413 for an unusable length."""
         try:
@@ -270,7 +282,7 @@ class _Handler(_BaseHandler):
     def do_POST(self) -> None:
         listener = self.listener
         raw = self._read_body()
-        if raw is None:
+        if raw is None or self._foreign_host():
             return
 
         parts = urlsplit(self.path)
@@ -391,6 +403,8 @@ class _SessionHandler(_BaseHandler):
 
     def do_GET(self) -> None:
         session = self.session
+        if self._foreign_host():
+            return
         parts = urlsplit(self.path)
         if not self._token_ok(parts.query):
             self._respond(403)
@@ -435,7 +449,7 @@ class _SessionHandler(_BaseHandler):
     def do_POST(self) -> None:
         session = self.session
         raw = self._read_body()
-        if raw is None:
+        if raw is None or self._foreign_host():
             return
 
         parts = urlsplit(self.path)

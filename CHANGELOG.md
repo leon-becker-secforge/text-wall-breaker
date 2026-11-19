@@ -63,9 +63,11 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - `ask` and `show` pages fill their template in one pass, as `review` already did. A
   template placeholder name inside a question, option, title or report was substituted
   again, which let the text close an HTML attribute and add a script handler.
-- `review` with `repo` no longer runs commands named in the repo's config:
-  `core.fsmonitor` is off and attributes come from the empty tree, so no filter or diff
-  driver runs. `repo` now needs git 2.40 or newer.
+- `review` with `repo` no longer runs commands named in the repo's config. `core.fsmonitor`
+  is off; attributes come from neither the tree, `core.attributesFile` nor anything else
+  that selects a filter, and every filter driver the config names is blanked; diff drivers
+  and submodule diffs are off; no transport may run and a partial clone fetches nothing.
+  `repo` now needs git 2.40 or newer.
 - The page listener serves each connection on its own thread with a 10 s socket timeout.
   One idle connection, such as a browser preconnect, stalled every page and kept a call
   from ever counting as abandoned.
@@ -81,7 +83,14 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - Every page carries a Content-Security-Policy with a per-page script nonce and a
   `no-referrer` policy, and loads mermaid with subresource integrity. `ask` and `show` no
   longer load remote images, which told their server the page was opened.
-- The README names the Python patch releases that fix CVE-2025-6069 (3.12.12, 3.13.6).
+- The README names the Python patch releases that fix CVE-2025-6069 (3.12.12, 3.13.6), and
+  the server warns at start when it runs on an older one.
+- A page may send requests only to its own listener (`connect-src`), served pages are not
+  cached (`Cache-Control: no-store`), and the token is redacted from tracebacks and
+  percent-encoded URLs in the log too.
+- `GET /asset` serves an image only to the session whose current page references it.
+- The listeners refuse a request whose `Host` is not `127.0.0.1:<port>` with 421, so a
+  site that rebinds its name to the loopback address is turned away before the token check.
 
 ## [0.21.0] - 2026-11-17
 
