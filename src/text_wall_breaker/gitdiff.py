@@ -186,6 +186,8 @@ def repo_root(repo: str) -> Path:
     """The top of the work tree `repo` is in: what `git diff` paths are relative to.
 
     `repo` itself when git cannot say, so a caller still gets a directory to resolve in.
+    Raises GitDiffError when the work tree is not `repo` or a folder above it: the repo's
+    own `core.worktree` can name any directory, and the review would show its files.
     """
     directory = Path(repo).expanduser()
     try:
@@ -193,18 +195,28 @@ def repo_root(repo: str) -> Path:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return directory
     top = completed.stdout.strip()
-    return Path(top) if completed.returncode == 0 and top else directory
+    if completed.returncode != 0 or not top:
+        return directory
+    if not directory.resolve().is_relative_to(Path(top).resolve()):
+        raise GitDiffError(f"the repo's work tree is outside it: {top}")
+    return Path(top)
 
 
 def pages_from_git(
-    repo: str, git_range: str | None, paths: list[str] | None, context_lines: int
+    repo: str,
+    git_range: str | None,
+    paths: list[str] | None,
+    context_lines: int,
+    *,
+    top: Path | None = None,
 ) -> list[dict[str, str]]:
     """One `{"path", "diff"}` per changed file of `git diff <git_range>` in `repo`.
 
     `git_range` defaults to `HEAD` (tracked changes in the working tree). A renamed file
     is one page under its new path; one renamed without edits gets a hunk header that says
     so, since a page needs one. A page whose new-side file can be shown in full also
-    has `"text"`: that file, for the page to expand the lines between the hunks.
+    has `"text"`: that file, for the page to expand the lines between the hunks. `top` is
+    `repo_root(repo)` when the caller has it already.
     """
     directory = Path(repo).expanduser()
     if not directory.is_dir():
@@ -215,6 +227,9 @@ def pages_from_git(
     # A leading dash would be read by git as an option, not a revision.
     if not revision or revision.startswith("-"):
         raise GitDiffError(f"invalid git_range: {git_range!r}")
+    # Before the diff: it must not run over a work tree elsewhere. Diff paths are relative
+    # to this top, not to `repo`.
+    top = top if top is not None else repo_root(repo)
 
     try:
         blanks = _filter_blanks(directory)
@@ -246,8 +261,6 @@ def pages_from_git(
             raise GitDiffError("git 2.40 or newer is needed to diff without running repo commands")
         raise GitDiffError(f"git diff failed: {completed.stderr.strip()}")
 
-    # Paths in the diff are relative to the top of the work tree, not to `repo`.
-    top = repo_root(repo)
     starts = [match.start() for match in _FILE_HEADER.finditer(completed.stdout)]
     ends = [*starts[1:], len(completed.stdout)][: len(starts)]
     chunks = [completed.stdout[start:end] for start, end in zip(starts, ends, strict=True)]

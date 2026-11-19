@@ -13,6 +13,7 @@ import sys
 import threading
 from collections.abc import Callable
 from functools import partial
+from pathlib import Path
 from typing import Annotated, Any, Protocol, cast
 
 import anyio
@@ -390,11 +391,12 @@ async def review(
             repo=repo, git_range=git_range, paths=paths, context_lines=context_lines
         )
         try:
-            pages, files = await _blocking(ctx, partial(_load_repo, source))
+            # Page paths are relative to the work tree's top, which `repo` may be below.
+            top = await _blocking(None, partial(repo_root, repo))
+            pages, files = await _blocking(ctx, partial(_load_repo, source, top=top))
         except GitDiffError as exc:
             raise ToolError(str(exc)) from exc
-        # Page paths are relative to the work tree's top, which `repo` may be below.
-        repo = str(await _blocking(None, partial(repo_root, repo)))
+        repo = str(top)
     request = ReviewRequest(
         pages=pages or [],
         notes=notes or [],
@@ -430,8 +432,10 @@ async def review(
         raise ToolError(str(exc)) from exc
 
 
-def _load_repo(source: RepoSource) -> tuple[list[Page], dict[str, str]]:
-    entries = pages_from_git(source.repo, source.git_range, source.paths, source.context_lines)
+def _load_repo(source: RepoSource, *, top: Path | None = None) -> tuple[list[Page], dict[str, str]]:
+    entries = pages_from_git(
+        source.repo, source.git_range, source.paths, source.context_lines, top=top
+    )
     pages = [Page(path=entry["path"], diff=entry["diff"]) for entry in entries]
     files = {entry["path"]: entry["text"] for entry in entries if "text" in entry}
     return pages, files

@@ -678,11 +678,9 @@ def _answer_from_submission(
     progress: dict[str, Any] | None = None,
     project: str | None = None,
 ) -> dict[str, Any]:
-    keep = {"multi": multi, "progress": progress, "project": project}
-    if submission is None:
-        return _unanswered({"abandoned": True}, steps, header, **keep)
-    if submission.kind == "cancel":
-        return _unanswered({"cancelled": True}, steps, header, **keep)
+    if submission is None or submission.kind == "cancel":
+        outcome = {"abandoned": True} if submission is None else {"cancelled": True}
+        return _unanswered(outcome, steps, header, multi=multi, progress=progress, project=project)
     if submission.kind == "interrupt":
         return _interrupted(steps, submission.data, multi=multi, header=header, project=project)
     if not multi:

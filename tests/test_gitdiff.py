@@ -217,6 +217,14 @@ def test_attributes_from_outside_the_tree_run_no_filter(repo, tmp_path_factory, 
     assert sorted(p.name for p in markers.iterdir()) == []
 
 
+def test_a_work_tree_outside_the_repo_is_refused(repo, tmp_path_factory):
+    elsewhere = tmp_path_factory.mktemp("elsewhere")
+    (elsewhere / "secret.txt").write_text("not part of the repo\n")
+    _git(repo, "config", "core.worktree", str(elsewhere))
+    with pytest.raises(GitDiffError, match="work tree is outside"):
+        pages_from_git(str(repo), None, None, 3)
+
+
 def test_a_filter_name_with_a_space_is_blanked_whole(repo):
     _git(repo, "config", "filter.a b.clean", "cat")
     blanks = gitdiff._filter_blanks(repo)
