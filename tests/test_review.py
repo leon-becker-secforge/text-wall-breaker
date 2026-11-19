@@ -287,9 +287,12 @@ def test_a_validated_request_checks_its_notes_once(monkeypatch):
     assert request.page_notes() == {}
 
 
-def test_two_pages_with_one_path_are_refused():
+@pytest.mark.parametrize("notes_first", [False, True])
+def test_two_pages_with_one_path_are_refused(notes_first):
     diff = "@@ -1 +1 @@\n-a\n+b\n"
     request = ReviewRequest(pages=[Page(path="a.py", diff=diff), Page(path="a.py", diff=diff)])
+    if notes_first:
+        request.page_notes()  # caches the notes, which must not stand in for validating
     with pytest.raises(InvalidReview, match=r"pages\[1\]: duplicate path 'a.py'"):
         request.validated()
 

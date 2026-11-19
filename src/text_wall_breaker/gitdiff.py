@@ -129,11 +129,13 @@ def _git(directory: Path, *args: str, text: bool = False) -> subprocess.Complete
 
 def _filter_blanks(directory: Path) -> list[str]:
     """`-c` options that blank every filter driver the repo's config (any scope) names."""
-    completed = _git(directory, "config", "--name-only", "--get-regexp", r"^filter\.", text=True)
+    completed = _git(
+        directory, "config", "-z", "--name-only", "--get-regexp", r"^filter\.", text=True
+    )
+    # NUL-separated: a driver name may hold a space.
+    keys = [key for key in completed.stdout.split("\0") if key]
     options: list[str] = []
-    for name in dict.fromkeys(
-        key.split(".", 1)[1].rsplit(".", 1)[0] for key in completed.stdout.split()
-    ):
+    for name in dict.fromkeys(key.split(".", 1)[1].rsplit(".", 1)[0] for key in keys):
         # `-c` splits at the first "=", so a driver named with one cannot be blanked.
         if "=" in name:
             raise GitDiffError(f"the repo's config has a filter git cannot skip: {name!r}")

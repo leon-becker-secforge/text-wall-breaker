@@ -217,6 +217,13 @@ def test_attributes_from_outside_the_tree_run_no_filter(repo, tmp_path_factory, 
     assert sorted(p.name for p in markers.iterdir()) == []
 
 
+def test_a_filter_name_with_a_space_is_blanked_whole(repo):
+    _git(repo, "config", "filter.a b.clean", "cat")
+    blanks = gitdiff._filter_blanks(repo)
+    assert "filter.a b.clean=" in blanks
+    assert "filter.a.clean=" not in blanks
+
+
 def test_a_submodule_runs_no_command_of_its_own_config(repo, tmp_path_factory):
     markers = tmp_path_factory.mktemp("markers")
     sub = repo / "sub"

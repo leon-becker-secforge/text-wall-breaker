@@ -119,9 +119,10 @@ class ReviewRequest(BaseModel):
     # Notes as page data, once checked: validating parses every diff, and the tool, the
     # run and the page builder all ask. A request is not changed after it is built.
     _notes: dict[str, list[ReviewNote]] | None = PrivateAttr(default=None)
+    _validated: bool = PrivateAttr(default=False)
 
     def validated(self) -> ReviewRequest:
-        if self._notes is not None:
+        if self._validated:
             return self
         if not self.pages:
             raise InvalidReview("pages is empty; give pages, or repo to diff a git repository")
@@ -133,6 +134,7 @@ class ReviewRequest(BaseModel):
                 raise InvalidReview(f"pages[{index}]: duplicate path {page.path!r}")
             seen.add(page.path)
         self.page_notes()
+        self._validated = True
         return self
 
     def page_notes(self) -> dict[str, list[ReviewNote]]:
