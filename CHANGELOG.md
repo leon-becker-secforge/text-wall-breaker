@@ -42,6 +42,7 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - Every page carries a Content-Security-Policy with a per-page script nonce and a
   `no-referrer` policy, and loads mermaid with subresource integrity. `ask` and `show` no
   longer load remote images, which told their server the page was opened.
+- The README names the Python patch releases that fix CVE-2025-6069 (3.12.12, 3.13.6).
 
 ## [0.21.0] - 2026-11-17
 
