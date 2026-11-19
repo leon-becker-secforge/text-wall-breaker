@@ -91,6 +91,9 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   cached (`Cache-Control: no-store`), and the token is redacted from tracebacks and
   percent-encoded URLs in the log too.
 - `GET /asset` serves an image only to the session whose current page references it.
+- Inline Markdown renders in linear time and nests at most eight spans deep. A long run of
+  one marker (backticks, `[`, `_`) took seconds to minutes, and a few thousand `*` crashed
+  the call with a `RecursionError`.
 - A reviewed AsciiDoc file's rendered view keeps no `id` and no class the page itself uses
   (`pp-`, `is-`, `has-`, `deck-`), so the file cannot pose as or shadow the page's controls.
 - The listeners refuse a request whose `Host` is not `127.0.0.1:<port>` with 421, so a

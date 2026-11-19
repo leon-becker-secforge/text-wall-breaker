@@ -98,16 +98,19 @@ _URL_BODY = r"(?:[^\s()]++|\([^\s()]*+\))++"
 # literal, `!badge[...]` before the plain image pattern so `!` isn't consumed by it
 # first, and `**` precedes `*` so bold is not mis-read as two italics.
 #
-# The `(?!`)` lookaheads around the tick group stop the backtick alternative from
-# backtracking to a shorter run when no closing run of the same length exists: without
-# them, three stray backticks in running prose (no fence, no matching close) pair their
-# first two into a spurious empty `<code></code>` and leak the third as text, rather than
-# falling through to literal text like every other unmatched construct here does.
+# A code span opens only at the start of a backtick run and takes the whole run
+# (`(?<!`)`, possessive `++`): three stray backticks in running prose then fall through
+# to literal text instead of pairing two into an empty `<code></code>`, and a long run is
+# tried once instead of once per backtick at every shorter length (quadratic).
+#
+# Bracketed text holds no `[`: a run of `[` with no `]` would otherwise make each one scan
+# to the end of the line. Underscore spans are capped for the same reason, since a `_`
+# that cannot close (`_a _a _a`) scans on to the end.
 _INLINE = re.compile(
-    r"(?P<tick>`+)(?!`)(?P<code>.+?)(?P=tick)(?!`)"
-    r"|!badge\[(?P<badge_text>[^\]]*)\]\((?P<badge_value>[A-Za-z]+)\)"
-    rf"|!\[(?P<img_alt>[^\]]*)\]\((?P<img_url>{_URL_BODY})\)"
-    rf"|\[(?P<link_text>[^\]]*)\]\((?P<link_url>{_URL_BODY})\)"
+    r"(?<!`)(?P<tick>`++)(?P<code>.+?)(?<!`)(?P=tick)(?!`)"
+    r"|!badge\[(?P<badge_text>[^\[\]]*)\]\((?P<badge_value>[A-Za-z]+)\)"
+    rf"|!\[(?P<img_alt>[^\[\]]*)\]\((?P<img_url>{_URL_BODY})\)"
+    rf"|\[(?P<link_text>[^\[\]]*)\]\((?P<link_url>{_URL_BODY})\)"
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
     # first: a non-greedy close would otherwise strand the trailing marker as text.
     # `*` and `**` need text against both markers, as CommonMark's flanking rule asks:
@@ -116,9 +119,9 @@ _INLINE = re.compile(
     r"|\*\*(?P<b_text>\S(?:.*?\S)??)\*\*(?![*_])"
     # `_` only delimits at a word boundary, as in CommonMark: identifiers like set_mode
     # in running prose must not turn into emphasis. `*` still works intraword.
-    r"|(?<!\w)__(?P<ub_text>.+?)__(?![*\w])"
+    r"|(?<!\w)__(?P<ub_text>.{1,1000}?)__(?![*\w])"
     r"|\*(?P<i_text>[^\s*](?:.*?[^\s*])??)\*"
-    r"|(?<!\w)_(?P<ui_text>.+?)_(?!\w)"
+    r"|(?<!\w)_(?P<ui_text>.{1,1000}?)_(?!\w)"
     r"|(?P<s>~~)(?P<s_text>.+?)(?P=s)",
     re.DOTALL,
 )
@@ -161,11 +164,22 @@ def render_inline(text: str, *, asset_base_url: str | None = None) -> str:
     `asset_base_url`, if set, is where a `file://` image is rewritten to instead of
     embedding the `file://` URL as-is — see `_render_match`'s image branch for why.
     """
+    return _inline(text, asset_base_url, 0)
+
+
+# Spans nest by recursion: a run of thousands of `*` nested that deep and overflowed the
+# stack. Deeper than this, the text stays as typed; no prose nests emphasis this far.
+_MAX_NESTING = 8
+
+
+def _inline(text: str, asset_base_url: str | None, depth: int) -> str:
+    if depth > _MAX_NESTING:
+        return _escape(text)
     out: list[str] = []
     pos = 0
     for match in _INLINE.finditer(text):
         out.append(_escape(text[pos : match.start()]))
-        out.append(_render_match(match, asset_base_url))
+        out.append(_render_match(match, asset_base_url, depth + 1))
         pos = match.end()
     out.append(_escape(text[pos:]))
     return "".join(out)
@@ -210,7 +224,7 @@ def forget_rendered_assets(asset_base_url: str) -> None:
         _rendered_assets.pop(asset_base_url, None)
 
 
-def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
+def _render_match(match: re.Match[str], asset_base_url: str | None, depth: int) -> str:
     if match.group("tick"):
         # Code spans are escaped but not recursed into: backticks win over every other
         # inline marker, so `**x**` in code stays as typed.
@@ -220,7 +234,7 @@ def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
         value = match.group("badge_value").lower()
         if value not in _BADGE_VALUES:
             return _escape(match.group(0))
-        text = render_inline(match.group("badge_text"), asset_base_url=asset_base_url)
+        text = _inline(match.group("badge_text"), asset_base_url, depth)
         return f'<span class="badge" data-axis="severity" data-value="{value}">{text}</span>'
 
     if match.group("img_url") is not None:
@@ -236,19 +250,18 @@ def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
         url = _safe_url(match.group("link_url"))
         if url is None:
             return _escape(match.group(0))
-        link_text = render_inline(match.group("link_text"), asset_base_url=asset_base_url)
+        link_text = _inline(match.group("link_text"), asset_base_url, depth)
         return f'<a href="{_escape(url)}">{link_text}</a>'
 
     bold = match.group("b_text") or match.group("ub_text")
     if bold is not None:
-        return f"<strong>{render_inline(bold, asset_base_url=asset_base_url)}</strong>"
+        return f"<strong>{_inline(bold, asset_base_url, depth)}</strong>"
 
     if match.group("s"):
-        s_text = render_inline(match.group("s_text"), asset_base_url=asset_base_url)
-        return f"<del>{s_text}</del>"
+        return f"<del>{_inline(match.group('s_text'), asset_base_url, depth)}</del>"
 
     italic = match.group("i_text") or match.group("ui_text")
-    return f"<em>{render_inline(italic, asset_base_url=asset_base_url)}</em>"
+    return f"<em>{_inline(italic, asset_base_url, depth)}</em>"
 
 
 def _split_row(line: str) -> list[str]:

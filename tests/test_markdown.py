@@ -165,11 +165,25 @@ def test_image_url_keeps_a_parenthesised_segment():
     ],
 )
 def test_an_unclosed_link_url_does_not_hang(source):
-    # The nested quantifier in the URL pattern used to take exponential time here: 26
-    # characters already cost seconds.
+    # The nested quantifier in the URL pattern took exponential time here: 26 characters
+    # already cost seconds.
     start = time.perf_counter()
     render_inline(source)
     assert time.perf_counter() - start < 1
+
+
+@pytest.mark.parametrize("unit", ["`", "[", "![", "!badge[", " _a", "__a ", "*", "~~x", "*a"])
+def test_a_long_run_of_one_marker_renders_in_linear_time(unit):
+    # 64k characters: quadratic matching took tens of seconds, nesting overflowed the stack.
+    source = unit * (64_000 // len(unit))
+    start = time.perf_counter()
+    render_inline(source)
+    assert time.perf_counter() - start < 2
+
+
+def test_emphasis_nests_only_so_deep():
+    html = render_inline("*" * 2000)
+    assert html.count("<strong>") + html.count("<em>") <= 9
 
 
 def test_image_bare_path_is_a_file_url():
