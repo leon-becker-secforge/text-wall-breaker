@@ -328,7 +328,9 @@ def test_an_agent_can_open_the_ask_live_straight_away(tab):
     started = run_ask(AskRequest(question="Which?", options=[Option(id="a", label="A")], live=True))
     operator.join(timeout=5)
     assert started["live"]["session"].startswith("la-")
-    session_module.live_for(started["live"]["session"])._session.close()
+    live = session_module.live_for(started["live"]["session"])
+    assert isinstance(live, LiveAsk)
+    live._session.close()
 
 
 def test_live_needs_the_shared_tab(tab):
@@ -355,6 +357,7 @@ def test_a_multi_question_ask_reports_the_question_of_a_message(tab):
         },
     )
     live = session_module.live_for(session_id)
+    assert isinstance(live, LiveAsk)
     assert call_as(live, session_id, wait=True)["messages"] == [
         {"chat": "?", "option": "b", "question": 1}
     ]

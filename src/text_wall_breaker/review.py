@@ -33,6 +33,8 @@ from .diff import (
 )
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
+    ReviewNote,
+    ReviewPage,
     _asset_base_url,
     build_review_page,
     read_saved_theme,
@@ -128,7 +130,7 @@ class ReviewRequest(BaseModel):
         self.page_notes()
         return self
 
-    def page_notes(self) -> dict[str, list[dict[str, Any]]]:
+    def page_notes(self) -> dict[str, list[ReviewNote]]:
         """Per path, the notes as page data, each checked against the rows its diff shows.
 
         A note on a row the page does not show (an unchanged line outside the hunks, an
@@ -143,7 +145,7 @@ class ReviewRequest(BaseModel):
             ]
             for page in self.pages
         }
-        found: dict[str, list[dict[str, Any]]] = {}
+        found: dict[str, list[ReviewNote]] = {}
         for index, note in enumerate(self.notes):
             label = f"notes[{index}]"
             if note.path not in rows:
@@ -160,7 +162,7 @@ class ReviewRequest(BaseModel):
                     f"{note.path} (only changed lines and their context, old side for "
                     "deleted lines only)"
                 )
-            entry: dict[str, Any] = {
+            entry: ReviewNote = {
                 "side": note.side,
                 "line": note.line,
                 "text": note.text.strip(),
@@ -202,7 +204,7 @@ def _build_html(
     expansion = request.expansion()
     notes = request.page_notes()
     asset_base_url = _asset_base_url(status_url)
-    entries: list[dict[str, Any]] = []
+    entries: list[ReviewPage] = []
     for page in request.pages:
         lines = expansion.get(page.path)
         rendered = rendered_view(

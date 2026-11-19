@@ -511,9 +511,11 @@ async def live(
         options=options,
     )
     try:
-        return await _blocking(ctx, partial(target.call, call), cancel=cancel)
+        result = await _blocking(ctx, partial(target.call, call), cancel=cancel)
     except (LiveError, GitDiffError) as exc:
         raise ToolError(str(exc)) from exc
+    # Its keys are checked against LiveResult by tests/test_results.py, as for the others.
+    return cast(LiveResult, result)
 
 
 def _reject_unknown_arguments() -> None:

@@ -12,6 +12,8 @@ import pytest
 
 from text_wall_breaker.page import (
     InvalidAccent,
+    ReviewNote,
+    ReviewPage,
     build_multi_page,
     build_page,
     build_review_page,
@@ -789,7 +791,9 @@ def test_progress_fill_is_a_block_so_it_has_a_size():
 
 def test_agent_notes_render_open_under_their_last_row_with_a_chip_on_the_first():
     diff = "@@ -1,2 +1,3 @@\n a\n+b\n+c\n"
-    notes = [{"side": "new", "line": 2, "end_side": "new", "end_line": 3, "text": "Why **x**"}]
+    notes: list[ReviewNote] = [
+        {"side": "new", "line": 2, "end_side": "new", "end_line": 3, "text": "Why **x**"}
+    ]
     html = build_review_page(
         pages=[{"path": "a.py", "diff": diff, "notes": notes}], submit_url="http://x/submit"
     )
@@ -804,7 +808,7 @@ def test_agent_notes_render_open_under_their_last_row_with_a_chip_on_the_first()
 
 def test_the_notes_bar_is_a_labelled_two_segment_switch():
     diff = "@@ -1,1 +1,2 @@\n a\n+b\n"
-    notes = [{"side": "new", "line": 2, "text": "why"}]
+    notes: list[ReviewNote] = [{"side": "new", "line": 2, "text": "why"}]
     html = build_review_page(
         pages=[{"path": "a.md", "diff": diff, "notes": notes, "rendered": "<p>x</p>"}],
         submit_url="http://x/submit",
@@ -816,9 +820,9 @@ def test_the_notes_bar_is_a_labelled_two_segment_switch():
     ) in html
 
 
-def _head(header, **page):
+def _head(header: str | None, blurb: str | None = None) -> str:
     diff = "@@ -1,1 +1,2 @@\n a\n+b\n"
-    pages = [{"path": "src/pkg/a.py", "diff": diff, **page}]
+    pages: list[ReviewPage] = [{"path": "src/pkg/a.py", "diff": diff, "blurb": blurb}]
     return build_review_page(pages=pages, header=header, submit_url="http://x/submit")
 
 
@@ -851,7 +855,7 @@ def test_the_path_is_a_dim_folder_and_a_bold_file_and_the_blurb_is_wrapped():
 
 
 def test_switching_file_drops_an_open_selection_and_its_comment_box():
-    pages: list[dict[str, object]] = [
+    pages: list[ReviewPage] = [
         {"path": "a.py", "diff": "@@ -1,1 +1,2 @@\n a\n+b\n"},
         {"path": "b.py", "diff": "@@ -1,1 +1,2 @@\n a\n+b\n"},
     ]

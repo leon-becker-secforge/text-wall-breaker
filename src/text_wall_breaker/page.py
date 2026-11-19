@@ -29,6 +29,7 @@ import secrets
 from bisect import bisect_right
 from importlib import resources
 from pathlib import Path
+from typing import NotRequired, TypedDict
 from urllib.parse import urlsplit
 
 from .diff import DiffLine, Gap, gaps_of, parse_unified_diff, rows_with_context
@@ -109,6 +110,29 @@ _LIGHT_BG_RGB = (0xFF, 0xFF, 0xFF)
 _LIGHT_TINT_ALPHA = 0.14
 _DARK_BG_RGB = (0x1E, 0x1E, 0x1E)
 _DARK_TINT_ALPHA = 0.22
+
+
+class ReviewNote(TypedDict):
+    """An agent note on a review page, already checked against the rows it shows."""
+
+    side: str
+    line: int
+    text: str
+    end_side: NotRequired[str]
+    end_line: NotRequired[int]
+
+
+class ReviewPage(TypedDict):
+    """One file of a review page: its diff and what the page shows beside it."""
+
+    path: str
+    diff: str
+    status: NotRequired[str]
+    renamed_from: NotRequired[str | None]
+    blurb: NotRequired[str | None]
+    lines: NotRequired[list[str] | None]
+    notes: NotRequired[list[ReviewNote] | None]
+    rendered: NotRequired[str | None]
 
 
 class InvalidAccent(ValueError):
@@ -284,7 +308,7 @@ def _render_review_gap(gap: Gap) -> str:
     )
 
 
-def _note_label(note: dict[str, object]) -> str:
+def _note_label(note: ReviewNote) -> str:
     start = f"{note['side']} {note['line']}"
     if "end_line" not in note:
         return start
@@ -293,9 +317,9 @@ def _note_label(note: dict[str, object]) -> str:
     return f"{start} \N{RIGHTWARDS ARROW} {note['end_side']} {note['end_line']}"
 
 
-def _render_review_note(index: int, note: dict[str, object], asset_base_url: str | None) -> str:
+def _render_review_note(index: int, note: ReviewNote, asset_base_url: str | None) -> str:
     label = html.escape(_note_label(note))
-    body = render_markdown(str(note["text"]), asset_base_url=asset_base_url)
+    body = render_markdown(note["text"], asset_base_url=asset_base_url)
     return (
         f'<div class="pp-note is-open" data-note="{index}">'
         f'<div class="pp-note-head"><span class="pp-note-label">&#10022; Agent &middot; '
@@ -310,7 +334,7 @@ def _render_review_row(
     text_html: str,
     marks: dict[tuple[str, int], list[int]],
     closings: dict[tuple[str, int], list[int]],
-    notes: list[dict[str, object]] | None,
+    notes: list[ReviewNote] | None,
     asset_base_url: str | None,
 ) -> str:
     """One addressable row, with the note chips on it and the notes that end on it."""
@@ -347,7 +371,7 @@ def _render_review_chunks(
     blocks: list[Block],
     marks: dict[tuple[str, int], list[int]],
     closings: dict[tuple[str, int], list[int]],
-    notes: list[dict[str, object]] | None,
+    notes: list[ReviewNote] | None,
     asset_base_url: str | None,
     path: str,
 ) -> str:
@@ -426,7 +450,7 @@ def _render_review_diff(
     path: str,
     diff: str,
     lines: list[str] | None = None,
-    notes: list[dict[str, object]] | None = None,
+    notes: list[ReviewNote] | None = None,
     asset_base_url: str | None = None,
     rendered: str | None = None,
 ) -> str:
@@ -459,8 +483,12 @@ def _render_review_diff(
     marks: dict[tuple[str, int], list[int]] = {}
     closings: dict[tuple[str, int], list[int]] = {}
     for index, note in enumerate(notes or []):
-        start = (str(note["side"]), int(str(note["line"])))
-        end = (str(note["end_side"]), int(str(note["end_line"]))) if "end_line" in note else start
+        start = (note["side"], note["line"])
+        end = (
+            (note["end_side"], note["end_line"])
+            if "end_side" in note and "end_line" in note
+            else start
+        )
         marks.setdefault(start, []).append(index)
         closings.setdefault(end, []).append(index)
     parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
@@ -525,7 +553,7 @@ def _plural(count: int, noun: str) -> str:
 
 
 def _render_review_header(
-    header: str | None, pages: list[dict[str, object]], asset_base_url: str | None
+    header: str | None, pages: list[ReviewPage], asset_base_url: str | None
 ) -> str:
     """The top of the page: one slim row, the agent's header folded under "Details".
 
@@ -563,7 +591,7 @@ def _render_review_header(
 
 
 def _render_review_pages(
-    pages: list[dict[str, object]], asset_base_url: str | None, *, with_files: bool
+    pages: list[ReviewPage], asset_base_url: str | None, *, with_files: bool
 ) -> str:
     """The deck of `.deck-slide`s for a `review` call — one per page, in order.
 
@@ -625,7 +653,7 @@ _FILTER_FROM = 8
 _STATUS_WORDS = {"A": "added", "M": "modified", "D": "deleted", "R": "renamed"}
 
 
-def _status_badge(page: dict[str, object]) -> str:
+def _status_badge(page: ReviewPage) -> str:
     """The letter that says how the file changed (see `diff.file_status`), or "" if unknown.
 
     A rename names its old path in the badge's tooltip.
@@ -642,7 +670,7 @@ def _status_badge(page: dict[str, object]) -> str:
     )
 
 
-def _render_review_files(pages: list[dict[str, object]]) -> str:
+def _render_review_files(pages: list[ReviewPage]) -> str:
     """The file list of a multi-page `review`: a sidebar, and below 900px a bar + drawer.
 
     Counts and the note mark start at zero/hidden and are kept current by
@@ -713,7 +741,7 @@ def _review_files_script(needed: bool) -> str:
 
 def build_review_page(
     *,
-    pages: list[dict[str, object]],
+    pages: list[ReviewPage],
     submit_url: str,
     header: str | None = None,
     title: str = "Claude Code",

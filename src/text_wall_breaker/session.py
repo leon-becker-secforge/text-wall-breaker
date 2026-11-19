@@ -13,9 +13,13 @@ from __future__ import annotations
 
 import secrets
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from .listener import SessionListener
+
+if TYPE_CHECKING:
+    # live_common imports listener only, but live and live_ask import this module.
+    from .live_common import LiveCall
 
 __all__ = [
     "detach_shared_session",
@@ -25,9 +29,18 @@ __all__ = [
     "register_live",
 ]
 
+
+class LiveTarget(Protocol):
+    """What the `live` tool calls on a running session (`LiveSession` or `LiveAsk`)."""
+
+    id: str
+
+    def call(self, request: LiveCall) -> dict[str, Any]: ...
+
+
 _lock = threading.Lock()
 _session: SessionListener | None = None
-_live: dict[str, Any] = {}
+_live: dict[str, LiveTarget] = {}
 
 
 def get_shared_session() -> SessionListener:
@@ -52,7 +65,7 @@ def detach_shared_session(session: object) -> None:
             _session = None
 
 
-def register_live(session_id: str, handle: Any) -> None:
+def register_live(session_id: str, handle: LiveTarget) -> None:
     with _lock:
         _live[session_id] = handle
 
@@ -62,7 +75,7 @@ def forget_live(session_id: str) -> None:
         _live.pop(session_id, None)
 
 
-def live_for(session_id: str) -> Any:
+def live_for(session_id: str) -> LiveTarget | None:
     """The live session `session_id` names (`LiveSession` or `LiveAsk`), or None."""
     with _lock:
         return _live.get(session_id)
