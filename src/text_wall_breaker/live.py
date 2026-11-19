@@ -39,9 +39,9 @@ from .review import (
     Note,
     Page,
     ReviewRequest,
-    _addressable_rows,
-    _extract_comments,
-    _result_from_submission,
+    addressable_rows,
+    extract_comments,
+    result_from_submission,
 )
 from .session import detach_shared_session, forget_live, register_live
 
@@ -81,10 +81,10 @@ def _interdiff(before: list[str], after: list[str]) -> list[dict[str, Any]]:
     text = "\n".join(difflib.unified_diff(before, after, lineterm="", n=3))
     if "@@" not in text:
         return []
-    rows: list[dict[str, Any]] = []
-    for row in parse_unified_diff(text):
-        rows.append({"kind": row.kind, "text": row.text, "old": row.old_line, "new": row.new_line})
-    return rows
+    return [
+        {"kind": row.kind, "text": row.text, "old": row.old_line, "new": row.new_line}
+        for row in parse_unified_diff(text)
+    ]
 
 
 def _run(rows: list[DiffLine], first: int, last: int) -> list[tuple[str | None, str]]:
@@ -228,7 +228,7 @@ class LiveSession(Reaper):
         return 400, {"error": "unknown event"}
 
     def _start_thread(self, raw: object) -> tuple[int, dict[str, Any]]:
-        found = _extract_comments(self._request.pages, [raw], self._request.expansion())
+        found = extract_comments(self._request.pages, [raw], self._request.expansion())
         if not found:
             return 400, {"error": "not a comment on this diff"}
         comment = found[0]
@@ -283,13 +283,13 @@ class LiveSession(Reaper):
         A comment whose rows still exist (same text and side, contiguous) moves to the
         occurrence nearest its old line; any other one goes to `_outdated`.
         """
-        old_rows = _addressable_rows(old.pages, old.expansion())
-        new_rows = _addressable_rows(new.pages, new.expansion())
+        old_rows = addressable_rows(old.pages, old.expansion())
+        new_rows = addressable_rows(new.pages, new.expansion())
         kept: list[dict[str, Any]] = []
         for entry in raw:
             if not isinstance(entry, dict):
                 continue
-            found = _extract_comments(old.pages, [entry], old.expansion())
+            found = extract_comments(old.pages, [entry], old.expansion())
             if not found:
                 continue
             comment = found[0]
@@ -526,7 +526,7 @@ class LiveSession(Reaper):
             "overall_note": self._overall_note,
         }
         data = Submission(kind=self._final.kind, data=progress) if self._final else None
-        result = _result_from_submission(request.pages, data, progress, request.expansion())
+        result = result_from_submission(request.pages, data, progress, request.expansion())
         result["comments"] += [
             {k: v for k, v in c.items() if k not in ("near", "thread")} for c in self._outdated
         ]

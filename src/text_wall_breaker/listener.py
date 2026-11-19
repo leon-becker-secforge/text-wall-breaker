@@ -604,7 +604,7 @@ class SessionListener:
         """Where the page can fetch a local image through, instead of a `file://` URL.
 
         Passed to `markdown.render_markdown`/`render_inline` as `asset_base_url` — see
-        `_image_src` there for why a page this session serves (over `http://`) needs
+        `image_src` there for why a page this session serves (over `http://`) needs
         this instead of the `file://` URL an agent wrote working as-is.
         """
         return f"http://127.0.0.1:{self.port}/asset?t={self._token}"
@@ -613,7 +613,7 @@ class SessionListener:
         """Read a local image file for `GET /asset`, returning (status, body, content_type).
 
         `path` is the absolute filesystem path a `file://` image URL held (see
-        `markdown._image_src`) — this is what stands in for the browser loading it
+        `markdown.image_src`) — this is what stands in for the browser loading it
         directly, which it refuses to do from an `http://` document. Restricted to paths
         a rendered page references (`markdown.is_rendered_asset`), a closed set of image
         extensions, regular files reached without a symlink, and a size cap: the token

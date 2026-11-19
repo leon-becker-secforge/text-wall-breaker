@@ -12,7 +12,7 @@ from text_wall_breaker.review import (
     Page,
     ReviewRequest,
     _build_html,
-    _result_from_submission,
+    result_from_submission,
 )
 
 DIFF = "@@ -1,2 +1,2 @@\n keep\n-old\n+new\n"
@@ -22,7 +22,7 @@ COMMENT = {"path": "a.py", "side": "new", "line": 2, "text": " why? "}
 
 def test_submit_returns_comments_with_their_context():
     submission = Submission(kind="submit", data={"comments": [COMMENT], "overall_note": " ok "})
-    assert _result_from_submission(PAGES, submission, None) == {
+    assert result_from_submission(PAGES, submission, None) == {
         "comments": [{**COMMENT, "text": "why?", "context": "new"}],
         "page_notes": [],
         "overall_note": "ok",
@@ -36,7 +36,7 @@ def test_page_notes_are_returned_trimmed_and_blank_ones_dropped():
             {"path": "a.py", "text": "   "},
         ]
     }
-    result = _result_from_submission(PAGES, Submission(kind="submit", data=data), None)
+    result = result_from_submission(PAGES, Submission(kind="submit", data=data), None)
     assert result["page_notes"] == [{"path": "a.py", "text": "split this file"}]
 
 
@@ -48,26 +48,26 @@ def test_a_page_note_for_an_unknown_path_or_of_the_wrong_shape_is_dropped():
             "not a dict",
         ]
     }
-    result = _result_from_submission(PAGES, Submission(kind="submit", data=data), None)
+    result = result_from_submission(PAGES, Submission(kind="submit", data=data), None)
     assert result["page_notes"] == []
 
 
 def test_abandoned_keeps_the_page_notes_of_the_last_report():
     progress = {"page_notes": [{"path": "a.py", "text": "wip"}]}
-    result = _result_from_submission(PAGES, None, progress)
+    result = result_from_submission(PAGES, None, progress)
     assert result["page_notes"] == [{"path": "a.py", "text": "wip"}]
 
 
 def test_cancel_keeps_the_comments_and_says_so():
     submission = Submission(kind="cancel", data={"comments": [COMMENT], "overall_note": ""})
-    result = _result_from_submission(PAGES, submission, None)
+    result = result_from_submission(PAGES, submission, None)
     assert result["cancelled"] is True
     assert len(result["comments"]) == 1
 
 
 def test_abandoned_returns_the_last_progress_report():
     progress = {"comments": [COMMENT], "overall_note": "half done"}
-    result = _result_from_submission(PAGES, None, progress)
+    result = result_from_submission(PAGES, None, progress)
     assert result["abandoned"] is True
     assert "cancelled" not in result
     assert result["overall_note"] == "half done"
@@ -75,7 +75,7 @@ def test_abandoned_returns_the_last_progress_report():
 
 
 def test_abandoned_without_any_report_is_an_empty_review():
-    assert _result_from_submission(PAGES, None, None) == {
+    assert result_from_submission(PAGES, None, None) == {
         "comments": [],
         "page_notes": [],
         "overall_note": None,
@@ -85,7 +85,7 @@ def test_abandoned_without_any_report_is_an_empty_review():
 
 def test_abandoned_progress_with_an_unknown_line_is_dropped():
     progress = {"comments": [{**COMMENT, "line": 99}], "overall_note": ""}
-    assert _result_from_submission(PAGES, None, progress)["comments"] == []
+    assert result_from_submission(PAGES, None, progress)["comments"] == []
 
 
 RANGE_DIFF = "@@ -1,3 +1,4 @@\n keep\n-old\n+new\n+added\n tail\n"
@@ -96,7 +96,7 @@ ADDED = {"side": "new", "line": 2, "end_side": "new", "end_line": 3}
 def _comments(*entries):
     data = {"comments": [{"path": "r.py", "text": "t", **entry} for entry in entries]}
     submission = Submission(kind="submit", data=data)
-    return _result_from_submission(RANGE_PAGES, submission, None)["comments"]
+    return result_from_submission(RANGE_PAGES, submission, None)["comments"]
 
 
 def test_a_range_on_one_side_returns_its_end_and_marked_rows():
@@ -188,7 +188,7 @@ def _long_request(files):
 def _long_comments(request, *entries):
     data = {"comments": [{"path": "long.py", "text": "t", **entry} for entry in entries]}
     submission = Submission(kind="submit", data=data)
-    return _result_from_submission(request.pages, submission, None, request.expansion())["comments"]
+    return result_from_submission(request.pages, submission, None, request.expansion())["comments"]
 
 
 def test_a_hidden_line_is_not_addressable_without_the_file():
@@ -217,7 +217,7 @@ def test_hidden_lines_keep_their_old_numbers_after_a_shift():
     page = Page(path="s.py", diff=diff)
     request = ReviewRequest(pages=[page], files={"s.py": "\n".join(new) + "\n"})
     data = {"comments": [{"path": "s.py", "side": "new", "line": 15, "text": "t"}]}
-    [comment] = _result_from_submission(
+    [comment] = result_from_submission(
         request.pages, Submission(kind="submit", data=data), None, request.expansion()
     )["comments"]
     assert comment["context"] == "line 14"  # new 15 is old 14

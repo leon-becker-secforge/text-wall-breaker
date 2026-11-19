@@ -47,7 +47,13 @@ from urllib.parse import quote, unquote, urlsplit
 
 from text_wall_breaker.highlight import highlight_code
 
-__all__ = ["forget_rendered_assets", "is_rendered_asset", "render_inline", "render_markdown"]
+__all__ = [
+    "forget_rendered_assets",
+    "image_src",
+    "is_rendered_asset",
+    "render_inline",
+    "render_markdown",
+]
 
 # Schemes a link or image may use. `file:` is here because the page is opened from disk
 # and images are referenced as file:// absolute paths (that is the only image mechanism
@@ -185,7 +191,7 @@ def _inline(text: str, asset_base_url: str | None, depth: int) -> str:
     return "".join(out)
 
 
-def _image_src(url: str, asset_base_url: str | None) -> str:
+def image_src(url: str, asset_base_url: str | None) -> str:
     """The `src` to embed for image `url`, rewriting a `file://` one if asked to.
 
     A page opened straight from disk (`file://`) can load a `file://` image with no
@@ -205,7 +211,7 @@ def _image_src(url: str, asset_base_url: str | None) -> str:
     return url
 
 
-# Per `/asset` route (one per session, its token in the URL), the paths `_image_src` put
+# Per `/asset` route (one per session, its token in the URL), the paths `image_src` put
 # into that session's pages. `GET /asset` serves only these, so the token alone does not
 # open every image-named file on disk, nor one only another session's page showed.
 _rendered_assets: dict[str, set[str]] = {}
@@ -243,7 +249,7 @@ def _render_match(match: re.Match[str], asset_base_url: str | None, depth: int) 
         # A remote image would tell its server the page was opened, and from where.
         if url is None or url.lower().startswith(("http://", "https://")):
             return _escape(match.group(0))
-        src = _image_src(url, asset_base_url)
+        src = image_src(url, asset_base_url)
         return f'<img src="{_escape(src)}" alt="{alt}">'
 
     if match.group("link_url") is not None:
@@ -266,11 +272,7 @@ def _render_match(match: re.Match[str], asset_base_url: str | None, depth: int) 
 
 def _split_row(line: str) -> list[str]:
     """Split one `| a | b |` row into its cell texts, stripping the outer pipes."""
-    stripped = line.strip()
-    if stripped.startswith("|"):
-        stripped = stripped[1:]
-    if stripped.endswith("|"):
-        stripped = stripped[:-1]
+    stripped = line.strip().removeprefix("|").removesuffix("|")
     return [cell.strip() for cell in stripped.split("|")]
 
 
@@ -460,7 +462,7 @@ def bold_lead(question: str) -> str | None:
 def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
     """Render `text` to an HTML fragment. Returns "" for empty or whitespace-only input.
 
-    `asset_base_url` is threaded down to every inline render — see `_image_src`.
+    `asset_base_url` is threaded down to every inline render — see `image_src`.
     """
     if not text or not text.strip():
         return ""

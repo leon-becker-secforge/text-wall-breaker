@@ -21,6 +21,7 @@ that comes from the caller (option labels, ids) is escaped at the point of inter
 
 from __future__ import annotations
 
+import functools
 import html
 import json
 import os
@@ -47,6 +48,9 @@ from .render import Block, split_blocks
 __all__ = [
     "ACCENT_ENV_VAR",
     "InvalidAccent",
+    "ReviewNote",
+    "ReviewPage",
+    "asset_base_url_for",
     "build_multi_page",
     "build_page",
     "build_review_page",
@@ -244,7 +248,7 @@ def build_show_page(
     if acknowledge_button:
         ack_html = '      <button type="button" id="pp-ack">Acknowledge</button>'
 
-    asset_base_url = _asset_base_url(status_url)
+    asset_base_url = asset_base_url_for(status_url)
     if slides is not None:
         content_html, raw_content = _render_deck(slides, header, footer, asset_base_url)
     else:
@@ -785,7 +789,7 @@ def build_review_page(
     if accent is not None:
         css += _accent_css(accent)
 
-    asset_base_url = _asset_base_url(status_url)
+    asset_base_url = asset_base_url_for(status_url)
     header_html = _render_review_header(header, pages, asset_base_url)
     content_html = _render_review_pages(pages, asset_base_url, with_files=with_files)
     live_script = (
@@ -902,7 +906,9 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
 # ask.html's fallback box, heartbeat and reuse-polling script, since a listener-backed
 # show page needs the same abandonment-heartbeat and tab-reuse behaviour.
 # Script bodies: deck.js, review_files.js and mermaid.js, wrapped in `<script>` here.
+@functools.cache
 def _load_asset(name: str) -> str:
+    # Package files: they do not change while the process runs.
     return resources.files(__package__).joinpath("assets", name).read_text(encoding="utf-8")
 
 
@@ -1014,7 +1020,7 @@ def _has_image_body(option: dict[str, object]) -> bool:
     return isinstance(body, str) and "![" in body
 
 
-def _asset_base_url(status_url: str | None) -> str | None:
+def asset_base_url_for(status_url: str | None) -> str | None:
     """The `/asset?t=...` URL local `file://` images should rewrite to, or None.
 
     Derived from `status_url` rather than taking its own parameter: the two are set
@@ -1300,7 +1306,7 @@ def build_page(
         hint = "Write an answer."
 
     gallery = _is_gallery(options)
-    asset_base_url = _asset_base_url(status_url)
+    asset_base_url = asset_base_url_for(status_url)
     question_html, question_class = _question_html(question, asset_base_url)
     options_html = _render_options(
         options, multi_select, gallery=gallery, asset_base_url=asset_base_url
@@ -1575,7 +1581,7 @@ def build_multi_page(
         css += _accent_css(accent)
 
     total = len(questions)
-    asset_base_url = _asset_base_url(status_url)
+    asset_base_url = asset_base_url_for(status_url)
     steps_html = "\n".join(build_step_fragments(questions, asset_base_url=asset_base_url))
     header_html = _render_header(header, asset_base_url=asset_base_url)
     segments_html = "".join(

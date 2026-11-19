@@ -42,7 +42,7 @@ _MAX_MESSAGE_CHARS = 20_000
 # What `LiveAsk` needs to republish the page after the agent replaced the question or its
 # options: given the new question and options (None: unchanged), it returns the page
 # builder, the new `questions` and the option ids the operator had picked that are gone.
-Refresher = Callable[
+type Refresher = Callable[
     [str | None, list[Any] | None],
     tuple[Callable[[int], str], list[tuple[str | None, set[str]]], list[str]],
 ]
@@ -141,7 +141,7 @@ class LiveAsk(Reaper):
             return {}
         if len(self._questions) == 1:
             return {"option": option}
-        return {"option": option, "question": question_id if question_id else index}
+        return {"option": option, "question": question_id or index}
 
     def on_progress(self, data: dict[str, Any]) -> None:
         """The listener keeps the answers so far for `resume`; nothing more to do here."""

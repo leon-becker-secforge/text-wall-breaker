@@ -8,7 +8,7 @@ from text_wall_breaker import ask as ask_module
 from text_wall_breaker.ask import Option, Question
 from text_wall_breaker.listener import Submission
 from text_wall_breaker.results import AskResult, LiveResult, ReviewResult, ShowStatusResult
-from text_wall_breaker.review import Page, _result_from_submission
+from text_wall_breaker.review import Page, result_from_submission
 from text_wall_breaker.server import server
 
 
@@ -39,7 +39,7 @@ def test_ask_answers_use_only_declared_keys():
 
 def test_review_results_use_only_declared_keys():
     pages = [Page(path="a.txt", diff="@@ -1 +1 @@\n-a\n+b\n")]
-    result = _result_from_submission(pages, Submission(kind="cancel", data={}), None)
+    result = result_from_submission(pages, Submission(kind="cancel", data={}), None)
     assert set(result) <= declared(ReviewResult)
 
 

@@ -275,7 +275,9 @@ def rows_with_context(diff: str, lines: list[str]) -> list[DiffLine]:
 
     def gap_rows(gap: Gap) -> list[DiffLine]:
         return [
-            DiffLine("ctx", lines[number - 1], number + gap.delta, number)
+            DiffLine(
+                kind="ctx", text=lines[number - 1], old_line=number + gap.delta, new_line=number
+            )
             for number in range(gap.new_first, gap.new_last + 1)
         ]
 

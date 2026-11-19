@@ -26,7 +26,7 @@ _MAX_CHARS = 2000
 _TOKEN = re.compile(r"\w+|\s+|[^\w\s]")
 _HTML_PIECE = re.compile(r"<[^>]*>|&(?:#x?[0-9a-fA-F]+|\w+);|.", re.DOTALL)
 
-Range = tuple[int, int]
+type Range = tuple[int, int]
 
 
 def changed_ranges(old: str, new: str) -> tuple[list[Range], list[Range]] | None:

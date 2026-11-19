@@ -35,7 +35,7 @@ from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
     ReviewNote,
     ReviewPage,
-    _asset_base_url,
+    asset_base_url_for,
     build_review_page,
     read_saved_theme,
     resolve_accent,
@@ -43,7 +43,17 @@ from .page import (
 from .render import rendered_view
 from .session import get_shared_session
 
-__all__ = ["BrowserUnavailable", "InvalidReview", "Note", "Page", "ReviewRequest", "run_review"]
+__all__ = [
+    "BrowserUnavailable",
+    "InvalidReview",
+    "Note",
+    "Page",
+    "ReviewRequest",
+    "addressable_rows",
+    "extract_comments",
+    "result_from_submission",
+    "run_review",
+]
 
 # Key of `run_review`'s result when a live session starts instead of a report: its value
 # is the generation of the page on screen, and the shared tab stays claimed.
@@ -215,7 +225,7 @@ def _build_html(
 ) -> str:
     expansion = request.expansion()
     notes = request.page_notes()
-    asset_base_url = _asset_base_url(status_url)
+    asset_base_url = asset_base_url_for(status_url)
     entries: list[ReviewPage] = []
     for page in request.pages:
         lines = expansion.get(page.path)
@@ -265,7 +275,7 @@ def build_live_html(request: ReviewRequest, session: SessionListener, generation
 _MARKERS = {"add": "+", "del": "-", "ctx": " "}
 
 
-def _addressable_rows(
+def addressable_rows(
     pages: list[Page], expansion: dict[str, list[str]]
 ) -> dict[str, list[DiffLine]]:
     """Per path, the rows of its diff a comment can address, in display order.
@@ -318,10 +328,10 @@ def _valid_quote(raw: object, rows: list[DiffLine]) -> str | None:
     return raw.strip() if needle in haystack and needle != haystack else None
 
 
-def _extract_comments(
+def extract_comments(
     pages: list[Page], raw: object, expansion: dict[str, list[str]]
 ) -> list[dict[str, Any]]:
-    rows_by_path = _addressable_rows(pages, expansion)
+    rows_by_path = addressable_rows(pages, expansion)
     index_by_path = {
         path: {(row.side, row.line): i for i, row in enumerate(rows)}
         for path, rows in rows_by_path.items()
@@ -382,7 +392,7 @@ def _extract_page_notes(pages: list[Page], raw: object) -> list[dict[str, str]]:
     return notes
 
 
-def _result_from_submission(
+def result_from_submission(
     pages: list[Page],
     submission: Submission | None,
     progress: dict[str, Any] | None,
@@ -395,7 +405,7 @@ def _result_from_submission(
     `ReviewRequest.expansion()`: the hidden lines a comment may also address.
     """
     data = submission.data if submission is not None else (progress or {})
-    comments = _extract_comments(pages, data.get("comments"), expansion or {})
+    comments = extract_comments(pages, data.get("comments"), expansion or {})
     note = data.get("overall_note")
     result: dict[str, Any] = {
         "comments": comments,
@@ -434,7 +444,7 @@ def _run_review_reusing_tab(
     if submission is not None and submission.kind == "live_start":
         return {LIVE_START: generation}
     session.end_question()
-    return _result_from_submission(
+    return result_from_submission(
         request.pages, submission, session.progress(), request.expansion()
     )
 
@@ -459,7 +469,7 @@ def _run_review_with_new_tab(request: ReviewRequest) -> dict[str, Any]:
             return not_delivered()
         progress = listener.progress()
 
-    return _result_from_submission(request.pages, submission, progress, request.expansion())
+    return result_from_submission(request.pages, submission, progress, request.expansion())
 
 
 def run_review(

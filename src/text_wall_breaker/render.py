@@ -26,7 +26,7 @@ from markdown_it.renderer import RendererHTML
 from markdown_it.token import Token
 from markdown_it.utils import EnvType, OptionsDict
 
-from .markdown import _image_src
+from .markdown import image_src
 
 __all__ = ["Block", "is_renderable", "rendered_view", "split_blocks"]
 
@@ -100,7 +100,7 @@ def _tidy_inline(token: Token, path: str, root: str | None, asset_base_url: str 
                 child.type, child.tag, child.attrs = "text", "", {}
                 child.content = child.content or ""
             else:
-                child.attrSet("src", _image_src(src, asset_base_url))
+                child.attrSet("src", image_src(src, asset_base_url))
         elif child.type == "link_open":
             href = str(child.attrGet("href") or "")
             if href.lower().startswith(_LINK_SCHEMES):
@@ -213,7 +213,7 @@ class _Cleaner(HTMLParser):
             elif name == "src" and tag == "img":
                 src = _local_image(value, self._path, self._root)
                 if src is not None:
-                    kept.append(f'src="{escape(_image_src(src, self._asset), quote=True)}"')
+                    kept.append(f'src="{escape(image_src(src, self._asset), quote=True)}"')
         if tag == "img" and not any(a.startswith("src=") for a in kept):
             alt = dict(attrs).get("alt") or ""
             self.out.append(escape(alt))  # a remote or outside image shows as its alt text
