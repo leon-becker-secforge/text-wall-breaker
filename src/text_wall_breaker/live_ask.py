@@ -17,7 +17,15 @@ from collections.abc import Callable
 from typing import Any
 
 from .listener import ABANDON_SECONDS, Submission
-from .live_common import POLL_SECONDS, LiveCall, LiveError, Reply, Tab, no_such_session
+from .live_common import (
+    POLL_SECONDS,
+    LiveCall,
+    LiveError,
+    Reaper,
+    Reply,
+    Tab,
+    no_such_session,
+)
 from .markdown import render_markdown
 from .session import detach_shared_session, forget_live, register_live
 
@@ -40,7 +48,7 @@ Refresher = Callable[
 ]
 
 
-class LiveAsk:
+class LiveAsk(Reaper):
     """State of one live `ask`, shared by the page's requests and the agent's calls."""
 
     def __init__(
@@ -78,6 +86,7 @@ class LiveAsk:
         session.live = self
         detach_shared_session(session)
         register_live(self.id, self)
+        self._start_reaper()
 
     # ---- the page ----
 

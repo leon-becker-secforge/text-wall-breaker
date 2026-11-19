@@ -210,6 +210,25 @@ def test_a_closed_tab_ends_the_session_as_abandoned(monkeypatch):
     assert session.closed
 
 
+def test_a_session_whose_tab_is_gone_frees_its_listener_without_a_call():
+    session, live = make()
+    assert not live._reap()
+    assert not session.closed
+    session.idle = 10_000
+    assert live._reap()
+    assert session.closed
+    # The agent's next call still learns how the session ended.
+    assert call(live)["abandoned"] is True
+
+
+def test_a_session_with_a_call_in_progress_is_not_reaped():
+    session, live = make()
+    session.idle = 10_000
+    live._busy = True
+    assert not live._reap()
+    assert not session.closed
+
+
 def _lock_is_free(lock) -> bool:
     """Whether another thread could take `lock` right now."""
     free: list[bool] = []

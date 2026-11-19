@@ -24,7 +24,15 @@ from typing import Any
 
 from .diff import DiffLine, parse_unified_diff
 from .listener import ABANDON_SECONDS, Submission
-from .live_common import POLL_SECONDS, LiveCall, LiveError, Reply, Tab, no_such_session
+from .live_common import (
+    POLL_SECONDS,
+    LiveCall,
+    LiveError,
+    Reaper,
+    Reply,
+    Tab,
+    no_such_session,
+)
 from .markdown import render_markdown
 from .review import (
     InvalidReview,
@@ -104,7 +112,7 @@ def _nearest(rows: list[DiffLine], side: str, line: int) -> dict[str, Any] | Non
     return {"side": row.side, "line": row.line}
 
 
-class LiveSession:
+class LiveSession(Reaper):
     """State of one live session, shared by the page's requests and the agent's calls."""
 
     def __init__(
@@ -149,6 +157,7 @@ class LiveSession:
         session.live = self
         detach_shared_session(session)
         register_live(self.id, self)
+        self._start_reaper()
 
     # ---- the page ----
 
