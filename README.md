@@ -41,9 +41,10 @@ Three more documents cover what applies to several tools and to the project:
 
 ## Installing
 
-It needs Python 3.12.12 or 3.13.6 or newer: older patch releases have CVE-2025-6069, a
-quadratic slowdown in the HTML parser that renders `review`'s AsciiDoc view. `review` with
-`repo` needs git 2.40 or newer.
+Both ways below run it with [uv](https://docs.astral.sh/uv/), which also fetches a fitting
+Python: 3.13.6 or newer, since older releases have CVE-2025-6069 (a slowdown in the HTML
+parser that renders `review`'s AsciiDoc view). A checkout runs on the version in
+`.python-version`, the newest stable one. `review` with `repo` needs git 2.40 or newer.
 
 Register it with Claude Code, from a checkout of this repository:
 

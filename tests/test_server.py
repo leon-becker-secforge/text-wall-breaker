@@ -288,20 +288,6 @@ def test_an_interrupted_wait_on_the_shared_tab_ends_the_wait():
         session.close()
 
 
-@pytest.mark.parametrize(
-    ("version", "warns"),
-    [
-        ((3, 12, 3), True),
-        ((3, 12, 12), False),
-        ((3, 13, 4), True),
-        ((3, 13, 6), False),
-        ((3, 14, 0), False),
-    ],
-)
-def test_a_python_with_the_html_parser_cve_is_warned_about(version, warns):
-    assert (server_module.python_warning(version) is not None) is warns
-
-
 def test_a_failing_progress_report_does_not_lose_the_result(monkeypatch):
     monkeypatch.setattr(server_module, "KEEPALIVE_SECONDS", 0.02)
 

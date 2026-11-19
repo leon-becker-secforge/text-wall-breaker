@@ -85,8 +85,9 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 - Every page carries a Content-Security-Policy with a per-page script nonce and a
   `no-referrer` policy, and loads mermaid with subresource integrity. `ask` and `show` no
   longer load remote images, which told their server the page was opened.
-- The README names the Python patch releases that fix CVE-2025-6069 (3.12.12, 3.13.6), and
-  the server warns at start when it runs on an older one.
+- It needs Python 3.13.6 or newer (was 3.12): older releases have CVE-2025-6069 in the HTML
+  parser `review`'s AsciiDoc view uses. A checkout runs on Python 3.15 (`.python-version`);
+  uv fetches it.
 - A page may send requests only to its own listener (`connect-src`), served pages are not
   cached (`Cache-Control: no-store`), and the token is redacted from tracebacks and
   percent-encoded URLs in the log too.
