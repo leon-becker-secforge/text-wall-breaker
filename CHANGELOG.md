@@ -24,6 +24,13 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   from ever counting as abandoned.
 - A request without the session token no longer counts as page activity, so it cannot keep
   an abandoned call alive.
+- `GET /asset` serves only images a rendered page references, refuses symlinks, and sends
+  `nosniff`, a sandbox CSP and no CORS header. It used to serve any image-named file,
+  including a symlink to any file.
+
+### Fixed
+
+- A `file://` image whose path is percent-encoded (`a%20b.png`) loads in a reused tab.
 
 ## [0.21.0] - 2026-11-17
 

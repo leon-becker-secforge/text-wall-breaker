@@ -6,11 +6,14 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
+from urllib.parse import quote
 
 import pytest
 
 from text_wall_breaker import listener as listener_module
 from text_wall_breaker.listener import LoopbackListener, SessionListener, Submission
+from text_wall_breaker.markdown import render_markdown
 
 
 def post(port: int, query: str, payload: object, content_type: str = "text/plain"):
@@ -294,3 +297,41 @@ def test_a_bad_content_length_gets_an_error_status(session, length, status):
         conn.sendall(f"POST /submit?t=tok HTTP/1.0\r\nContent-Length: {length}\r\n\r\n".encode())
         conn.settimeout(3)
         assert conn.recv(64).split(b" ")[1] == str(status).encode()
+
+
+_PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
+
+
+def _get_asset(session: SessionListener, path: Path):
+    url = f"{session.asset_base_url}&path={quote(str(path), safe='')}"
+    try:
+        return urllib.request.urlopen(url, timeout=5)  # noqa: S310 — loopback asset route
+    except urllib.error.HTTPError as error:
+        return error
+
+
+def test_asset_serves_an_image_a_page_references(session, tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(_PNG)
+    render_markdown(f"![s]({image})", asset_base_url=session.asset_base_url)
+    response = _get_asset(session, image)
+    assert response.status == 200
+    assert response.read() == _PNG
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "sandbox" in response.headers["Content-Security-Policy"]
+    assert response.headers["Access-Control-Allow-Origin"] is None
+
+
+def test_asset_refuses_an_image_no_page_references(session, tmp_path):
+    image = tmp_path / "other.png"
+    image.write_bytes(_PNG)
+    assert _get_asset(session, image).status == 404
+
+
+def test_asset_refuses_a_symlink(session, tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("secret")
+    link = tmp_path / "innocent.png"
+    link.symlink_to(secret)
+    render_markdown(f"![s]({link})", asset_base_url=session.asset_base_url)
+    assert _get_asset(session, link).status == 404

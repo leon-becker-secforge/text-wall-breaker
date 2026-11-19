@@ -42,11 +42,11 @@ from __future__ import annotations
 import html
 import re
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, unquote, urlsplit
 
 from text_wall_breaker.highlight import highlight_code
 
-__all__ = ["render_inline", "render_markdown"]
+__all__ = ["is_rendered_asset", "render_inline", "render_markdown"]
 
 # Schemes a link or image may use. `file:` is here because the page is opened from disk
 # and images are referenced as file:// absolute paths (that is the only image mechanism
@@ -179,8 +179,20 @@ def _image_src(url: str, asset_base_url: str | None) -> str:
     ordinary `file://`-opened page — where the raw URL already works.
     """
     if asset_base_url is not None and url.lower().startswith("file://"):
-        return f"{asset_base_url}&path={quote(url[len('file://') :], safe='')}"
+        path = unquote(urlsplit(url).path)
+        _rendered_assets.add(path)
+        return f"{asset_base_url}&path={quote(path, safe='')}"
     return url
+
+
+# Every path `_image_src` put into a page as an `/asset` URL. `GET /asset` serves only
+# these, so the token alone does not open every image-named file on disk.
+_rendered_assets: set[str] = set()
+
+
+def is_rendered_asset(path: str) -> bool:
+    """Whether a page this process rendered references `path` through `/asset`."""
+    return path in _rendered_assets
 
 
 def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:

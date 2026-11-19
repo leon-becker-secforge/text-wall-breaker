@@ -158,6 +158,11 @@ def test_image_bare_path_goes_through_asset_route():
     assert out == '<img src="http://h/asset?t=k&amp;path=%2Ftmp%2Fx.png" alt="a">'
 
 
+def test_image_file_url_is_percent_decoded_for_the_asset_route():
+    out = render_inline("![a](file:///tmp/a%20b.png)", asset_base_url="http://h/asset?t=k")
+    assert out == '<img src="http://h/asset?t=k&amp;path=%2Ftmp%2Fa%20b.png" alt="a">'
+
+
 def test_image_relative_and_link_paths_stay_text():
     assert render_inline("![a](x.png)") == "![a](x.png)"
     assert render_inline("![a](//evil.test/x.png)") == "![a](//evil.test/x.png)"

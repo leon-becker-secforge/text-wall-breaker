@@ -21,7 +21,9 @@ when `xdg-open` returned.
 from __future__ import annotations
 
 import json
+import os
 import secrets
+import stat
 import threading
 import time
 from collections.abc import Callable
@@ -32,6 +34,7 @@ from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 
 from .log import logger
+from .markdown import is_rendered_asset
 from .page import save_theme
 
 __all__ = ["LoopbackListener", "SessionListener", "Submission"]
@@ -49,6 +52,13 @@ _ASSET_CONTENT_TYPES = {
     ".webp": "image/webp",
     ".svg": "image/svg+xml",
 }
+
+# An SVG opened on its own would run its scripts on the page's origin, which holds the
+# token; sandboxed with no sources, it renders as an image and nothing more.
+_ASSET_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'"),
+)
 
 # Comfortably above a full-resolution screenshot, the actual use case this exists for;
 # not so high that a bad path turns the route into a memory hog.
@@ -207,10 +217,13 @@ class _BaseHandler(BaseHTTPRequestHandler):
         content_type: str = "application/json",
         *,
         cors: bool = True,
+        headers: tuple[tuple[str, str], ...] = (),
     ) -> None:
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
+        for name, value in headers:
+            self.send_header(name, value)
         if cors:
             # Without an explicit allow-origin the browser treats the response as opaque
             # and the page's `res.ok` check can never see it — so a rejected token would
@@ -368,7 +381,13 @@ class _SessionHandler(_BaseHandler):
         if parts.path == "/asset":
             path = parse_qs(parts.query).get("path", [""])[0]
             status, body, content_type = session.read_asset(path)
-            self._respond(status, body, content_type=content_type or "application/octet-stream")
+            self._respond(
+                status,
+                body,
+                content_type=content_type or "application/octet-stream",
+                cors=False,
+                headers=_ASSET_HEADERS,
+            )
             return
         self._respond(404)
 
@@ -539,25 +558,28 @@ class SessionListener:
 
         `path` is the absolute filesystem path a `file://` image URL held (see
         `markdown._image_src`) — this is what stands in for the browser loading it
-        directly, which it refuses to do from an `http://` document. Restricted to a
-        closed set of image extensions and a size cap (see `_ASSET_CONTENT_TYPES`/
-        `_MAX_ASSET_BYTES`): the token gates who can reach this route at all, the same
-        as `/submit`, but that's no reason to let it double as an arbitrary local file
-        read.
+        directly, which it refuses to do from an `http://` document. Restricted to paths
+        a rendered page references (`markdown.is_rendered_asset`), a closed set of image
+        extensions, regular files reached without a symlink, and a size cap: the token
+        gates who can reach this route at all, but that's no reason to let it double as
+        an arbitrary local file read.
         """
         candidate = Path(path)
         content_type = _ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
-        if content_type is None or not candidate.is_absolute():
+        if content_type is None or not candidate.is_absolute() or not is_rendered_asset(path):
             return 404, b"", ""
         try:
-            if not candidate.is_file():
-                return 404, b"", ""
-            if candidate.stat().st_size > _MAX_ASSET_BYTES:
-                return 413, b"", ""
-            data = candidate.read_bytes()
+            # O_NOFOLLOW: a symlink named like an image could point at any file.
+            fd = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW)
         except OSError:
             return 404, b"", ""
-        return 200, data, content_type
+        with os.fdopen(fd, "rb") as file:
+            info = os.fstat(file.fileno())
+            if not stat.S_ISREG(info.st_mode):
+                return 404, b"", ""
+            if info.st_size > _MAX_ASSET_BYTES:
+                return 413, b"", ""
+            return 200, file.read(), content_type
 
     def current_page(self) -> tuple[bytes, int]:
         with self._state_lock:
