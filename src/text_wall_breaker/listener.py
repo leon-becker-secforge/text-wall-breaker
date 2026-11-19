@@ -26,7 +26,8 @@ import secrets
 import stat
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -87,6 +88,29 @@ ABANDON_SECONDS = 180.0
 # /status. One that hasn't after this long was closed (or is an unanswered page that
 # stopped polling), so a new tab is opened instead of publishing into nothing.
 REUSE_GRACE_SECONDS = 4.0
+
+
+_call = threading.local()
+
+
+@contextmanager
+def cancellable(event: threading.Event) -> Generator[None]:
+    """Let the waits below, on this thread, end early once `event` is set.
+
+    Thread-local rather than a parameter: the server sets it around a whole tool call,
+    and the wait sits several calls down in ask, review or show.
+    """
+    previous = getattr(_call, "cancel", None)
+    _call.cancel = event
+    try:
+        yield
+    finally:
+        _call.cancel = previous
+
+
+def _cancelled() -> bool:
+    event: threading.Event | None = getattr(_call, "cancel", None)
+    return event is not None and event.is_set()
 
 
 @dataclass(frozen=True)
@@ -323,7 +347,7 @@ class LoopbackListener:
         started = time.monotonic()
         while self._submission is None:
             now = time.monotonic()
-            if now > self._last_activity + ABANDON_SECONDS:
+            if now > self._last_activity + ABANDON_SECONDS or _cancelled():
                 return None
             if not self._seen and now > started + DELIVERY_SECONDS:
                 logger.warning(
@@ -715,7 +739,7 @@ class SessionListener:
                     return self._submission
             with self._state_lock:
                 idle_for = time.monotonic() - self._last_activity
-            if idle_for > ABANDON_SECONDS:
+            if idle_for > ABANDON_SECONDS or _cancelled():
                 return None
 
     def close(self) -> None:

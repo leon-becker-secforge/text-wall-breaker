@@ -30,6 +30,11 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   while it waits already was.
 - A live session closes its listener outside its own lock, so a request arriving as the
   session ends cannot deadlock the call.
+- An interrupted `ask`, `review` or `show` call (Esc in Claude Code) ends its wait at once
+  and frees its tab. It used to keep waiting until the user answered, and later calls
+  opened extra tabs meanwhile.
+- A failing progress notification no longer discards the user's answer; the call only stops
+  sending heartbeats.
 
 ### Security
 

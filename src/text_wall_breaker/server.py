@@ -40,7 +40,7 @@ from .descriptions import (
     pp_review_prompt,
 )
 from .gitdiff import GitDiffError, pages_from_git
-from .listener import SessionListener
+from .listener import SessionListener, cancellable
 from .live import ATTACH_INSTRUCTION, LiveSession, RepoSource
 from .live_common import LiveCall, LiveError, Reply, no_such_session
 from .log import configure as configure_logging
@@ -95,17 +95,22 @@ async def _blocking[T](
     Off the loop because a call owns a socket and a browser tab until the user answers,
     and a second call must be able to open its own tab meanwhile.
 
-    With `cancel`, an interrupted call (the client abandons it) sets the event and returns
-    at once; `func` watches the event and ends its wait, as a live session must or the
-    abandoned wait would keep the session locked against the next call.
+    An interrupted call (the client abandons it) sets `cancel` and returns at once. The
+    page waits in `listener` see the event through `cancellable` and end; a live session
+    gets it as its own argument. Either way the abandoned wait lets go of its tab and
+    socket instead of holding them until the user answers.
     """
+    event = cancel if cancel is not None else threading.Event()
+
+    def body() -> T:
+        with cancellable(event):
+            return func()
 
     async def run() -> T:
         try:
-            return await anyio.to_thread.run_sync(func, abandon_on_cancel=cancel is not None)
+            return await anyio.to_thread.run_sync(body, abandon_on_cancel=True)
         except anyio.get_cancelled_exc_class():
-            if cancel is not None:
-                cancel.set()
+            event.set()
             raise
 
     if ctx is None:
@@ -116,7 +121,12 @@ async def _blocking[T](
         while True:
             await anyio.sleep(KEEPALIVE_SECONDS)
             beats += 1
-            await ctx.report_progress(beats, message="waiting for the user")
+            try:
+                await ctx.report_progress(beats, message="waiting for the user")
+            except Exception:
+                # The answer still matters more than the heartbeat that failed.
+                logger.exception("progress report failed; no more heartbeats for this call")
+                return
 
     try:
         async with anyio.create_task_group() as group:

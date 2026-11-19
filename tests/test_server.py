@@ -10,6 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import GetPromptResult, TextContent
 from test_live import make as make_live
 
+from text_wall_breaker.listener import LoopbackListener, SessionListener
 from text_wall_breaker.server import (
     MAX_TOOL_DESCRIPTION_CHARS,
     accent_config_problem,
@@ -244,6 +245,60 @@ def test_an_interrupted_call_sets_its_cancel_event_and_returns_at_once():
     assert anyio.run(scenario) is True
     assert cancel.is_set()
     assert finished.wait(2)
+
+
+def test_an_interrupted_wait_on_a_page_ends_the_wait():
+    # ask, review and show pass no event of their own; an interruption must still end the
+    # listener's wait, or the call holds its tab and socket until the user answers.
+    finished = threading.Event()
+
+    def wait():
+        with LoopbackListener("tok") as listener:
+            listener.mark_seen()
+            listener.wait()
+        finished.set()
+
+    async def scenario():
+        with anyio.move_on_after(0.2):
+            await server_module._blocking(None, wait)
+
+    started = time.monotonic()
+    anyio.run(scenario)
+    assert finished.wait(2)
+    assert time.monotonic() - started < 2
+
+
+def test_an_interrupted_wait_on_the_shared_tab_ends_the_wait():
+    finished = threading.Event()
+    session = SessionListener("tok")
+    session.publish(lambda generation: "<html>")
+
+    def wait():
+        session.wait_for_answer()
+        finished.set()
+
+    async def scenario():
+        with anyio.move_on_after(0.2):
+            await server_module._blocking(None, wait)
+
+    try:
+        anyio.run(scenario)
+        assert finished.wait(2)
+    finally:
+        session.close()
+
+
+def test_a_failing_progress_report_does_not_lose_the_result(monkeypatch):
+    monkeypatch.setattr(server_module, "KEEPALIVE_SECONDS", 0.02)
+
+    class Broken:
+        async def report_progress(self, *_args: object, **_kwargs: object) -> None:
+            raise RuntimeError("stdout closed")
+
+    async def main():
+        return await server_module._blocking(Broken(), lambda: time.sleep(0.2) or "answer")
+
+    assert anyio.run(main) == "answer"
 
 
 def test_an_interrupted_live_call_does_not_lock_the_session():
