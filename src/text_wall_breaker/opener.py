@@ -159,8 +159,13 @@ def is_wsl() -> bool:
 
 
 def _parse_override(value: str) -> Opener | str:
+    windows = sys.platform == "win32"
     try:
-        argv = shlex.split(value, posix=sys.platform != "win32")
+        # Non-POSIX splitting keeps backslashes in Windows paths, and also the quotes
+        # around a token, which a path must not carry.
+        argv = [
+            _unquote(token) if windows else token for token in shlex.split(value, posix=not windows)
+        ]
     except ValueError as exc:
         return f"{OPENER_ENV_VAR} is invalid: {exc}"
     if not argv:
@@ -169,6 +174,12 @@ def _parse_override(value: str) -> Opener | str:
     if executable is None:
         return f"{OPENER_ENV_VAR} names {argv[0]!r}, which is not on PATH"
     return Opener(name=argv[0], argv=(executable, *argv[1:]))
+
+
+def _unquote(token: str) -> str:
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in "\"'":
+        return token[1:-1]
+    return token
 
 
 def _on_path(program: str) -> Opener | None:

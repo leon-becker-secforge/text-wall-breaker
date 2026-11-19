@@ -27,6 +27,7 @@ import sys
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 
 WAIT_SECONDS = 30.0  # text-wall-breaker's DELIVERY_SECONDS
 OPEN_TIMEOUT = 20.0  # text-wall-breaker's _OPEN_TIMEOUT_SECONDS
@@ -46,7 +47,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def log_message(self, *_args: object) -> None:
+    def log_message(self, format: str, *args: object) -> None:
         pass
 
 
@@ -80,14 +81,19 @@ def environment() -> None:
         print(f"window manager: {run(['wmctrl', '-m']).splitlines()[0]}")
     else:
         print("window manager: wmctrl not installed")
-    print(f"webbrowser default: {webbrowser.get().__class__.__name__}")
+    try:
+        print(f"webbrowser default: {webbrowser.get().__class__.__name__}")
+    except webbrowser.Error as exc:
+        print(f"webbrowser default: none ({exc})")
     if shutil.which("pgrep"):
         names = "firefox|chromium|chrome|brave|librewolf"
         print(f"browser processes: {run(['pgrep', '-a', '-i', '-x', names])}")
     print()
 
 
-def attempt(label: str, opener, path: str, base: str, ask: bool) -> dict[str, object]:
+def attempt(
+    label: str, opener: Callable[[str], object], path: str, base: str, ask: bool
+) -> dict[str, object]:
     start = time.monotonic()
     outcome = ""
     try:
@@ -99,7 +105,7 @@ def attempt(label: str, opener, path: str, base: str, ask: bool) -> dict[str, ob
     deadline = start + WAIT_SECONDS
     while time.monotonic() < deadline:
         with lock:
-            hit = [t for t, p, _ in requests if p == path]
+            hit = [t for t, p, _ in requests if p == path and t >= start]
         if hit:
             seen_at = hit[0] - start
             break
@@ -131,7 +137,7 @@ def xdg_open(url: str) -> str:
     )
 
 
-def custom(command: str):
+def custom(command: str) -> Callable[[str], str]:
     def open_with(url: str) -> str:
         done = subprocess.run(
             [*shlex.split(command), url], capture_output=True, text=True, timeout=OPEN_TIMEOUT
@@ -155,7 +161,7 @@ def main() -> int:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     base = f"http://127.0.0.1:{server.server_address[1]}"
 
-    openers = [("webbrowser.open", webbrowser.open)]
+    openers: list[tuple[str, Callable[[str], object]]] = [("webbrowser.open", webbrowser.open)]
     if shutil.which("xdg-open"):
         openers.append(("xdg-open", xdg_open))
     openers += [(f"cmd: {command}", custom(command)) for command in args.cmd]
@@ -164,12 +170,13 @@ def main() -> int:
     print("Watch the screen. Close each test tab when it appears.\n")
     rows = []
     for round_number in range(1, args.repeat + 1):
-        for label, opener in openers:
+        # One path per round and opener: two --cmd openers must not answer for each other.
+        for index, (label, opener) in enumerate(openers):
             rows.append(
                 attempt(
                     f"round {round_number} {label}",
                     opener,
-                    f"/t{round_number}-{label.split()[0].replace(':', '')}",
+                    f"/t{round_number}-{index}",
                     base,
                     not args.no_ask,
                 )

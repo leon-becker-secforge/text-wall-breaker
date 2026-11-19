@@ -45,6 +45,14 @@ def test_override_wins_and_skips_the_display_check(monkeypatch):
     assert find_opener() == Opener(name="firefox", argv=("/bin/firefox", "--new-tab"))
 
 
+def test_a_quoted_windows_override_path_loses_its_quotes(monkeypatch):
+    monkeypatch.setattr("sys.platform", "win32")
+    exe = r"C:\Program Files\Mozilla Firefox\firefox.exe"
+    monkeypatch.setattr("shutil.which", lambda name: name if name == exe else None)
+    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", f'"{exe}" -new-tab')
+    assert find_opener() == Opener(name=exe, argv=(exe, "-new-tab"))
+
+
 def test_override_appends_the_target_last(monkeypatch):
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
     monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", "firefox --new-tab")

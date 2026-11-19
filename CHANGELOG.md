@@ -41,6 +41,9 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   page's file list and in the comments' attribution.
 - `review` with `repo` set to a subdirectory of a work tree keeps context expansion and
   rendered-view images: file paths are resolved from the work tree's top.
+- On Windows, a quoted path in `TEXT_WALL_BREAKER_OPENER`
+  (`"C:\Program Files\...\firefox.exe" -new-tab`) is found instead of reported as not on
+  `PATH`.
 - A live session whose tab is gone closes its listener within about 30 seconds of the
   abandonment window, even if the agent never calls `live` again; the next call still
   returns the abandoned result.

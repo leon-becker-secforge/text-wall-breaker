@@ -9,8 +9,8 @@
 
 A section starts at a line matching "## [<version>]" and runs to the next "## "
 heading, or the end of the file. Exits 1 with a message on stderr if the file has no
-such section — the release workflow uses that to fail loudly on a forgotten changelog
-entry rather than publish a release with empty notes.
+such section, or only an empty one — the release workflow uses that to fail loudly on a
+forgotten changelog entry rather than publish a release with empty notes.
 """
 
 from __future__ import annotations
@@ -45,6 +45,9 @@ def main(
     section = extract(text, version)
     if section is None:
         print(f"::error::No '## [{version}]' section found in {changelog}", file=sys.stderr)
+        raise typer.Exit(1)
+    if not section.strip():
+        print(f"::error::The '## [{version}]' section in {changelog} is empty", file=sys.stderr)
         raise typer.Exit(1)
     sys.stdout.write(section)
 
