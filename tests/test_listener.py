@@ -402,6 +402,28 @@ def test_asset_refuses_an_image_no_page_references(session, tmp_path):
     assert _get_asset(session, image).status == 404
 
 
+def test_asset_refuses_an_image_only_another_sessions_page_references(session, tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(_PNG)
+    other = SessionListener("other")
+    try:
+        render_markdown(f"![s]({image})", asset_base_url=other.asset_base_url)
+        assert _get_asset(session, image).status == 404
+    finally:
+        other.close()
+
+
+def test_asset_refuses_an_image_of_a_replaced_page(session, tmp_path):
+    image = tmp_path / "shot.png"
+    image.write_bytes(_PNG)
+    session.publish(
+        lambda g: render_markdown(f"![s]({image})", asset_base_url=session.asset_base_url)
+    )
+    assert _get_asset(session, image).status == 200
+    session.publish(lambda g: "<p>next question</p>")
+    assert _get_asset(session, image).status == 404
+
+
 def test_asset_refuses_a_symlink(session, tmp_path):
     secret = tmp_path / "secret.txt"
     secret.write_text("secret")

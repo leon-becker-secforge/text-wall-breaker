@@ -36,7 +36,7 @@ from typing import Any, Protocol, cast
 from urllib.parse import parse_qs, urlsplit
 
 from .log import logger
-from .markdown import is_rendered_asset
+from .markdown import forget_rendered_assets, is_rendered_asset
 from .page import save_theme
 
 __all__ = ["LoopbackListener", "SessionListener", "Submission"]
@@ -602,7 +602,11 @@ class SessionListener:
         """
         candidate = Path(path)
         content_type = _ASSET_CONTENT_TYPES.get(candidate.suffix.lower())
-        if content_type is None or not candidate.is_absolute() or not is_rendered_asset(path):
+        if (
+            content_type is None
+            or not candidate.is_absolute()
+            or not is_rendered_asset(self.asset_base_url, path)
+        ):
             return 404, b"", ""
         try:
             # O_NOFOLLOW: a symlink named like an image could point at any file.
@@ -683,6 +687,8 @@ class SessionListener:
         with self._publish_lock:
             with self._state_lock:
                 generation = self._generation + 1
+            # The tab is about to reload: only the new page's images stay servable.
+            forget_rendered_assets(self.asset_base_url)
             page = build_html(generation).encode("utf-8")
             self._swap_in(generation, page)
         self.note_activity()
@@ -768,3 +774,4 @@ class SessionListener:
     def close(self) -> None:
         self._httpd.shutdown()
         self._httpd.server_close()
+        forget_rendered_assets(self.asset_base_url)

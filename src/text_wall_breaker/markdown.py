@@ -41,12 +41,13 @@ from __future__ import annotations
 
 import html
 import re
+import threading
 from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 from text_wall_breaker.highlight import highlight_code
 
-__all__ = ["is_rendered_asset", "render_inline", "render_markdown"]
+__all__ = ["forget_rendered_assets", "is_rendered_asset", "render_inline", "render_markdown"]
 
 # Schemes a link or image may use. `file:` is here because the page is opened from disk
 # and images are referenced as file:// absolute paths (that is the only image mechanism
@@ -184,19 +185,29 @@ def _image_src(url: str, asset_base_url: str | None) -> str:
     """
     if asset_base_url is not None and url.lower().startswith("file://"):
         path = unquote(urlsplit(url).path)
-        _rendered_assets.add(path)
+        with _rendered_lock:
+            _rendered_assets.setdefault(asset_base_url, set()).add(path)
         return f"{asset_base_url}&path={quote(path, safe='')}"
     return url
 
 
-# Every path `_image_src` put into a page as an `/asset` URL. `GET /asset` serves only
-# these, so the token alone does not open every image-named file on disk.
-_rendered_assets: set[str] = set()
+# Per `/asset` route (one per session, its token in the URL), the paths `_image_src` put
+# into that session's pages. `GET /asset` serves only these, so the token alone does not
+# open every image-named file on disk, nor one only another session's page showed.
+_rendered_assets: dict[str, set[str]] = {}
+_rendered_lock = threading.Lock()
 
 
-def is_rendered_asset(path: str) -> bool:
-    """Whether a page this process rendered references `path` through `/asset`."""
-    return path in _rendered_assets
+def is_rendered_asset(asset_base_url: str, path: str) -> bool:
+    """Whether a page rendered for `asset_base_url` references `path`."""
+    with _rendered_lock:
+        return path in _rendered_assets.get(asset_base_url, ())
+
+
+def forget_rendered_assets(asset_base_url: str) -> None:
+    """Drop what pages rendered for `asset_base_url` referenced: they are not shown any more."""
+    with _rendered_lock:
+        _rendered_assets.pop(asset_base_url, None)
 
 
 def _render_match(match: re.Match[str], asset_base_url: str | None) -> str:
