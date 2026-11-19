@@ -12,7 +12,6 @@ only `Submission.kind` tells them apart.
 
 from __future__ import annotations
 
-import os
 import secrets
 import shutil
 import tempfile
@@ -34,12 +33,10 @@ from .diff import (
 )
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
-    ACCENT_ENV_VAR,
-    InvalidAccent,
     _asset_base_url,
     build_review_page,
-    parse_accent,
     read_saved_theme,
+    resolve_accent,
 )
 from .render import rendered_view
 from .session import get_shared_session
@@ -194,18 +191,6 @@ class ReviewRequest(BaseModel):
         return found
 
 
-def _resolve_accent() -> str | None:
-    """Same reasoning as `ask._resolve_accent` — see there."""
-    value = os.environ.get(ACCENT_ENV_VAR)
-    if not value:
-        return None
-    try:
-        parse_accent(value)
-    except InvalidAccent:
-        return None
-    return value
-
-
 def _build_html(
     request: ReviewRequest,
     *,
@@ -243,7 +228,7 @@ def _build_html(
         pages=entries,
         header=request.header,
         title=request.title,
-        accent=_resolve_accent(),
+        accent=resolve_accent(),
         theme=read_saved_theme(),
         submit_url=submit_url,
         status_url=status_url,

@@ -31,7 +31,7 @@ from importlib import resources
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .diff import DiffLine, Gap, gaps_of, parse_unified_diff
+from .diff import DiffLine, Gap, gaps_of, parse_unified_diff, rows_with_context
 from .intraline import decorated_rows
 from .markdown import (
     LONG_QUESTION_CHARS,
@@ -52,6 +52,7 @@ __all__ = [
     "build_show_page",
     "parse_accent",
     "read_saved_theme",
+    "resolve_accent",
     "save_theme",
 ]
 
@@ -303,14 +304,6 @@ def _render_review_note(index: int, note: dict[str, object], asset_base_url: str
     )
 
 
-def _context_rows(gap: Gap, lines: list[str]) -> list[DiffLine]:
-    """The unchanged lines of `gap` as context rows, old line numbers from the gap's delta."""
-    return [
-        DiffLine("ctx", lines[n - 1], n + gap.delta, n)
-        for n in range(gap.new_first, gap.new_last + 1)
-    ]
-
-
 def _render_review_row(
     escaped_path: str,
     row: DiffLine,
@@ -475,19 +468,11 @@ def _render_review_diff(
     if blocks:
         # With the file text every line gets a row, so the gap bars have nothing left to
         # hide. Without it (a `pages` source) the rows are the hunks' only.
-        whole: list[DiffLine] = []
-        hunk = -1
-        for row in rows:
-            if row.kind == "hunk":
-                hunk += 1
-                if lines is not None and hunk in gap_before:
-                    whole.extend(_context_rows(gap_before[hunk], lines))
-            else:
-                whole.append(row)
-        if lines is not None:
-            for gap in gaps:
-                if gap.position == "end":
-                    whole.extend(_context_rows(gap, lines))
+        whole = (
+            rows_with_context(diff, lines)
+            if lines is not None
+            else [row for row in rows if row.kind != "hunk"]
+        )
         parts.append(
             _render_review_chunks(
                 escaped_path, whole, blocks, marks, closings, notes, asset_base_url, path
@@ -905,6 +890,24 @@ def parse_accent(value: str) -> tuple[int, int, int]:
     if len(stripped) != 6 or not all(c in "0123456789abcdefABCDEF" for c in stripped):
         raise InvalidAccent(f"{value!r} is not a #rrggbb hex colour")
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
+
+
+def resolve_accent() -> str | None:
+    """Read `TEXT_WALL_BREAKER_ACCENT`, or None if it's unset or unusable.
+
+    `server.main` validates the same variable at startup and refuses to run rather than
+    let a typo pass silently — this is the fallback for the case that check can't cover
+    (a tool run called directly, as the tests do, without going through `main`), where
+    falling back quietly beats failing every page over one bad environment variable.
+    """
+    value = os.environ.get(ACCENT_ENV_VAR)
+    if not value:
+        return None
+    try:
+        parse_accent(value)
+    except InvalidAccent:
+        return None
+    return value
 
 
 def _relative_luminance(rgb: tuple[int, int, int]) -> float:

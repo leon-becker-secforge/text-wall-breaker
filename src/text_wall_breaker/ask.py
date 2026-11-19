@@ -28,7 +28,6 @@ every answer, the stopped-at one included.
 
 from __future__ import annotations
 
-import os
 import re
 import secrets
 import shutil
@@ -50,12 +49,10 @@ from .log import LOG_ENV_VAR, active_log
 from .markdown import LONG_QUESTION_CHARS, first_paragraph
 from .opener import BrowserUnavailable, find_opener
 from .page import (
-    ACCENT_ENV_VAR,
-    InvalidAccent,
     build_multi_page,
     build_page,
-    parse_accent,
     read_saved_theme,
+    resolve_accent,
 )
 from .session import get_shared_session
 
@@ -357,24 +354,6 @@ def open_in_browser(target: Path | str) -> None:
     opener.open(target)
 
 
-def _resolve_accent() -> str | None:
-    """Read `TEXT_WALL_BREAKER_ACCENT`, or None if it's unset or unusable.
-
-    `server.main` validates the same variable at startup and refuses to run rather than
-    let a typo pass silently — this is the fallback for the case that check can't cover
-    (`run_ask` called directly, as the tests do, without going through `main`), where
-    falling back quietly beats crashing every `ask` over one bad environment variable.
-    """
-    value = os.environ.get(ACCENT_ENV_VAR)
-    if not value:
-        return None
-    try:
-        parse_accent(value)
-    except InvalidAccent:
-        return None
-    return value
-
-
 def _check_question_ids(questions: list[Question], taken: set[str] | None = None) -> None:
     """Raise `InvalidAsk` if a question id repeats within `questions` or in `taken`."""
     seen = set(taken or ())
@@ -500,7 +479,7 @@ def _build_html(
             allow_free_text=step.allow_free_text,
             free_text_prefill=step.free_text or "",
             submit_url=submit_url,
-            accent=_resolve_accent(),
+            accent=resolve_accent(),
             theme=read_saved_theme(),
             status_url=status_url,
             generation=generation,
@@ -522,7 +501,7 @@ def _build_html(
         ],
         header=request.header,
         submit_url=submit_url,
-        accent=_resolve_accent(),
+        accent=resolve_accent(),
         theme=read_saved_theme(),
         status_url=status_url,
         generation=generation,

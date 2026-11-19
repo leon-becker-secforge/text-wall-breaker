@@ -19,19 +19,19 @@ from text_wall_breaker.ask import (
     InvalidAsk,
     Option,
     Question,
-    _resolve_accent,
     run_ask,
 )
+from text_wall_breaker.page import resolve_accent
 
 
 def test_resolve_accent_is_none_when_unset(monkeypatch):
     monkeypatch.delenv("TEXT_WALL_BREAKER_ACCENT", raising=False)
-    assert _resolve_accent() is None
+    assert resolve_accent() is None
 
 
 def test_resolve_accent_returns_a_valid_value(monkeypatch):
     monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "#2563eb")
-    assert _resolve_accent() == "#2563eb"
+    assert resolve_accent() == "#2563eb"
 
 
 def test_resolve_accent_falls_back_to_none_when_invalid(monkeypatch):
@@ -39,7 +39,7 @@ def test_resolve_accent_falls_back_to_none_when_invalid(monkeypatch):
     # fallback for run_ask being called directly (as the rest of this file does),
     # bypassing that gate.
     monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "not-a-colour")
-    assert _resolve_accent() is None
+    assert resolve_accent() is None
 
 
 def test_empty_options_without_free_text_is_rejected():

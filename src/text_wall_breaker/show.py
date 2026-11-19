@@ -16,7 +16,6 @@ button ever sends one — Save is pure client-side Blob download and never reach
 
 from __future__ import annotations
 
-import os
 import secrets
 import shutil
 import tempfile
@@ -28,11 +27,9 @@ from pydantic import BaseModel
 from .ask import BrowserUnavailable, not_delivered, open_in_browser
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
-    ACCENT_ENV_VAR,
-    InvalidAccent,
     build_show_page,
-    parse_accent,
     read_saved_theme,
+    resolve_accent,
 )
 from .session import get_shared_session
 
@@ -87,18 +84,6 @@ class ShowRequest(BaseModel):
         return self
 
 
-def _resolve_accent() -> str | None:
-    """Same reasoning as `ask._resolve_accent` — see there."""
-    value = os.environ.get(ACCENT_ENV_VAR)
-    if not value:
-        return None
-    try:
-        parse_accent(value)
-    except InvalidAccent:
-        return None
-    return value
-
-
 def _build_html(
     request: ShowRequest,
     *,
@@ -112,7 +97,7 @@ def _build_html(
         header=request.header,
         footer=request.footer,
         title=request.title,
-        accent=_resolve_accent(),
+        accent=resolve_accent(),
         theme=read_saved_theme(),
         save_button=request.save_button,
         acknowledge_button=request.acknowledge_button,
