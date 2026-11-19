@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .diff import expansion_lines
 
-__all__ = ["MAX_FILE_BYTES", "MAX_TOTAL_BYTES", "GitDiffError", "pages_from_git"]
+__all__ = ["MAX_FILE_BYTES", "MAX_TOTAL_BYTES", "GitDiffError", "pages_from_git", "repo_root"]
 
 _GIT_TIMEOUT_SECONDS = 30
 _FILE_HEADER = re.compile(r"^diff --git ", re.MULTILINE)
@@ -126,6 +126,23 @@ def _expandable_text(directory: Path, revision: str, path: str, diff: str) -> st
     return text if expansion_lines(diff, text) is not None else None
 
 
+def repo_root(repo: str) -> Path:
+    """The top of the work tree `repo` is in: what `git diff` paths are relative to.
+
+    `repo` itself when git cannot say, so a caller still gets a directory to resolve in.
+    """
+    directory = Path(repo).expanduser()
+    command = ["git", "-C", str(directory), *_NO_REPO_COMMANDS, "rev-parse", "--show-toplevel"]
+    try:
+        completed = subprocess.run(  # noqa: S603 - fixed argv, no shell
+            command, capture_output=True, text=True, timeout=_GIT_TIMEOUT_SECONDS, check=False
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return directory
+    top = completed.stdout.strip()
+    return Path(top) if completed.returncode == 0 and top else directory
+
+
 def pages_from_git(
     repo: str, git_range: str | None, paths: list[str] | None, context_lines: int
 ) -> list[dict[str, str]]:
@@ -183,6 +200,8 @@ def pages_from_git(
             raise GitDiffError("git 2.40 or newer is needed to diff without running repo commands")
         raise GitDiffError(f"git diff failed: {completed.stderr.strip()}")
 
+    # Paths in the diff are relative to the top of the work tree, not to `repo`.
+    top = repo_root(repo)
     starts = [match.start() for match in _FILE_HEADER.finditer(completed.stdout)]
     ends = [*starts[1:], len(completed.stdout)][: len(starts)]
     chunks = [completed.stdout[start:end] for start, end in zip(starts, ends, strict=True)]
@@ -195,7 +214,7 @@ def pages_from_git(
             pages.append({"path": path, "diff": chunk.rstrip("\n") + "\n" + _RENAME_ONLY_HUNK})
         elif path is not None and "\n@@ " in chunk:
             page = {"path": path, "diff": chunk}
-            text = _expandable_text(directory, revision, path, chunk)
+            text = _expandable_text(top, revision, path, chunk)
             if text is not None and len(text.encode("utf-8")) <= budget:
                 budget -= len(text.encode("utf-8"))
                 page["text"] = text

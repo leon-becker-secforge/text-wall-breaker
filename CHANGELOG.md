@@ -39,6 +39,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   passthrough no longer hides the rest of the file from `review`'s rendered view.
 - `review` rejects two pages with the same path; the second replaced the first in the
   page's file list and in the comments' attribution.
+- `review` with `repo` set to a subdirectory of a work tree keeps context expansion and
+  rendered-view images: file paths are resolved from the work tree's top.
 
 ### Security
 

@@ -163,6 +163,24 @@ def test_a_file_that_changed_since_the_diff_is_not_expandable(repo, monkeypatch)
     assert all("text" not in page for page in pages)
 
 
+@pytest.mark.parametrize("git_range", [None, "HEAD~1..HEAD"])
+def test_a_repo_subdirectory_still_reads_files_from_the_work_tree_top(tmp_path, git_range):
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "f.txt").write_text("one\ntwo\n")
+    _git(tmp_path, "init", "-q")
+    _git(tmp_path, "add", ".")
+    _git(tmp_path, "commit", "-q", "-m", "base")
+    (tmp_path / "pkg" / "f.txt").write_text("one\nTWO\n")
+    if git_range:
+        _git(tmp_path, "commit", "-q", "-am", "change")
+
+    (page,) = pages_from_git(str(tmp_path / "pkg"), git_range, None, 3)
+
+    assert page["path"] == "pkg/f.txt"
+    assert page["text"] == "one\nTWO\n"
+    assert gitdiff.repo_root(str(tmp_path / "pkg")).resolve() == tmp_path.resolve()
+
+
 @pytest.mark.parametrize("git_range", [None, "HEAD~1..HEAD", "HEAD~1"])
 def test_the_repo_config_runs_no_command(repo, tmp_path_factory, git_range):
     markers = tmp_path_factory.mktemp("markers")

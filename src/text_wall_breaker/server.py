@@ -39,7 +39,7 @@ from .descriptions import (
     SHOW_STATUS_DESCRIPTION,
     pp_review_prompt,
 )
-from .gitdiff import GitDiffError, pages_from_git
+from .gitdiff import GitDiffError, pages_from_git, repo_root
 from .listener import SessionListener, cancellable
 from .live import ATTACH_INSTRUCTION, LiveSession, RepoSource
 from .live_common import LiveCall, LiveError, Reply, no_such_session
@@ -393,6 +393,8 @@ async def review(
             pages, files = await _blocking(ctx, partial(_load_repo, source))
         except GitDiffError as exc:
             raise ToolError(str(exc)) from exc
+        # Page paths are relative to the work tree's top, which `repo` may be below.
+        repo = str(await _blocking(None, partial(repo_root, repo)))
     request = ReviewRequest(
         pages=pages or [],
         notes=notes or [],
