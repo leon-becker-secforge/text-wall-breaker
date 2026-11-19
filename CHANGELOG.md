@@ -35,6 +35,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   opened extra tabs meanwhile.
 - A failing progress notification no longer discards the user's answer; the call only stops
   sending heartbeats.
+- An `<object>` with any element inside, an `<embed>` or an `<object/>` in an AsciiDoc
+  passthrough no longer hides the rest of the file from `review`'s rendered view.
 
 ### Security
 

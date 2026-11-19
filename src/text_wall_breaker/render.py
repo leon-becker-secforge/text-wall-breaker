@@ -177,8 +177,11 @@ class _Cleaner(HTMLParser):
         self._skip = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        # `_skip` counts open dropped elements only: their end tags are the only ones that
+        # bring it back down. `embed` has no end tag, so it drops just itself.
+        if tag in _DROP_WITH_CONTENT and tag != "embed":
+            self._skip += 1
         if self._skip or tag in _DROP_WITH_CONTENT:
-            self._skip += 0 if tag in _VOID else 1
             return
         if tag not in _TAGS:
             return
@@ -208,6 +211,8 @@ class _Cleaner(HTMLParser):
             self._stack.append((tag, mark))
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in _DROP_WITH_CONTENT:
+            return  # `<object/>`: nothing inside to drop, and no end tag will come
         self.handle_starttag(tag, attrs)
 
     def handle_endtag(self, tag: str) -> None:
