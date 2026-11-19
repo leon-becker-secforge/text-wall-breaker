@@ -37,6 +37,24 @@ def test_the_session_token_never_reaches_the_file():
     assert text.count("t=…") == 2
 
 
+def test_the_token_never_reaches_the_file_in_a_traceback_or_encoded():
+    path = log.configure()
+    assert path is not None
+    try:
+        raise RuntimeError(f"cannot open http://127.0.0.1:1/?t={_TOKEN}")
+    except RuntimeError:
+        log.logger.exception("opening failed")
+    log.logger.info("asset path=%s", f"x%26t%3D{_TOKEN}")
+    _flush()
+    assert _TOKEN not in path.read_text()
+
+
+def test_a_bad_format_does_not_raise_at_the_call_site(capsys):
+    log.configure()
+    log.logger.info("two %s %s", "only one")
+    assert "Logging error" in capsys.readouterr().err
+
+
 def test_the_file_and_its_directory_are_private():
     path = log.configure()
     assert path is not None

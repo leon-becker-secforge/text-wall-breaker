@@ -24,8 +24,9 @@ logger = logging.getLogger("text_wall_breaker")
 _MAX_BYTES = 1_000_000
 _BACKUPS = 2
 
-# A page URL carries the session token, which grants its holder the page's answers.
-_TOKEN = re.compile(r"\bt=[0-9a-f]{32}\b")
+# A page URL carries the session token, which grants its holder the page's answers; it
+# may also appear percent-encoded, as in an asset URL's `path` parameter.
+_TOKEN = re.compile(r"t(?:=|%3[dD])[0-9a-f]{32}\b")
 
 _active: Path | None = None
 
@@ -41,11 +42,15 @@ def active_log() -> Path | None:
     return _active
 
 
-class _RedactTokens(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = _TOKEN.sub("t=…", record.getMessage())
-        record.args = None
-        return True
+class _RedactingFormatter(logging.Formatter):
+    """Formats a record, traceback and stack included, with every session token cut out.
+
+    A formatter rather than a filter: it sees the finished text, exception text included,
+    and runs inside the handler, whose error handling covers a bad format string.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        return _TOKEN.sub("t=…", super().format(record))
 
 
 def _rotate(path: Path) -> None:
@@ -90,8 +95,9 @@ def configure() -> Path | None:
         # Logging must never stop the server; stderr is the fallback.
         print(f"text-wall-breaker: cannot write log {path}: {exc}", file=sys.stderr)
         return None
-    handler.setFormatter(logging.Formatter("%(asctime)s pid=%(process)d %(levelname)s %(message)s"))
-    handler.addFilter(_RedactTokens())
+    handler.setFormatter(
+        _RedactingFormatter("%(asctime)s pid=%(process)d %(levelname)s %(message)s")
+    )
     logger.addHandler(handler)
     logger.setLevel(level)
     logger.propagate = False
