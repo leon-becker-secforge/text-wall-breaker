@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
-from support import Reply, fetch
+from support import Reply, fetch, wait_until
 
 from text_wall_breaker import listener as listener_module
 from text_wall_breaker.listener import LoopbackListener, SessionListener, Submission
@@ -340,6 +340,39 @@ def test_an_interrupted_call_stops_waiting_for_its_tab(session, monkeypatch):
     with listener_module.cancellable(cancel):
         assert not session.show_in_tab(generation, lambda url: None)
     assert time.monotonic() - started < 2
+
+
+def test_connections_past_the_cap_are_closed_and_the_tab_still_answered(session, monkeypatch):
+    monkeypatch.setattr(listener_module, "_MAX_CONNECTIONS", 4)
+    capped = SessionListener("tok")
+    try:
+        idle = [_idle_connection(capped.port) for _ in range(4)]
+        extra = _idle_connection(capped.port)
+        extra.settimeout(3)
+        assert extra.recv(1) == b""  # closed straight away, no thread spent on it
+        for conn in idle:
+            conn.close()
+        wait_until(lambda: fetch(f"http://127.0.0.1:{capped.port}/status?t=tok").status == 200)
+        extra.close()
+    finally:
+        capped.close()
+
+
+def test_a_slow_drip_body_is_cut_off(session, monkeypatch):
+    monkeypatch.setattr(listener_module, "_BODY_SECONDS", 1.0)
+    with socket.create_connection(("127.0.0.1", session.port)) as conn:
+        head = f"POST /submit?t=tok HTTP/1.0\r\nHost: 127.0.0.1:{session.port}\r\n"
+        conn.sendall(f"{head}Content-Length: 100\r\n\r\n".encode())
+        conn.settimeout(5)
+        started = time.monotonic()
+        for _ in range(6):
+            time.sleep(0.3)
+            try:
+                conn.sendall(b"x")
+            except OSError:
+                break
+        assert conn.recv(64).split(b" ")[1] == b"408"
+        assert time.monotonic() - started < 4
 
 
 def test_an_idle_connection_does_not_block_the_session(session):

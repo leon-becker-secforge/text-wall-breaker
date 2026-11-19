@@ -70,6 +70,13 @@ _MAX_ASSET_BYTES = 25 * 1024 * 1024
 # submission is a handful of option ids and a free-text box.
 _MAX_BODY_BYTES = 1 << 20
 
+# Connections one listener serves at once. A tab keeps a few open (page, polls, posts);
+# further ones are closed at once rather than given a thread each.
+_MAX_CONNECTIONS = 32
+
+# How long a request body may take to arrive in full.
+_BODY_SECONDS = 10.0
+
 # How long a single handle_request() blocks before the loop re-checks the deadline.
 _POLL_SECONDS = 0.5
 
@@ -199,9 +206,31 @@ def _handle_submit_payload(
 
 class _ThreadedServer(ThreadingHTTPServer):
     # One thread per connection, so a connection that never sends a request (a browser's
-    # speculative preconnect) cannot stall the others or the caller's deadline loop.
+    # speculative preconnect) cannot stall the others or the caller's deadline loop. At
+    # most _MAX_CONNECTIONS at once: a page needs a handful, and a local process opening
+    # thousands must not get a thread for each.
     daemon_threads = True
     block_on_close = False
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._slots = threading.BoundedSemaphore(_MAX_CONNECTIONS)
+
+    def process_request(self, request: Any, client_address: Any) -> None:
+        if not self._slots.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._slots.release()
+            raise
+
+    def process_request_thread(self, request: Any, client_address: Any) -> None:
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._slots.release()
 
 
 class _Server(_ThreadedServer):
@@ -248,7 +277,20 @@ class _BaseHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             self._respond(413, b'{"error":"body too large"}')
             return None
-        return self.rfile.read(length) if length else b""
+        # The socket timeout bounds each read, not the body: a byte every few seconds
+        # would hold the thread for days. The whole body gets _BODY_SECONDS.
+        deadline = time.monotonic() + _BODY_SECONDS
+        body = bytearray()
+        while len(body) < length:
+            if time.monotonic() > deadline:
+                self.close_connection = True
+                self._respond(408, b'{"error":"body too slow"}')
+                return None
+            chunk = self.rfile.read1(length - len(body))
+            if not chunk:
+                break
+            body += chunk
+        return bytes(body)
 
     def _respond(
         self,

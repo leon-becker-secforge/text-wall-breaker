@@ -96,6 +96,12 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   cached (`Cache-Control: no-store`), and the token is redacted from tracebacks and
   percent-encoded URLs in the log too.
 - `GET /asset` serves an image only to the session whose current page references it.
+- A listener serves at most 32 connections at once and closes the rest, and a request body
+  must arrive within 10 s in full: a local process could otherwise tie up a thread per
+  connection, or one for days with a body sent a byte at a time.
+- `review` refuses a `repo` whose work tree (its own `core.worktree`) lies outside it.
+- The CSP nonce is written by the code that writes each script; nothing is added to the
+  finished page by pattern, so a script tag in agent text could never get one.
 - Inline Markdown renders in linear time and nests at most eight spans deep. A long run of
   one marker (backticks, `[`, `_`) took seconds to minutes, and a few thousand `*` crashed
   the call with a `RecursionError`.
