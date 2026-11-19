@@ -18,6 +18,10 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 ### Fixed
 
 - A `file://` image whose path is percent-encoded (`a%20b.png`) loads in a reused tab.
+- An answer from a reused tab is taken only from the page currently published, and only
+  while a call waits on it; anything else gets HTTP 409 and a copy box. A second or stale
+  tab could answer the newer question, and a page that loaded after its call returned
+  `not_delivered` took an answer nobody read.
 
 ### Security
 

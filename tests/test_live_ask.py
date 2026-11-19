@@ -155,6 +155,9 @@ def test_the_page_sees_whether_the_agent_is_waiting():
 
 
 def _post(url, payload):
+    """POST as a tab showing the current page does: with that page's generation."""
+    status = urllib.request.urlopen(url.replace("/submit?", "/status?"), timeout=5)  # noqa: S310 (loopback)
+    payload = {**payload, "generation": json.loads(status.read())["generation"]}
     request = urllib.request.Request(  # noqa: S310 (loopback)
         url,
         data=json.dumps(payload).encode(),

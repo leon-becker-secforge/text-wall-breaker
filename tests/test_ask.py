@@ -148,8 +148,15 @@ class FakeBrowser:
             return
         # A list is posted in order: progress reports, then the submission or cancel.
         payloads = payload if isinstance(payload, list) else [payload]
+        payloads = [_from_page(self.page, each) for each in payloads]
         self.thread = threading.Thread(target=lambda: [_post(url, each) for each in payloads])
         self.thread.start()
+
+
+def _from_page(html: str, payload: dict) -> dict:
+    """`payload` as the page's own `send` posts it: carrying the page's generation."""
+    generation = int(html.split("var GENERATION = ")[1].split(";")[0])
+    return {**payload, "generation": generation}
 
 
 def _post(url: str, payload: object) -> None:
@@ -498,7 +505,7 @@ def _answer_current_generation(session, expected_generation, payload, timeout=5.
             with urllib.request.urlopen(session.page_url, timeout=5) as response:  # noqa: S310
                 html = response.read().decode("utf-8")
             submit_url = html.split('var SUBMIT_URL = "')[1].split('"')[0]
-            _post(submit_url, payload)
+            _post(submit_url, _from_page(html, payload))
             return
         time.sleep(0.02)
     raise AssertionError(f"generation {expected_generation} was never published")
@@ -626,15 +633,18 @@ def test_a_closed_tab_gets_replaced_instead_of_published_into(monkeypatch):
     session = session_module.get_shared_session()
     opened: list[object] = []
     monkeypatch.setattr(ask_module, "open_in_browser", _loading_opener(opened))
-    cancel = {"kind": "cancel", "data": {}}
+    submit_url = session.page_url.replace("/?", "/submit?")
+
+    def cancel():
+        _post(submit_url, {"kind": "cancel", "data": {}, "generation": session.current_page()[1]})
 
     def answer_from_the_new_tab():
         # The closed tab never reloads; only the replacement one loads and answers.
         while len(opened) < 2:
             time.sleep(0.02)
-        _post(session.page_url.replace("/?", "/submit?"), cancel)
+        cancel()
 
-    threading.Timer(0.1, _post, (session.page_url.replace("/?", "/submit?"), cancel)).start()
+    threading.Timer(0.1, cancel).start()
     assert run_ask(AskRequest(question="first")) == {"cancelled": True}
     thread = threading.Thread(target=answer_from_the_new_tab)
     thread.start()

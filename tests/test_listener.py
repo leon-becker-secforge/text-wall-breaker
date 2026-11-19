@@ -205,23 +205,24 @@ def session():
     listener.close()
 
 
-def _published_report(session: SessionListener, title: str = "Report") -> None:
-    session.publish(lambda generation: "<html>")
+def _published_report(session: SessionListener, title: str = "Report") -> int:
+    generation = session.publish(lambda generation: "<html>")
     session.mark_report(title)
+    return generation
 
 
 def test_no_call_can_claim_the_session_while_a_report_is_unread(session):
-    _published_report(session)
+    generation = _published_report(session)
     assert not session.try_claim()
     # The refused claim must not leave the session locked.
-    session.deliver(Submission(kind="acknowledge", data={}))
+    assert session.deliver(Submission(kind="acknowledge", data={}), generation)
     assert session.try_claim()
     session.release()
 
 
 def test_acknowledging_the_report_frees_the_session_for_questions(session):
-    _published_report(session)
-    session.deliver(Submission(kind="acknowledge", data={}))
+    generation = _published_report(session)
+    assert session.deliver(Submission(kind="acknowledge", data={}), generation)
     assert session.report_status() == {"state": "acknowledged", "title": "Report"}
     assert session.try_claim()
     session.release()
@@ -251,6 +252,39 @@ def test_publishing_anything_else_clears_the_report_status(session):
 def _idle_connection(port: int) -> socket.socket:
     """A connection that sends nothing, as a browser's speculative preconnect does."""
     return socket.create_connection(("127.0.0.1", port))
+
+
+def test_a_page_no_tab_loaded_is_no_longer_open(session, monkeypatch):
+    # The caller reports not_delivered and stops waiting: a tab that loads late must say
+    # the question is closed instead of taking an answer nobody reads.
+    monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 0.1)
+    generation = session.publish(lambda generation: "<html>")
+    assert session.status()["open"]
+    assert not session.show_in_tab(generation, lambda url: None)
+    assert not session.status()["open"]
+
+
+def _answer(session: SessionListener, generation: object) -> int:
+    payload = {"kind": "submit", "data": {"selected": ["a"]}, "generation": generation}
+    try:
+        return post(session.port, "?t=tok", payload).status
+    except urllib.error.HTTPError as error:
+        return error.code
+
+
+def test_an_answer_from_an_older_page_is_refused(session):
+    first = session.publish(lambda generation: "<html>")
+    second = session.publish(lambda generation: "<html>")
+    assert _answer(session, first) == 409
+    assert _answer(session, None) == 409
+    assert _answer(session, second) == 200
+    assert session.wait_for_answer() == Submission("submit", {"selected": ["a"]})
+
+
+def test_an_answer_after_the_call_ended_is_refused(session):
+    generation = session.publish(lambda generation: "<html>")
+    session.end_question()
+    assert _answer(session, generation) == 409
 
 
 def test_an_idle_connection_does_not_block_the_session(session):

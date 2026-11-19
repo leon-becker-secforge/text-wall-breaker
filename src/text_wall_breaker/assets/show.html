@@ -193,7 +193,7 @@ __ACK_BUTTON__
   }
 
   async function send(kind, data) {
-    var payload = { kind: kind, data: data };
+    var payload = { kind: kind, data: data, generation: GENERATION };
     try {
       var res = await fetch(SUBMIT_URL, {
         method: 'POST',

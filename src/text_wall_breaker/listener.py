@@ -100,7 +100,7 @@ class Submission:
 def _handle_submit_payload(
     raw: bytes,
     respond: Callable[[int, bytes], None],
-    deliver: Callable[[Submission], None],
+    deliver: Callable[[Submission, object], bool],
     progress: Callable[[dict[str, Any]], None] | None = None,
     live: Callable[[dict[str, Any]], tuple[int, dict[str, Any]]] | None = None,
 ) -> None:
@@ -165,7 +165,10 @@ def _handle_submit_payload(
 
     data = payload.get("data")
     # Stored before the page is told it arrived, so "ok" never outruns the answer.
-    deliver(Submission(kind=kind, data=data if isinstance(data, dict) else {}))
+    submission = Submission(kind=kind, data=data if isinstance(data, dict) else {})
+    if not deliver(submission, payload.get("generation")):
+        respond(409, b'{"error":"no call waits on this page"}')
+        return
     respond(200, b'{"ok":true}')
 
 
@@ -289,8 +292,10 @@ class LoopbackListener:
     def note_activity(self) -> None:
         self._last_activity = time.monotonic()
 
-    def deliver(self, submission: Submission) -> None:
+    def deliver(self, submission: Submission, generation: object = None) -> bool:  # noqa: ARG002
+        # One page per listener, so the page's generation has nothing to tell apart.
         self._submission = submission
+        return True
 
     def set_progress(self, data: dict[str, Any]) -> None:
         self._progress = data
@@ -621,6 +626,9 @@ class SessionListener:
         if served:
             logger.info("generation %s served", generation)
         else:
+            # The caller gives up on this page; a tab loading it late must not take an
+            # answer nobody will read.
+            self.end_question()
             logger.warning(
                 "generation %s not served within %ss: no request reached %s",
                 generation,
@@ -644,8 +652,8 @@ class SessionListener:
             self._open = True
             self._progress = None
             self._report = None
+            self._answered.clear()
             generation = self._generation
-        self._answered.clear()
         self.note_activity()
         return generation
 
@@ -674,8 +682,16 @@ class SessionListener:
         with self._state_lock:
             return self._progress
 
-    def deliver(self, submission: Submission) -> None:
+    def deliver(self, submission: Submission, generation: object = None) -> bool:
+        """Take `submission` if it answers the page a call still waits on.
+
+        False for a page of an older generation (a second tab, or one that has not yet
+        noticed the reload) and for a page whose call already ended: either answer
+        would be read as the answer to something else, or by nobody.
+        """
         with self._state_lock:
+            if generation != self._generation or not self._open:
+                return False
             self._submission = submission
             if submission.kind == "acknowledge" and self._report is not None:
                 self._report["state"] = "acknowledged"
@@ -683,6 +699,7 @@ class SessionListener:
         if live is not None:
             live.on_submission(submission)
         self._answered.set()
+        return True
 
     def wait_for_answer(self) -> Submission | None:
         """Block until the current question is answered, or the tab is abandoned.

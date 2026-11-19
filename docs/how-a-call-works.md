@@ -41,6 +41,11 @@ Every call then waits for some tab to load its page; if none does within 30 seco
 returns `not_delivered`. A tab the browser throttles hard in the background can miss the
 4 seconds and end up with a second tab beside it, which is the cheaper mistake.
 
+Each answer the page sends carries its page's generation. The reused tab's listener takes
+an answer only from the page currently published, and only while a call still waits on
+it; anything else (a second tab, a page loaded after its call returned `not_delivered`)
+gets HTTP 409, and the page offers the answer for copying instead.
+
 The page reports the answers entered so far back with a `progress` message that never
 counts as the answer, so a cancelled or timed-out ask can be resumed with them prefilled.
 
