@@ -1,22 +1,16 @@
+from __future__ import annotations
+
 import threading
-import time
 from typing import Any
 
 import pytest
+from support import make_live_review as make
+from support import wait_until
 
-from text_wall_breaker.listener import LiveHandler, Submission
-from text_wall_breaker.live import LiveError, LiveSession, Reply
+from text_wall_breaker.listener import Submission
+from text_wall_breaker.live import LiveError, Reply
 from text_wall_breaker.live_common import LiveCall
-from text_wall_breaker.review import Page, ReviewRequest
-
-DIFF = """--- a/a.txt
-+++ b/a.txt
-@@ -1,3 +1,3 @@
- one
--two
-+TWO
- three
-"""
+from text_wall_breaker.review import Page
 
 DIFF_SHIFTED = """--- a/a.txt
 +++ b/a.txt
@@ -36,44 +30,6 @@ DIFF_GONE = """--- a/a.txt
 +2
  three
 """
-
-
-class FakeSession:
-    def __init__(self):
-        self.live: LiveHandler | None = None
-        self.generation = 1
-        self.published = []
-        self.closed = False
-        self.ended = False
-        self.idle = 0.0
-
-    def publish(self, build_html):
-        self.generation += 1
-        self.published.append(build_html(self.generation))
-        return self.generation
-
-    def idle_seconds(self):
-        return self.idle
-
-    def end_question(self):
-        self.ended = True
-
-    def close(self):
-        self.closed = True
-
-
-def make(diff=DIFF):
-    session = FakeSession()
-    request = ReviewRequest(pages=[Page(path="a.txt", diff=diff)]).validated()
-    live = LiveSession(
-        session,
-        request,
-        None,
-        build_html=lambda req, g: f"page {g}",
-        load_repo=lambda source: ([], {}),
-        generation=1,
-    )
-    return session, live
 
 
 def call(live, session_id: str | None = None, **kwargs: Any):
@@ -108,8 +64,7 @@ def test_a_blocking_call_returns_when_the_operator_writes():
     out = {}
     worker = threading.Thread(target=lambda: out.update(call(live)))
     worker.start()
-    time.sleep(0.2)
-    assert live.poll(restore=False)["agent"]["waiting"] is True
+    wait_until(lambda: live.poll(restore=False)["agent"]["waiting"])
     live.handle({"type": "chat", "text": "rename it"})
     worker.join(2)
     assert out == {"messages": [{"chat": "rename it"}]}
@@ -271,7 +226,7 @@ def test_a_git_range_without_refresh_is_not_ignored():
         call(live, git_range="HEAD~1", wait=False)
 
 
-def test_a_second_call_during_a_slow_refresh_is_refused():
+def test_a_second_call_during_a_slow_refresh_is_refused(monkeypatch):
     _, live = make()
     entered, release = threading.Event(), threading.Event()
     carry = live._carry_notes
@@ -281,7 +236,7 @@ def test_a_second_call_during_a_slow_refresh_is_refused():
         release.wait(5)
         return carry(*args)
 
-    live._carry_notes = slow_carry
+    monkeypatch.setattr(live, "_carry_notes", slow_carry)
     first = threading.Thread(target=lambda: call(live, refresh=True, wait=False))
     first.start()
     assert entered.wait(5)

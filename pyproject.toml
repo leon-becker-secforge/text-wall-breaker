@@ -29,15 +29,22 @@ packages = ["src/text_wall_breaker"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]
 
 [tool.ty.src]
-include = ["src", "tests"]
+include = ["src", "tests", "scripts", "showcase.py"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
-    "ruff>=0.6",
-    "ty>=0.0.1a1",
+    "pytest>=9.2",
+    "ruff>=0.17",
+    # Pre-1.0: its diagnostics change between releases, so CI and local agree only on one.
+    "ty==0.0.105",
+    # What the uv scripts (scripts/, showcase.py) import, so ty can check them.
+    "rich>=14",
+    "typer>=0.29",
 ]
 
 [tool.ruff]

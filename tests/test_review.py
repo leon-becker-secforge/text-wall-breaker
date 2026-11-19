@@ -401,11 +401,9 @@ def test_a_long_document_is_chunked_and_unchanged_runs_fold_behind_a_bar():
 def test_an_undelivered_review_carries_a_reason(monkeypatch):
     from text_wall_breaker import listener as listener_module
     from text_wall_breaker import review as review_module
-    from text_wall_breaker import session as session_module
 
     monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 0.05)
     monkeypatch.setattr(review_module, "open_in_browser", lambda page: None)
-    monkeypatch.setattr(session_module, "_session", None)
     request = ReviewRequest(pages=PAGES)
     result = review_module.run_review(request)
     assert result["not_delivered"] is True

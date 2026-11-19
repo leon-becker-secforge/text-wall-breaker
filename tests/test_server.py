@@ -8,7 +8,8 @@ import anyio
 import pytest
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import GetPromptResult, TextContent
-from test_live import make as make_live
+from support import make_live_review as make_live
+from support import wait_until
 
 from text_wall_breaker.listener import LoopbackListener, SessionListener
 from text_wall_breaker.server import (
@@ -37,11 +38,14 @@ def test_a_blocking_call_reports_progress_until_it_returns(monkeypatch):
     monkeypatch.setattr(server_module, "KEEPALIVE_SECONDS", 0.05)
     recorder = _ProgressRecorder()
 
+    def work() -> str:
+        wait_until(lambda: len(recorder.beats) >= 3)
+        return "done"
+
     async def main():
-        return await server_module._blocking(recorder, lambda: time.sleep(0.3) or "done")
+        return await server_module._blocking(recorder, work)
 
     assert anyio.run(main) == "done"
-    assert len(recorder.beats) >= 3
     assert [b[0] for b in recorder.beats] == list(range(1, len(recorder.beats) + 1))
     count = len(recorder.beats)
     anyio.run(anyio.sleep, 0.15)

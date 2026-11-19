@@ -19,7 +19,7 @@ import json
 import os
 import subprocess
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Annotated, Any
@@ -38,7 +38,7 @@ console = Console()
 
 
 @contextmanager
-def status_spinner(text: str) -> Iterator[Console]:
+def status_spinner(text: str) -> Generator[Console]:
     with console.status(f"[cyan]{text}[/cyan]"):
         yield console
     console.print(f"[green]✓[/green] {text}")

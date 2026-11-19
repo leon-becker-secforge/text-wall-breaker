@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 import pytest
+from support import Reply, fetch
 
 from text_wall_breaker import listener as listener_module
 from text_wall_breaker.listener import LoopbackListener, SessionListener, Submission
@@ -23,7 +24,14 @@ def post(port: int, query: str, payload: object, content_type: str = "text/plain
         headers={"Content-Type": content_type},
         method="POST",
     )
-    return urllib.request.urlopen(request, timeout=5)  # noqa: S310 — fixed loopback URL
+    # Closed before returning (status and headers stay readable), so no socket outlives it.
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:  # noqa: S310 — loopback
+            response.read()
+            return response
+    except urllib.error.HTTPError as error:
+        error.close()
+        raise
 
 
 @pytest.fixture(autouse=True)
@@ -72,10 +80,10 @@ def test_a_silent_page_is_abandoned():
 
 
 def test_a_heartbeat_keeps_the_wait_alive(monkeypatch):
-    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 0.6)
+    monkeypatch.setattr(listener_module, "ABANDON_SECONDS", 1.0)
     with LoopbackListener("tok") as listener:
         thread, result = wait_in_thread(listener)
-        # Three probes 0.4 s apart: past the 0.6 s window in total, never within it alone.
+        # Three probes 0.4 s apart: past the 1 s window in total, well within it each.
         for _ in range(3):
             time.sleep(0.4)
             assert post(listener.port, "?t=tok", {"kind": "probe"}).status == 204
@@ -125,15 +133,8 @@ def test_rejection_leaves_the_connection_usable():
 def test_malformed_body_is_rejected_without_ending_the_wait():
     with LoopbackListener("tok") as listener:
         thread, result = wait_in_thread(listener)
-        request = urllib.request.Request(
-            f"http://127.0.0.1:{listener.port}/submit?t=tok",
-            data=b"not json",
-            headers={"Content-Type": "text/plain"},
-            method="POST",
-        )
-        with pytest.raises(urllib.error.HTTPError) as caught:
-            urllib.request.urlopen(request, timeout=5)  # noqa: S310 — fixed loopback URL
-        assert caught.value.code == 400
+        url = f"http://127.0.0.1:{listener.port}/submit?t=tok"
+        assert fetch(url, raw=b"not json").status == 400
         post(listener.port, "?t=tok", {"kind": "submit", "data": {}})
         thread.join(timeout=5)
 
@@ -154,12 +155,7 @@ def test_unknown_kind_is_rejected():
 def test_wrong_path_is_a_404():
     with LoopbackListener("tok") as listener:
         thread, _ = wait_in_thread(listener)
-        request = urllib.request.Request(
-            f"http://127.0.0.1:{listener.port}/nope?t=tok", data=b"{}", method="POST"
-        )
-        with pytest.raises(urllib.error.HTTPError) as caught:
-            urllib.request.urlopen(request, timeout=5)  # noqa: S310 — fixed loopback URL
-        assert caught.value.code == 404
+        assert fetch(f"http://127.0.0.1:{listener.port}/nope?t=tok", {}).status == 404
         thread.join(timeout=5)
 
 
@@ -290,10 +286,7 @@ def test_a_slow_page_build_does_not_stall_the_tab(session):
 
 def _answer(session: SessionListener, generation: object) -> int:
     payload = {"kind": "submit", "data": {"selected": ["a"]}, "generation": generation}
-    try:
-        return post(session.port, "?t=tok", payload).status
-    except urllib.error.HTTPError as error:
-        return error.code
+    return fetch(f"http://127.0.0.1:{session.port}/submit?t=tok", payload).status
 
 
 def test_an_answer_from_an_older_page_is_refused(session):
@@ -313,9 +306,7 @@ def test_an_answer_after_the_call_ended_is_refused(session):
 
 def test_an_idle_connection_does_not_block_the_session(session):
     with _idle_connection(session.port):
-        url = f"http://127.0.0.1:{session.port}/status?t=tok"
-        with urllib.request.urlopen(url, timeout=2) as response:
-            assert response.status == 200
+        assert fetch(f"http://127.0.0.1:{session.port}/status?t=tok", timeout=2).status == 200
 
 
 def test_an_idle_connection_does_not_hold_off_abandonment():
@@ -360,12 +351,8 @@ def test_a_bad_content_length_gets_an_error_status(session, length, status):
 _PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
 
 
-def _get_asset(session: SessionListener, path: Path):
-    url = f"{session.asset_base_url}&path={quote(str(path), safe='')}"
-    try:
-        return urllib.request.urlopen(url, timeout=5)  # noqa: S310 — loopback asset route
-    except urllib.error.HTTPError as error:
-        return error
+def _get_asset(session: SessionListener, path: Path) -> Reply:
+    return fetch(f"{session.asset_base_url}&path={quote(str(path), safe='')}")
 
 
 def test_asset_serves_an_image_a_page_references(session, tmp_path):
@@ -374,7 +361,7 @@ def test_asset_serves_an_image_a_page_references(session, tmp_path):
     render_markdown(f"![s]({image})", asset_base_url=session.asset_base_url)
     response = _get_asset(session, image)
     assert response.status == 200
-    assert response.read() == _PNG
+    assert response.body == _PNG
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert "sandbox" in response.headers["Content-Security-Policy"]
     assert response.headers["Access-Control-Allow-Origin"] is None

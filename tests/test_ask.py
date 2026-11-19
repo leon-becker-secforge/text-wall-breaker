@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from support import fetch
 
 from text_wall_breaker import ask as ask_module
 from text_wall_breaker import listener as listener_module
@@ -160,13 +161,8 @@ def _from_page(html: str, payload: dict) -> dict:
 
 
 def _post(url: str, payload: object) -> None:
-    request = urllib.request.Request(  # noqa: S310 — loopback URL from our own page
-        url,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "text/plain"},
-        method="POST",
-    )
-    urllib.request.urlopen(request, timeout=5)  # noqa: S310 — loopback URL from our own page
+    reply = fetch(url, payload)
+    assert reply.status < 400, reply
 
 
 @pytest.fixture(autouse=True)
@@ -174,22 +170,6 @@ def _short_delivery_waits(monkeypatch):
     """Delivery checks sized for a test, not a cold browser start."""
     monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 1.0)
     monkeypatch.setattr(listener_module, "REUSE_GRACE_SECONDS", 0.5)
-
-
-@pytest.fixture(autouse=True)
-def _isolated_shared_session():
-    """Give every test its own shared-tab session, closed after, never the real one.
-
-    Without this, tests would fight over one process-wide singleton — an earlier test's
-    claimed-but-not-released session would make a later one silently fall back to its
-    one-off tab, or two tests' assertions about the shared port would collide.
-    """
-    original = session_module._session
-    session_module._session = None
-    yield
-    if session_module._session is not None:
-        session_module._session.close()
-    session_module._session = original
 
 
 @pytest.fixture
@@ -615,8 +595,7 @@ def _session_url(session, path: str) -> str:
 
 
 def _get_json(url: str) -> dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=5) as response:  # noqa: S310 (loopback)
-        return json.loads(response.read())
+    return json.loads(fetch(url).body)
 
 
 def _loading_opener(targets: list[object]):
@@ -624,7 +603,7 @@ def _loading_opener(targets: list[object]):
 
     def open_tab(target: object) -> None:
         targets.append(target)
-        urllib.request.urlopen(str(target), timeout=5).read()  # noqa: S310 (loopback)
+        fetch(str(target))
 
     return open_tab
 

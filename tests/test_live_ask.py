@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import threading
 import time
-import urllib.request
 
 import pytest
+from support import fetch, wait_until
 
 from text_wall_breaker import ask as ask_module
 from text_wall_breaker import listener as listener_module
@@ -165,7 +165,7 @@ def test_a_second_waiting_call_is_refused():
     _, live = make()
     waiter = threading.Thread(target=call, args=(live,))
     waiter.start()
-    time.sleep(0.2)
+    wait_until(lambda: live.poll(restore=False)["agent"]["waiting"])
     with pytest.raises(LiveError, match="already waiting"):
         call(live)
     chat(live, "wake")
@@ -177,8 +177,7 @@ def test_the_page_sees_whether_the_agent_is_waiting():
     assert live.poll(restore=False)["agent"]["waiting"] is False
     waiter = threading.Thread(target=call, args=(live,))
     waiter.start()
-    time.sleep(0.2)
-    assert live.poll(restore=False)["agent"]["waiting"] is True
+    wait_until(lambda: live.poll(restore=False)["agent"]["waiting"])
     chat(live, "wake")
     waiter.join(timeout=5)
 
@@ -188,15 +187,9 @@ def test_the_page_sees_whether_the_agent_is_waiting():
 
 def _post(url, payload):
     """POST as a tab showing the current page does: with that page's generation."""
-    status = urllib.request.urlopen(url.replace("/submit?", "/status?"), timeout=5)  # noqa: S310 (loopback)
-    payload = {**payload, "generation": json.loads(status.read())["generation"]}
-    request = urllib.request.Request(  # noqa: S310 (loopback)
-        url,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "text/plain"},
-        method="POST",
-    )
-    urllib.request.urlopen(request, timeout=5).read()  # noqa: S310 (loopback)
+    status = json.loads(fetch(url.replace("/submit?", "/status?")).body)
+    reply = fetch(url, {**payload, "generation": status["generation"]})
+    assert reply.status < 400, reply
 
 
 def _operator(session, steps):
@@ -207,7 +200,7 @@ def _operator(session, steps):
         while time.monotonic() < deadline and not session.current_page()[0]:
             time.sleep(0.02)
         submit = f"http://127.0.0.1:{session.port}/submit?t={session.token}"
-        urllib.request.urlopen(session.page_url, timeout=5).read()  # noqa: S310 (loopback)
+        fetch(session.page_url)
         for step in steps:
             _post(submit, step)
 
@@ -220,10 +213,7 @@ def _operator(session, steps):
 def tab(monkeypatch):
     monkeypatch.setattr(listener_module, "DELIVERY_SECONDS", 2.0)
     monkeypatch.setattr(ask_module, "open_in_browser", lambda target: None)
-    original = session_module._session
-    session_module._session = None
-    yield session_module.get_shared_session()
-    session_module._session = original
+    return session_module.get_shared_session()
 
 
 def test_the_operator_starts_a_discussion_and_the_answer_comes_through_live(tab):
