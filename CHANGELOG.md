@@ -5,6 +5,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-19
+
 ### Changed
 
 - `ask` rejects a question with no `options` that contains `"options":` or `"label":`.
