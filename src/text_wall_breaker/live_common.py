@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import threading
 import time
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -50,7 +51,7 @@ class Tab(Protocol):
     def close(self) -> None: ...
 
 
-class LiveBase:
+class LiveBase(ABC):
     """What a live review and a live ask do alike: wait for the operator, and close the
     session's listener after the call that ends it, or once its tab is gone.
 
@@ -72,8 +73,8 @@ class LiveBase:
     _final: Submission | None
     _inbox: list[dict[str, Any]]
 
-    def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]:
-        raise NotImplementedError
+    @abstractmethod
+    def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]: ...
 
     def _take_inbox(self) -> list[dict[str, Any]]:
         messages, self._inbox = self._inbox, []

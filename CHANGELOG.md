@@ -96,15 +96,20 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   cached (`Cache-Control: no-store`), and the token is redacted from tracebacks and
   percent-encoded URLs in the log too.
 - `GET /asset` serves an image only to the session whose current page references it.
-- A listener serves at most 32 connections at once and closes the rest, and a request body
-  must arrive within 10 s in full: a local process could otherwise tie up a thread per
-  connection, or one for days with a body sent a byte at a time.
-- `review` refuses a `repo` whose work tree (its own `core.worktree`) lies outside it.
+- A listener serves at most 32 connections at once, and a request body must arrive within
+  10 s in full: a local process could otherwise tie up a thread per connection, or one for
+  days with a body sent a byte at a time. Past the cap, a new connection evicts the oldest
+  one that has not shown the token, so sockets held open cannot lock the tab out. A body
+  shorter than its `Content-Length` gets 400, and a dropped connection no longer prints a
+  traceback to the MCP client's log.
+- `review` refuses a `repo` whose work tree (its own `core.worktree`) is not the one git
+  finds from that work tree's top, a parent folder included: a repo in `~/Downloads` could
+  otherwise show `~/.ssh/id_rsa` on the review page.
 - The CSP nonce is written by the code that writes each script; nothing is added to the
   finished page by pattern, so a script tag in agent text could never get one.
 - Inline Markdown renders in linear time and nests at most eight spans deep. A long run of
-  one marker (backticks, `[`, `_`) took seconds to minutes, and a few thousand `*` crashed
-  the call with a `RecursionError`.
+  one marker (backticks, `[`, `_`, `*a `, `**a `) took seconds to minutes and stalled every
+  listener of the server, and a few thousand `*` crashed the call with a `RecursionError`.
 - A reviewed AsciiDoc file's rendered view keeps no `id` and no class the page itself uses
   (`pp-`, `is-`, `has-`, `deck-`), so the file cannot pose as or shadow the page's controls.
 - The listeners refuse a request whose `Host` is not `127.0.0.1:<port>` with 421, so a
