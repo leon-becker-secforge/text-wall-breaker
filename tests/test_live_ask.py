@@ -129,6 +129,38 @@ def test_a_silent_tab_ends_the_session_as_abandoned():
     assert call(live) == {"abandoned": True}
 
 
+def test_an_invalid_reply_posts_none_of_the_replies():
+    _, live = make()
+    replies = [Reply(to="chat", text="one"), Reply(to="t1", text="two")]
+    with pytest.raises(LiveError, match="one chat"):
+        call(live, replies=replies, wait=False)
+    assert live.poll(restore=True)["chat"] == []
+
+
+def test_the_listener_is_closed_outside_the_session_lock():
+    session, live = make()
+    held: list[bool] = []
+
+    def close():
+        free: list[bool] = []
+
+        def probe():
+            took = live._cond.acquire(timeout=1)
+            free.append(took)
+            if took:
+                live._cond.release()
+
+        thread = threading.Thread(target=probe)
+        thread.start()
+        thread.join()
+        held.append(free != [True])
+
+    session.close = close
+    live.on_submission(Submission(kind="submit", data={}))
+    call(live)
+    assert held == [False]
+
+
 def test_a_second_waiting_call_is_refused():
     _, live = make()
     waiter = threading.Thread(target=call, args=(live,))

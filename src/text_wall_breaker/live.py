@@ -134,11 +134,15 @@ class LiveSession:
         self._chat: list[dict[str, str]] = []
         self._inbox: list[dict[str, Any]] = []
         self._version = 0
+        # `_blocking`: a call waits for the operator (shown on the page). `_busy`: a call
+        # is anywhere past its first check, refresh included.
         self._blocking = False
+        self._busy = False
         self._since = time.monotonic()
         self._final: Submission | None = None
         self._abandoned = False
         self._done = False
+        self._closed = False
         self._initial = {p.path: _new_side(p, request.files) for p in request.pages}
         self._seen: dict[str, list[str]] = {}
         self._interdiffs: dict[str, list[dict[str, Any]]] = {}
@@ -332,26 +336,54 @@ class LiveSession:
 
     def call(self, request: LiveCall) -> dict[str, Any]:
         """One `live` call: post, maybe refresh, then wait for the operator."""
+        try:
+            return self._call(request)
+        finally:
+            # Outside `_cond`: closing waits for the listener, whose handlers take it.
+            with self._cond:
+                close, self._closed = self._done and not self._closed, self._closed or self._done
+            if close:
+                self._session.close()
+
+    def _call(self, request: LiveCall) -> dict[str, Any]:
         if request.has_ask_arguments():
             raise LiveError("question and options are for ask sessions")
         pages: list[Page] | None = request.pages
         notes: list[Note] | None = request.notes
-        wants_refresh = request.refresh or bool(pages) or notes is not None
+        wants_refresh = (
+            request.refresh
+            or bool(pages)
+            or notes is not None
+            or request.git_range is not None
+            or request.paths is not None
+        )
         with self._cond:
             if request.session_id != self.id or self._done:
                 raise no_such_session(request.session_id)
-            if self._blocking:
+            # `_busy` from here on, not only while waiting: a refresh runs outside the
+            # lock, and a second call slipping in then would refresh from the same state.
+            if self._busy:
                 raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
                 return self._finish(refresh_dropped=wants_refresh)
             for reply in request.replies:
+                self._check_reply(reply)
+            for reply in request.replies:
                 self._post(reply)
+            self._busy = True
             self._since = time.monotonic()
             self._version += 1
-        if wants_refresh:
-            self._refresh(
-                git_range=request.git_range, paths=request.paths, pages=pages, notes=notes
-            )
+        try:
+            if wants_refresh:
+                self._refresh(
+                    git_range=request.git_range, paths=request.paths, pages=pages, notes=notes
+                )
+            return self._wait(request)
+        finally:
+            with self._cond:
+                self._busy = False
+
+    def _wait(self, request: LiveCall) -> dict[str, Any]:
         with self._cond:
             if not request.wait:
                 return {"posted": True, "messages": self._take_inbox()}
@@ -377,17 +409,19 @@ class LiveSession:
                 self._since = time.monotonic()
                 self._version += 1
 
+    def _check_reply(self, reply: Reply) -> None:
+        if not reply.text.strip():
+            raise LiveError("a reply needs text")
+        if reply.to != "chat" and reply.to not in self._threads:
+            raise LiveError(f'no thread {reply.to!r}; reply to a thread id or to "chat"')
+
     def _post(self, reply: Reply) -> None:
         text = reply.text.strip()
-        if not text:
-            raise LiveError("a reply needs text")
         entry = {"from": "agent", "text": text, "html": render_markdown(text)}
         if reply.to == "chat":
             self._chat.append(entry)
             return
-        thread = self._threads.get(reply.to)
-        if thread is None:
-            raise LiveError(f'no thread {reply.to!r}; reply to a thread id or to "chat"')
+        thread = self._threads[reply.to]
         thread["messages"].append(entry)
         thread["done"] = reply.done
 
@@ -496,7 +530,6 @@ class LiveSession:
         self._session.live = None
         self._session.end_question()
         forget_live(self.id)
-        self._session.close()
         return result
 
     @staticmethod

@@ -263,12 +263,13 @@ def test_an_interrupted_live_call_does_not_lock_the_session():
 
 def test_a_live_call_error_reaches_the_agent_as_its_own_message():
     _, live = make_live()
-    live._blocking = True  # another call is waiting
 
     async def scenario():
-        await server.call_tool("live", {"session": live.id})
+        await server.call_tool(
+            "live", {"session": live.id, "replies": [{"to": "t99", "text": "hi"}]}
+        )
 
-    with pytest.raises(ToolError, match="already waiting"):
+    with pytest.raises(ToolError, match="no thread 't99'"):
         anyio.run(scenario)
 
 

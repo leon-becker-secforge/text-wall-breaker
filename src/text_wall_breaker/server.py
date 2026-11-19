@@ -453,10 +453,10 @@ async def live(
         ),
     ] = False,
     git_range: Annotated[
-        str | None, Field(description="With refresh: a new range for the repo diff.")
+        str | None, Field(description="A new range for the repo diff; implies refresh.")
     ] = None,
     paths: Annotated[
-        list[str] | None, Field(description="With refresh: new paths for the repo diff.")
+        list[str] | None, Field(description="New paths for the repo diff; implies refresh.")
     ] = None,
     pages: Annotated[
         list[Page] | None,

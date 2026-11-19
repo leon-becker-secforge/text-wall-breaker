@@ -66,11 +66,15 @@ class LiveAsk:
         self._chat: list[dict[str, Any]] = []
         self._inbox: list[dict[str, Any]] = []
         self._version = 0
+        # `_blocking`: a call waits for the operator (shown on the page). `_busy`: a call
+        # is anywhere past its first check, refresh included.
         self._blocking = False
+        self._busy = False
         self._since = time.monotonic()
         self._final: Submission | None = None
         self._abandoned = False
         self._done = False
+        self._closed = False
         session.live = self
         detach_shared_session(session)
         register_live(self.id, self)
@@ -146,26 +150,46 @@ class LiveAsk:
     def call(self, request: LiveCall) -> dict[str, Any]:
         """One `live` call: post, maybe replace the question or options, then wait for the
         operator's next message."""
+        try:
+            return self._call(request)
+        finally:
+            # Outside `_cond`: closing waits for the listener, whose handlers take it.
+            with self._cond:
+                close, self._closed = self._done and not self._closed, self._closed or self._done
+            if close:
+                self._session.close()
+
+    def _call(self, request: LiveCall) -> dict[str, Any]:
         if request.has_review_arguments():
             raise LiveError("refresh, git_range, paths, pages and notes are for review sessions")
         update = (request.question, request.options) if request.has_ask_arguments() else None
-        wait = request.wait
         with self._cond:
             if request.session_id != self.id or self._done:
                 raise no_such_session(request.session_id)
-            if self._blocking:
+            # `_busy` from here on, not only while waiting: a refresh runs outside the
+            # lock, and a second call slipping in then would refresh from the same state.
+            if self._busy:
                 raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
                 return self._finish(refresh_dropped=update is not None)
             for reply in request.replies:
+                self._check_reply(reply)
+            for reply in request.replies:
                 self._post(reply)
+            self._busy = True
             self._since = time.monotonic()
             self._version += 1
-        extra: dict[str, Any] = {}
-        if update is not None:
-            # Outside the lock: publishing takes the listener's lock, and the listener
-            # takes that lock before it calls into this session.
-            extra["refreshed"] = {"dropped_picks": self._refresh(*update)}
+        try:
+            extra: dict[str, Any] = {}
+            if update is not None:
+                extra["refreshed"] = {"dropped_picks": self._refresh(*update)}
+            return self._wait(request, extra)
+        finally:
+            with self._cond:
+                self._busy = False
+
+    def _wait(self, request: LiveCall, extra: dict[str, Any]) -> dict[str, Any]:
+        wait = request.wait
         with self._cond:
             if not wait:
                 return {"posted": True, "messages": self._take_inbox(), **extra}
@@ -206,12 +230,15 @@ class LiveAsk:
             self._version += 1
         return dropped
 
-    def _post(self, reply: Reply) -> None:
-        text = reply.text.strip()
-        if not text:
+    @staticmethod
+    def _check_reply(reply: Reply) -> None:
+        if not reply.text.strip():
             raise LiveError("a reply needs text")
         if reply.to != "chat":
             raise LiveError('a live ask has one chat: reply to "chat"')
+
+    def _post(self, reply: Reply) -> None:
+        text = reply.text.strip()
         self._chat.append({"from": "agent", "text": text, "html": render_markdown(text)})
 
     def _take_inbox(self) -> list[dict[str, Any]]:
@@ -230,5 +257,4 @@ class LiveAsk:
         self._session.live = None
         self._session.end_question()
         forget_live(self.id)
-        self._session.close()
         return result

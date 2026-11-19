@@ -210,6 +210,70 @@ def test_a_closed_tab_ends_the_session_as_abandoned(monkeypatch):
     assert session.closed
 
 
+def _lock_is_free(lock) -> bool:
+    """Whether another thread could take `lock` right now."""
+    free: list[bool] = []
+
+    def probe():
+        took = lock.acquire(timeout=1)
+        free.append(took)
+        if took:
+            lock.release()
+
+    thread = threading.Thread(target=probe)
+    thread.start()
+    thread.join()
+    return free == [True]
+
+
+def test_the_listener_is_closed_outside_the_session_lock():
+    # Closing waits for the listener's serve loop; a request handler holding out for the
+    # lock would deadlock it.
+    session, live = make()
+    held: list[bool] = []
+    session.close = lambda: held.append(not _lock_is_free(live._cond))
+    live.on_submission(Submission(kind="submit", data={"comments": [], "generation": 1}))
+    call(live)
+    assert held == [False]
+
+
+def test_an_invalid_reply_posts_none_of_the_replies():
+    _, live = make()
+    replies = [Reply(to="chat", text="one"), Reply(to="t99", text="two")]
+    for _ in range(2):
+        with pytest.raises(LiveError, match="t99"):
+            call(live, replies=replies, wait=False)
+    assert live.poll(restore=True)["chat"] == []
+
+
+def test_a_git_range_without_refresh_is_not_ignored():
+    _, live = make()
+    with pytest.raises(LiveError, match="git_range and paths need a session opened with repo"):
+        call(live, git_range="HEAD~1", wait=False)
+
+
+def test_a_second_call_during_a_slow_refresh_is_refused():
+    _, live = make()
+    entered, release = threading.Event(), threading.Event()
+    carry = live._carry_notes
+
+    def slow_carry(*args):
+        entered.set()
+        release.wait(5)
+        return carry(*args)
+
+    live._carry_notes = slow_carry
+    first = threading.Thread(target=lambda: call(live, refresh=True, wait=False))
+    first.start()
+    assert entered.wait(5)
+    try:
+        with pytest.raises(LiveError, match="already"):
+            call(live, wait=False)
+    finally:
+        release.set()
+        first.join(5)
+
+
 def test_a_stale_session_id_is_refused():
     _, live = make()
     with pytest.raises(LiveError, match="no live session"):

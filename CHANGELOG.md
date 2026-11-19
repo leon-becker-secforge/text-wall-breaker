@@ -22,6 +22,14 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   while a call waits on it; anything else gets HTTP 409 and a copy box. A second or stale
   tab could answer the newer question, and a page that loaded after its call returned
   `not_delivered` took an answer nobody read.
+- `live` validates every reply before posting any, so a retry after one bad reply no longer
+  duplicates the others.
+- `live` with `git_range` or `paths` refreshes the diff; without `refresh` they were
+  silently ignored.
+- A second `live` call made while the first refreshes the diff is refused, as one made
+  while it waits already was.
+- A live session closes its listener outside its own lock, so a request arriving as the
+  session ends cannot deadlock the call.
 
 ### Security
 
