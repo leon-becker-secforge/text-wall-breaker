@@ -466,146 +466,135 @@ def render_markdown(text: str, *, asset_base_url: str | None = None) -> str:
     """
     if not text or not text.strip():
         return ""
-
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     lines = _expand_literal_newlines(lines)
-    out: list[str] = []
-    paragraph: list[str] = []
-    list_entries: list[tuple[int, str, str]] = []
-    quote_lines: list[str] = []
-
-    def flush_paragraph() -> None:
-        if paragraph:
-            rendered = (render_inline(line, asset_base_url=asset_base_url) for line in paragraph)
-            out.append("<p>" + "<br>".join(rendered) + "</p>")
-            paragraph.clear()
-
-    def flush_list() -> None:
-        if list_entries:
-            index = 0
-            while index < len(list_entries):
-                html, index = _render_list(list_entries, index, asset_base_url)
-                out.append(html)
-            list_entries.clear()
-
-    def flush_quote() -> None:
-        if quote_lines:
-            rendered = (render_inline(line, asset_base_url=asset_base_url) for line in quote_lines)
-            body = "<br>".join(rendered)
-            out.append(f"<blockquote><p>{body}</p></blockquote>")
-            quote_lines.clear()
-
-    def flush_all() -> None:
-        flush_paragraph()
-        flush_list()
-        flush_quote()
-
+    blocks = _Blocks(asset_base_url)
     index = 0
     while index < len(lines):
-        line = lines[index]
-        fence = _FENCE.match(line.strip())
+        index = _render_block(blocks, lines, index)
+    blocks.flush_all()
+    return "".join(blocks.out)
 
-        if fence is not None:
-            flush_all()
-            language = fence.group(1)
-            body: list[str] = []
-            index += 1
-            # An unterminated fence runs to the end of the input rather than erroring —
-            # a truncated prompt should still render everything before the break.
-            while index < len(lines) and not _FENCE_CLOSE.match(lines[index].strip()):
-                body.append(lines[index])
-                index += 1
-            if language == "diff":
-                out.append(_render_diff_block(body))
-            elif language == "verdict":
-                # Prose, not code: run through inline rendering same as a paragraph
-                # would be, just wrapped for base.css's `[data-role="verdict"]` style.
-                rendered = (render_inline(line, asset_base_url=asset_base_url) for line in body)
-                inner = "<br>".join(rendered)
-                out.append(f'<div data-role="verdict">{inner}</div>')
-            elif language == "mermaid":
-                # Rendered client-side by page.py's mermaid loader, which only appears on
-                # a page that actually has one of these — see _needs_mermaid there. The
-                # raw diagram source is escaped the same way any other fenced block's is;
-                # mermaid.run() reads it back via .textContent, which un-escapes it.
-                out.append(f'<pre class="mermaid">{_escape("\n".join(body))}</pre>')
-            else:
-                attr = f' data-language="{_escape(language)}"' if language else ""
-                source = "\n".join(body)
-                code = highlight_code(language, source) or _escape(source)
-                out.append(f'<pre class="code-block"{attr}><code>{code}</code></pre>')
-            index += 1
-            continue
 
-        if not line.strip():
-            flush_all()
-            index += 1
-            continue
+class _Blocks:
+    """The finished HTML, and the paragraph, list and quote still collecting lines."""
 
-        heading = _HEADING.match(line)
-        if heading is not None:
-            flush_all()
-            level = len(heading.group(1))
-            heading_html = render_inline(heading.group(2), asset_base_url=asset_base_url)
-            out.append(f"<h{level}>{heading_html}</h{level}>")
-            index += 1
-            continue
+    def __init__(self, asset_base_url: str | None) -> None:
+        self.asset = asset_base_url
+        self.out: list[str] = []
+        self.paragraph: list[str] = []
+        self.items: list[tuple[int, str, str]] = []
+        self.quote: list[str] = []
 
-        if _THEMATIC_BREAK.match(line.strip()):
-            flush_all()
-            out.append("<hr>")
-            index += 1
-            continue
+    def _lines(self, lines: list[str]) -> str:
+        return "<br>".join(render_inline(line, asset_base_url=self.asset) for line in lines)
 
-        quote = _QUOTE.match(line)
-        if quote is not None:
-            flush_paragraph()
-            flush_list()
-            quote_lines.append(quote.group(1))
-            index += 1
-            continue
+    def flush_paragraph(self) -> None:
+        if self.paragraph:
+            self.out.append(f"<p>{self._lines(self.paragraph)}</p>")
+            self.paragraph.clear()
 
-        # A table is a header row immediately followed by a separator row — checking the
-        # next line is what tells it apart from a paragraph that just happens to contain
-        # a `|`, since neither row is identifiable from itself alone. A line that is
-        # itself a list item never qualifies as that header row, even with a `|` in its
-        # text and a `| --- |`-shaped line right after it: list detection wins, or a
-        # bullet like `- a | b` followed by a real separator would lose its `- ` marker
-        # into a bogus table cell instead of staying a list.
-        is_list_item = _BULLET.match(line) is not None or _ORDERED.match(line) is not None
-        if (
-            not is_list_item
-            and "|" in line
-            and index + 1 < len(lines)
-            and _is_table_separator(lines[index + 1])
-        ):
-            flush_all()
-            header = _split_row(line)
-            aligns = [_table_alignment(cell) for cell in _split_row(lines[index + 1])]
-            index += 2
-            body_rows: list[list[str]] = []
-            while index < len(lines) and lines[index].strip() and "|" in lines[index]:
-                body_rows.append(_split_row(lines[index]))
-                index += 1
-            out.append(_render_table(header, aligns, body_rows, asset_base_url))
-            continue
+    def flush_list(self) -> None:
+        index = 0
+        while index < len(self.items):
+            html, index = _render_list(self.items, index, self.asset)
+            self.out.append(html)
+        self.items.clear()
 
-        bullet = _BULLET.match(line)
-        ordered = _ORDERED.match(line) if bullet is None else None
-        item_match = bullet or ordered
-        if item_match is not None:
-            tag = "ul" if bullet is not None else "ol"
-            flush_paragraph()
-            flush_quote()
-            indent = len(item_match.group(1).expandtabs())
-            list_entries.append((indent, tag, item_match.group(2)))
-            index += 1
-            continue
+    def flush_quote(self) -> None:
+        if self.quote:
+            self.out.append(f"<blockquote><p>{self._lines(self.quote)}</p></blockquote>")
+            self.quote.clear()
 
-        flush_list()
-        flush_quote()
-        paragraph.append(line)
+    def flush_all(self) -> None:
+        self.flush_paragraph()
+        self.flush_list()
+        self.flush_quote()
+
+    def add(self, html: str) -> None:
+        """A block that stands alone: whatever was collecting ends before it."""
+        self.flush_all()
+        self.out.append(html)
+
+
+def _render_block(blocks: _Blocks, lines: list[str], index: int) -> int:
+    """Take the block starting at `lines[index]` into `blocks`; the index after it."""
+    line = lines[index]
+    if (fence := _FENCE.match(line.strip())) is not None:
+        # An unterminated fence runs to the end of the input rather than erroring: a
+        # truncated prompt should still render everything before the break.
+        end = index + 1
+        while end < len(lines) and not _FENCE_CLOSE.match(lines[end].strip()):
+            end += 1
+        blocks.add(_render_fence(fence.group(1), lines[index + 1 : end], blocks.asset))
+        return end + 1
+    if not line.strip():
+        blocks.flush_all()
+        return index + 1
+    if (heading := _HEADING.match(line)) is not None:
+        level = len(heading.group(1))
+        title = render_inline(heading.group(2), asset_base_url=blocks.asset)
+        blocks.add(f"<h{level}>{title}</h{level}>")
+        return index + 1
+    if _THEMATIC_BREAK.match(line.strip()):
+        blocks.add("<hr>")
+        return index + 1
+    if (quote := _QUOTE.match(line)) is not None:
+        blocks.flush_paragraph()
+        blocks.flush_list()
+        blocks.quote.append(quote.group(1))
+        return index + 1
+    bullet = _BULLET.match(line)
+    item = bullet or _ORDERED.match(line)
+    if item is None and _starts_table(lines, index):
+        return _render_table_at(blocks, lines, index)
+    if item is not None:
+        blocks.flush_paragraph()
+        blocks.flush_quote()
+        indent = len(item.group(1).expandtabs())
+        blocks.items.append((indent, "ul" if bullet is not None else "ol", item.group(2)))
+        return index + 1
+    blocks.flush_list()
+    blocks.flush_quote()
+    blocks.paragraph.append(line)
+    return index + 1
+
+
+def _render_fence(language: str, body: list[str], asset_base_url: str | None) -> str:
+    if language == "diff":
+        return _render_diff_block(body)
+    if language == "verdict":
+        # Prose, not code: rendered inline like a paragraph, wrapped for base.css's
+        # `[data-role="verdict"]` style.
+        inner = "<br>".join(render_inline(line, asset_base_url=asset_base_url) for line in body)
+        return f'<div data-role="verdict">{inner}</div>'
+    if language == "mermaid":
+        # Drawn client-side by page.py's mermaid loader, which only a page with one of
+        # these gets (see _needs_mermaid there). mermaid.run() reads the escaped source
+        # back through .textContent, which un-escapes it.
+        return f'<pre class="mermaid">{_escape("\n".join(body))}</pre>'
+    attr = f' data-language="{_escape(language)}"' if language else ""
+    source = "\n".join(body)
+    code = highlight_code(language, source) or _escape(source)
+    return f'<pre class="code-block"{attr}><code>{code}</code></pre>'
+
+
+def _starts_table(lines: list[str], index: int) -> bool:
+    """Whether `lines[index]` is a table's header row: a `|` line before a separator row.
+
+    Neither row is identifiable alone, so the next line decides. The caller has already
+    ruled out a list item: `- a | b` before a separator stays a list, keeping its marker.
+    """
+    return "|" in lines[index] and index + 1 < len(lines) and _is_table_separator(lines[index + 1])
+
+
+def _render_table_at(blocks: _Blocks, lines: list[str], index: int) -> int:
+    header = _split_row(lines[index])
+    aligns = [_table_alignment(cell) for cell in _split_row(lines[index + 1])]
+    index += 2
+    rows: list[list[str]] = []
+    while index < len(lines) and lines[index].strip() and "|" in lines[index]:
+        rows.append(_split_row(lines[index]))
         index += 1
-
-    flush_all()
-    return "".join(out)
+    blocks.add(_render_table(header, aligns, rows, blocks.asset))
+    return index
