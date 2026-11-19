@@ -100,6 +100,19 @@ def test_a_marker_with_space_on_its_inner_side_is_not_emphasis(text):
     assert render_inline(text) == text
 
 
+@pytest.mark.parametrize(
+    ("text", "html"),
+    [
+        ("**a**, **b**", "<strong>a</strong>, <strong>b</strong>"),
+        ("*x* *y*", "<em>x</em> <em>y</em>"),
+        ("*a* and *b*", "<em>a</em> and <em>b</em>"),
+        ("**ab** and **cd**", "<strong>ab</strong> and <strong>cd</strong>"),
+    ],
+)
+def test_neighbouring_short_spans_stay_apart(text, html):
+    assert render_inline(text) == html
+
+
 def test_a_fence_line_with_a_language_inside_a_block_does_not_close_it():
     html = render_markdown("```\nfoo\n```python\nbar\n```\nafter")
     assert html.count("<pre") == 1

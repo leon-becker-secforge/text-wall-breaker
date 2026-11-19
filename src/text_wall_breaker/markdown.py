@@ -110,12 +110,13 @@ _INLINE = re.compile(
     # The lookahead is what makes `**a *b***` close on the last pair rather than the
     # first: a non-greedy close would otherwise strand the trailing marker as text.
     # `*` and `**` need text against both markers, as CommonMark's flanking rule asks:
-    # `2 * 3 * 4` is arithmetic, not emphasis.
-    r"|\*\*(?P<b_text>\S(?:.*?\S)?)\*\*(?![*_])"
+    # `2 * 3 * 4` is arithmetic, not emphasis. The optional tail is lazy (`??`), or a
+    # one-character span would run on to the next marker: `*a* and *b*`.
+    r"|\*\*(?P<b_text>\S(?:.*?\S)??)\*\*(?![*_])"
     # `_` only delimits at a word boundary, as in CommonMark: identifiers like set_mode
     # in running prose must not turn into emphasis. `*` still works intraword.
     r"|(?<!\w)__(?P<ub_text>.+?)__(?![*\w])"
-    r"|\*(?P<i_text>[^\s*](?:.*?[^\s*])?)\*"
+    r"|\*(?P<i_text>[^\s*](?:.*?[^\s*])??)\*"
     r"|(?<!\w)_(?P<ui_text>.+?)_(?!\w)"
     r"|(?P<s>~~)(?P<s_text>.+?)(?P=s)",
     re.DOTALL,
