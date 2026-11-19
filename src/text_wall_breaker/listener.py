@@ -467,6 +467,7 @@ class SessionListener:
     def __init__(self, token: str) -> None:
         self._token = token
         self._state_lock = threading.Lock()
+        self._publish_lock = threading.Lock()
         self._busy_lock = threading.Lock()
         self._last_activity = time.monotonic()
         self._page = b""
@@ -668,18 +669,28 @@ class SessionListener:
         own `GENERATION` — a page it matches means it's already showing this content, no
         reload needed; anything else means a newer question is waiting. Returns the new
         generation, for `show_in_tab`.
+
+        The page is built outside `_state_lock`, which every request takes: a large
+        review can take seconds to render, and the tab's polls would stall meanwhile.
+        `_publish_lock` keeps two publishes from picking the same generation.
         """
+        with self._publish_lock:
+            with self._state_lock:
+                generation = self._generation + 1
+            page = build_html(generation).encode("utf-8")
+            self._swap_in(generation, page)
+        self.note_activity()
+        return generation
+
+    def _swap_in(self, generation: int, page: bytes) -> None:
         with self._state_lock:
-            self._generation += 1
-            self._page = build_html(self._generation).encode("utf-8")
+            self._generation = generation
+            self._page = page
             self._submission = None
             self._open = True
             self._progress = None
             self._report = None
             self._answered.clear()
-            generation = self._generation
-        self.note_activity()
-        return generation
 
     def end_question(self) -> None:
         """Record that no call waits on the current page any more."""

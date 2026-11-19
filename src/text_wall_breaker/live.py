@@ -468,6 +468,9 @@ class LiveSession:
             request.validated()
         except InvalidReview as exc:
             raise LiveError(f"refresh: {exc}") from exc
+        # Re-anchoring and publishing under one hold of `_cond`: a `/live` poll in between
+        # would see comments placed on rows the tab does not show yet. Only this session's
+        # own requests wait meanwhile; the listener's `/status` does not take `_cond`.
         with self._cond:
             if self._final is not None:
                 return

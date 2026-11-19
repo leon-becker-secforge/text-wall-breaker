@@ -264,6 +264,30 @@ def test_a_page_no_tab_loaded_is_no_longer_open(session, monkeypatch):
     assert not session.status()["open"]
 
 
+def test_a_slow_page_build_does_not_stall_the_tab(session):
+    first = session.publish(lambda generation: "old")
+    building, release = threading.Event(), threading.Event()
+
+    def slow(generation: int) -> str:
+        building.set()
+        release.wait(5)
+        return "new"
+
+    thread = threading.Thread(target=session.publish, args=(slow,))
+    thread.start()
+    try:
+        assert building.wait(5)
+        started = time.monotonic()
+        # Until the new page exists, the tab keeps getting the old one, as a whole.
+        assert session.status()["generation"] == first
+        assert session.current_page() == (b"old", first)
+        assert time.monotonic() - started < 0.5
+    finally:
+        release.set()
+        thread.join(5)
+    assert session.current_page() == (b"new", first + 1)
+
+
 def _answer(session: SessionListener, generation: object) -> int:
     payload = {"kind": "submit", "data": {"selected": ["a"]}, "generation": generation}
     try:
