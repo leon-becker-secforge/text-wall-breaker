@@ -16,9 +16,11 @@ button ever sends one — Save is pure client-side Blob download and never reach
 
 from __future__ import annotations
 
+import os
 import secrets
 import shutil
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -142,6 +144,35 @@ def _run_show_reusing_tab(request: ShowRequest, session: SessionListener) -> dic
     return _result_from_submission(submission)
 
 
+_REPORT_PREFIX = "text-wall-breaker-show-"
+# A report shown without waiting outlives its call: the tab still reads the file. A day
+# later nobody does, so the next one-off report removes it.
+_REPORT_MAX_AGE_SECONDS = 24 * 3600
+
+
+def _sweep_old_reports() -> None:
+    """Remove this user's one-off report directories older than a day."""
+    cutoff = time.time() - _REPORT_MAX_AGE_SECONDS
+    uid = os.getuid() if hasattr(os, "getuid") else None
+    try:
+        entries = list(os.scandir(tempfile.gettempdir()))
+    except OSError:
+        return
+    for entry in entries:
+        if not entry.name.startswith(_REPORT_PREFIX):
+            continue
+        try:
+            info = entry.stat(follow_symlinks=False)
+        except OSError:
+            continue
+        # Only real directories of this user: never follow a planted symlink.
+        if not entry.is_dir(follow_symlinks=False) or info.st_mtime > cutoff:
+            continue
+        if uid is not None and info.st_uid != uid:
+            continue
+        shutil.rmtree(entry.path, ignore_errors=True)
+
+
 def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
     """Show `request` with its own one-off tab, used when the shared one is busy.
 
@@ -150,7 +181,8 @@ def _run_show_with_new_tab(request: ShowRequest) -> dict[str, Any]:
     for no reason. Without a listener, Acknowledge still shows on the page but is purely
     a local "seen" mark (see build_show_page's docstring); Save is unaffected either way.
     """
-    directory = Path(tempfile.mkdtemp(prefix="text-wall-breaker-show-"))
+    _sweep_old_reports()
+    directory = Path(tempfile.mkdtemp(prefix=_REPORT_PREFIX))
     page = directory / "show.html"
 
     if not request.wait_for_acknowledge:

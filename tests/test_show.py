@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+import tempfile
+import time
+
 import pytest
 
 from text_wall_breaker import show as show_module
@@ -97,3 +101,24 @@ def test_a_report_in_its_own_tab_is_named_by_show_status(monkeypatch):
     assert show_module.show_status() == {"state": "none", "own_tab": "Report"}
     show_module._own_tab_title.value = None
     assert show_module.show_status() == {"state": "none"}
+
+
+def test_a_day_old_one_off_report_is_removed_by_the_next(monkeypatch, tmp_path):
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    old, fresh = tmp_path / "text-wall-breaker-show-old", tmp_path / "text-wall-breaker-show-new"
+    other = tmp_path / "something-else"
+    for directory in (old, fresh, other):
+        directory.mkdir()
+        (directory / "show.html").write_text("x")
+    day_ago = time.time() - 25 * 3600
+    os.utime(old, (day_ago, day_ago))
+    os.utime(other, (day_ago, day_ago))
+    link = tmp_path / "text-wall-breaker-show-link"
+    link.symlink_to(other)
+
+    show_module._sweep_old_reports()
+
+    assert not old.exists()
+    assert fresh.exists()
+    assert other.exists()
+    assert link.is_symlink()

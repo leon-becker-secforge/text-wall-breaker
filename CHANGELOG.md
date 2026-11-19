@@ -49,6 +49,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   returns the abandoned result.
 - A reused tab's page is built before the listener's state lock is taken, so a large
   review no longer stalls the tab's status polls and heartbeats while it renders.
+- A one-off `show` report's temp directory, which outlives its call for the tab to read,
+  is removed by a later one-off report once it is a day old.
 - `*` and `**` need text against both markers, so `2 * 3 * 4` and `f(*args, **kwargs)` stay
   as written instead of turning partly italic.
 - Only a bare ```` ``` ```` closes a code block; a ```` ```python ```` line inside one is
