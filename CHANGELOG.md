@@ -49,6 +49,10 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   returns the abandoned result.
 - A reused tab's page is built before the listener's state lock is taken, so a large
   review no longer stalls the tab's status polls and heartbeats while it renders.
+- The page templates and the AsciiDoc script are read once, when the server starts. A
+  server run from a checkout read them on every page, so a template changed on disk under
+  it (a branch switch) could get a placeholder its code does not fill: the wizard's Next
+  button then never enabled.
 - A one-off `show` report's temp directory, which outlives its call for the tab to read,
   is removed by a later one-off report once it is a day old.
 - `*` and `**` need text against both markers, so `2 * 3 * 4` and `f(*args, **kwargs)` stay

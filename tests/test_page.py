@@ -1040,6 +1040,16 @@ def test_every_page_has_a_nonce_csp_that_covers_each_of_its_scripts(name):
     assert '<meta name="referrer" content="no-referrer">' in html
 
 
+def test_pages_build_from_templates_read_at_import(monkeypatch):
+    # A running server must serve the templates its own code fills, not files edited on
+    # disk since it started.
+    def no_disk(*_args: object) -> None:
+        raise AssertionError("asset read from disk after import")
+
+    monkeypatch.setattr(resources, "files", no_disk)
+    assert set(_every_page()) == {"ask", "multi", "show", "deck", "review"}
+
+
 def test_a_page_may_only_reach_its_own_listener():
     policy = _csp(build_show_page(content="x", submit_url="http://127.0.0.1:4242/submit?t=T"))
     assert "connect-src http://127.0.0.1:4242;" in policy

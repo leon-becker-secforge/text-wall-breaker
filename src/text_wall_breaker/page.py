@@ -21,7 +21,6 @@ that comes from the caller (option labels, ids) is escaped at the point of inter
 
 from __future__ import annotations
 
-import functools
 import html
 import json
 import os
@@ -906,10 +905,18 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
 # ask.html's fallback box, heartbeat and reuse-polling script, since a listener-backed
 # show page needs the same abandonment-heartbeat and tab-reuse behaviour.
 # Script bodies: deck.js, review_files.js and mermaid.js, wrapped in `<script>` here.
-@functools.cache
+# Read once, when the module loads: a server started from a checkout keeps its code in
+# memory, and a template edited on disk later (a branch switch, say) would otherwise be
+# filled by code that does not know its placeholders, leaving the page's script broken.
+_ASSETS = {
+    entry.name: entry.read_text(encoding="utf-8")
+    for entry in resources.files(__package__).joinpath("assets").iterdir()
+    if entry.is_file() and entry.name.endswith((".html", ".css", ".js", ".svg"))
+}
+
+
 def _load_asset(name: str) -> str:
-    # Package files: they do not change while the process runs.
-    return resources.files(__package__).joinpath("assets", name).read_text(encoding="utf-8")
+    return _ASSETS[name]
 
 
 def parse_accent(value: str) -> tuple[int, int, int]:

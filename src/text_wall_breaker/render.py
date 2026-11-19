@@ -139,7 +139,9 @@ def _markdown(path: str, lines: list[str], root: str | None, asset_base_url: str
     return parser.renderer.render(tokens, parser.options, {})
 
 
-_ADOC_SCRIPT = Path(__file__).with_name("adoc_lines.rb")
+# Read when the module loads, like page.py's templates: a running server must not pick up
+# a script edited on disk afterwards that its own code does not match.
+_ADOC_SCRIPT = Path(__file__).with_name("adoc_lines.rb").read_text(encoding="utf-8")
 # A block attribute line (`[source,python]`, `[[id]]`) or title (`.Title`) above its block.
 _BLOCK_PREFIX = re.compile(r"^(\[.*\]|\.[^\s.].*)\s*$")
 _ADOC_TIMEOUT_SECONDS = 20
@@ -275,7 +277,7 @@ def _asciidoc(
         return None
     try:
         done = subprocess.run(  # noqa: S603
-            [ruby, str(_ADOC_SCRIPT)],
+            [ruby, "-e", _ADOC_SCRIPT],
             input="\n".join(lines) + "\n",
             capture_output=True,
             text=True,
