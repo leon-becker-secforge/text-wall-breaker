@@ -24,11 +24,12 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import socket
 import stat
 import threading
 import time
 from collections.abc import Callable, Generator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -204,33 +205,69 @@ def _handle_submit_payload(
     respond(200, b'{"ok":true}')
 
 
+type _Request = socket.socket | tuple[bytes, socket.socket]
+
+
+def _socket_of(request: _Request) -> socket.socket:
+    return request if isinstance(request, socket.socket) else request[1]
+
+
 class _ThreadedServer(ThreadingHTTPServer):
     # One thread per connection, so a connection that never sends a request (a browser's
     # speculative preconnect) cannot stall the others or the caller's deadline loop. At
     # most _MAX_CONNECTIONS at once: a page needs a handful, and a local process opening
     # thousands must not get a thread for each.
+    #
+    # Past the cap a newcomer evicts the oldest connection that has not shown the token,
+    # rather than being refused: otherwise any local process holding _MAX_CONNECTIONS
+    # sockets open (each read resets the socket timeout) would lock the tab out.
     daemon_threads = True
     block_on_close = False
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._slots = threading.BoundedSemaphore(_MAX_CONNECTIONS)
+        self._connections_lock = threading.Lock()
+        # In accept order; True once the connection's request carried the right token.
+        self._connections: dict[_Request, bool] = {}
 
-    def process_request(self, request: Any, client_address: Any) -> None:
-        if not self._slots.acquire(blocking=False):
-            self.shutdown_request(request)
-            return
+    def process_request(self, request: _Request, client_address: Any) -> None:
+        with self._connections_lock:
+            if len(self._connections) >= _MAX_CONNECTIONS:
+                victim = next((r for r, ok in self._connections.items() if not ok), None)
+                if victim is None:
+                    self.shutdown_request(request)
+                    return
+                del self._connections[victim]
+                # Shut down, not closed: its own thread still owns the descriptor, and
+                # its blocked read now returns at once.
+                with suppress(OSError):
+                    _socket_of(victim).shutdown(socket.SHUT_RDWR)
+            self._connections[request] = False
         try:
             super().process_request(request, client_address)
         except BaseException:
-            self._slots.release()
+            self._forget(request)
             raise
 
-    def process_request_thread(self, request: Any, client_address: Any) -> None:
+    def process_request_thread(self, request: _Request, client_address: Any) -> None:
         try:
             super().process_request_thread(request, client_address)
         finally:
-            self._slots.release()
+            self._forget(request)
+
+    def _forget(self, request: _Request) -> None:
+        with self._connections_lock:
+            self._connections.pop(request, None)
+
+    def trust(self, request: _Request) -> None:
+        with self._connections_lock:
+            if request in self._connections:
+                self._connections[request] = True
+
+    def handle_error(self, request: _Request, client_address: Any) -> None:  # noqa: ARG002
+        # The default prints a traceback to stderr, which the MCP client keeps as its
+        # log; an evicted or reset connection is routine here.
+        logger.debug("connection failed", exc_info=True)
 
 
 class _Server(_ThreadedServer):
@@ -250,6 +287,10 @@ class _BaseHandler(BaseHTTPRequestHandler):
         # stdout is the MCP stdio transport. Anything written there corrupts the
         # protocol stream, so the access log is dropped entirely.
         return
+
+    def _trust(self) -> None:
+        """Exempt this connection from eviction: its request carried the token."""
+        cast("_ThreadedServer", self.server).trust(self.request)
 
     def _foreign_host(self) -> bool:
         """Answer 421 and return True unless the request names this listener as its Host.
@@ -278,7 +319,8 @@ class _BaseHandler(BaseHTTPRequestHandler):
             self._respond(413, b'{"error":"body too large"}')
             return None
         # The socket timeout bounds each read, not the body: a byte every few seconds
-        # would hold the thread for days. The whole body gets _BODY_SECONDS.
+        # would hold the thread for days. The deadline is checked between reads, so the
+        # whole body gets at most _BODY_SECONDS plus one socket timeout.
         deadline = time.monotonic() + _BODY_SECONDS
         body = bytearray()
         while len(body) < length:
@@ -288,7 +330,9 @@ class _BaseHandler(BaseHTTPRequestHandler):
                 return None
             chunk = self.rfile.read1(length - len(body))
             if not chunk:
-                break
+                self.close_connection = True
+                self._respond(400, b'{"error":"body shorter than content-length"}')
+                return None
             body += chunk
         return bytes(body)
 
@@ -323,8 +367,7 @@ class _Handler(_BaseHandler):
 
     def do_POST(self) -> None:
         listener = self.listener
-        raw = self._read_body()
-        if raw is None or self._foreign_host():
+        if self._foreign_host():
             return
 
         parts = urlsplit(self.path)
@@ -335,6 +378,10 @@ class _Handler(_BaseHandler):
         token = parse_qs(parts.query).get("t", [""])[0]
         if not listener.token_matches(token):
             self._respond(403, b'{"error":"bad token"}')
+            return
+        self._trust()
+        raw = self._read_body()
+        if raw is None:
             return
 
         listener.note_activity()
@@ -445,7 +492,10 @@ class _SessionHandler(_BaseHandler):
         return cast("_SessionServer", self.server).session
 
     def _token_ok(self, query: str) -> bool:
-        return self.session.token_matches(parse_qs(query).get("t", [""])[0])
+        if not self.session.token_matches(parse_qs(query).get("t", [""])[0]):
+            return False
+        self._trust()
+        return True
 
     def do_GET(self) -> None:
         session = self.session
@@ -494,8 +544,7 @@ class _SessionHandler(_BaseHandler):
 
     def do_POST(self) -> None:
         session = self.session
-        raw = self._read_body()
-        if raw is None or self._foreign_host():
+        if self._foreign_host():
             return
 
         parts = urlsplit(self.path)
@@ -504,6 +553,9 @@ class _SessionHandler(_BaseHandler):
             return
         if not self._token_ok(parts.query):
             self._respond(403, b'{"error":"bad token"}')
+            return
+        raw = self._read_body()
+        if raw is None:
             return
         session.note_activity()
 

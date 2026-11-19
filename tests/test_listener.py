@@ -342,18 +342,40 @@ def test_an_interrupted_call_stops_waiting_for_its_tab(session, monkeypatch):
     assert time.monotonic() - started < 2
 
 
-def test_connections_past_the_cap_are_closed_and_the_tab_still_answered(session, monkeypatch):
+def test_past_the_cap_the_oldest_tokenless_connection_makes_room(session, monkeypatch):
     monkeypatch.setattr(listener_module, "_MAX_CONNECTIONS", 4)
     capped = SessionListener("tok")
+    idle = [_idle_connection(capped.port) for _ in range(4)]
     try:
-        idle = [_idle_connection(capped.port) for _ in range(4)]
-        extra = _idle_connection(capped.port)
-        extra.settimeout(3)
-        assert extra.recv(1) == b""  # closed straight away, no thread spent on it
+        for conn in idle:
+            conn.settimeout(3)
+        # Held open by a local process, they must not lock the tab out.
+        started = time.monotonic()
+        assert fetch(f"http://127.0.0.1:{capped.port}/status?t=tok").status == 200
+        assert time.monotonic() - started < 2
+        assert idle[0].recv(1) == b""  # the oldest made room
+    finally:
         for conn in idle:
             conn.close()
-        wait_until(lambda: fetch(f"http://127.0.0.1:{capped.port}/status?t=tok").status == 200)
-        extra.close()
+        capped.close()
+
+
+def test_a_connection_that_showed_the_token_is_not_evicted(session, monkeypatch):
+    monkeypatch.setattr(listener_module, "_MAX_CONNECTIONS", 2)
+    monkeypatch.setattr(listener_module, "_BODY_SECONDS", 3.0)
+    capped = SessionListener("tok")
+    try:
+        with socket.create_connection(("127.0.0.1", capped.port)) as answering:
+            head = f"POST /submit?t=tok HTTP/1.0\r\nHost: 127.0.0.1:{capped.port}\r\n"
+            body = b'{"kind": "submit", "data": {}}'
+            answering.sendall(f"{head}Content-Length: {len(body)}\r\n\r\n".encode())
+            wait_until(lambda: any(capped._httpd._connections.values()))
+            flood = [_idle_connection(capped.port) for _ in range(3)]
+            answering.sendall(body)
+            answering.settimeout(3)
+            assert answering.recv(64).startswith(b"HTTP/1.0 ")  # answered, not hung up on
+            for conn in flood:
+                conn.close()
     finally:
         capped.close()
 
@@ -373,6 +395,19 @@ def test_a_slow_drip_body_is_cut_off(session, monkeypatch):
                 break
         assert conn.recv(64).split(b" ")[1] == b"408"
         assert time.monotonic() - started < 4
+
+
+def test_a_body_shorter_than_its_length_is_refused(session):
+    with socket.create_connection(("127.0.0.1", session.port)) as conn:
+        head = f"POST /submit?t=tok HTTP/1.0\r\nHost: 127.0.0.1:{session.port}\r\n"
+        conn.sendall(f'{head}Content-Length: 100\r\n\r\n{{"kind": "submit"}}'.encode())
+        conn.shutdown(socket.SHUT_WR)
+        conn.settimeout(5)
+        response = b""
+        while chunk := conn.recv(4096):
+            response += chunk
+    assert response.split(b" ")[1] == b"400"
+    assert b"shorter than content-length" in response
 
 
 def test_an_idle_connection_does_not_block_the_session(session):
@@ -415,7 +450,8 @@ def test_a_session_post_without_the_token_is_no_activity(session):
 @pytest.mark.parametrize(("length", "status"), [("abc", 400), (str(2 << 20), 413)])
 def test_a_bad_content_length_gets_an_error_status(session, length, status):
     with socket.create_connection(("127.0.0.1", session.port)) as conn:
-        conn.sendall(f"POST /submit?t=tok HTTP/1.0\r\nContent-Length: {length}\r\n\r\n".encode())
+        head = f"POST /submit?t=tok HTTP/1.0\r\nHost: 127.0.0.1:{session.port}\r\n"
+        conn.sendall(f"{head}Content-Length: {length}\r\n\r\n".encode())
         conn.settimeout(3)
         assert conn.recv(64).split(b" ")[1] == str(status).encode()
 
