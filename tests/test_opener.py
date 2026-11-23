@@ -5,13 +5,15 @@ from pathlib import Path
 
 import pytest
 
+from text_wall_breaker import config
 from text_wall_breaker import opener as opener_module
+from text_wall_breaker.config import Config
 from text_wall_breaker.opener import BrowserUnavailable, Opener, find_opener
 
 
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
-    monkeypatch.delenv("TEXT_WALL_BREAKER_OPENER", raising=False)
+    monkeypatch.setattr(config, "current", Config())
     monkeypatch.setattr(opener_module, "is_wsl", lambda: False)
 
 
@@ -41,7 +43,7 @@ def test_override_wins_and_skips_the_display_check(monkeypatch):
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
-    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", "firefox --new-tab")
+    monkeypatch.setattr(config, "current", Config(opener="firefox --new-tab"))
     assert find_opener() == Opener(name="firefox", argv=("/bin/firefox", "--new-tab"))
 
 
@@ -49,13 +51,13 @@ def test_a_quoted_windows_override_path_loses_its_quotes(monkeypatch):
     monkeypatch.setattr("sys.platform", "win32")
     exe = r"C:\Program Files\Mozilla Firefox\firefox.exe"
     monkeypatch.setattr("shutil.which", lambda name: name if name == exe else None)
-    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", f'"{exe}" -new-tab')
+    monkeypatch.setattr(config, "current", Config(opener=f'"{exe}" -new-tab'))
     assert find_opener() == Opener(name=exe, argv=(exe, "-new-tab"))
 
 
 def test_override_appends_the_target_last(monkeypatch):
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
-    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", "firefox --new-tab")
+    monkeypatch.setattr(config, "current", Config(opener="firefox --new-tab"))
     runs = _record_runs(monkeypatch)
     opener = find_opener()
     assert isinstance(opener, Opener)
@@ -70,10 +72,10 @@ def test_override_appends_the_target_last(monkeypatch):
 def test_bad_override_is_refused(monkeypatch, value, reason):
     monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setattr("shutil.which", _which_only("firefox"))
-    monkeypatch.setenv("TEXT_WALL_BREAKER_OPENER", value)
+    monkeypatch.setattr(config, "current", Config(opener=value))
     problem = find_opener()
     assert isinstance(problem, str)
-    assert "TEXT_WALL_BREAKER_OPENER" in problem
+    assert "--opener" in problem
     assert reason in problem
 
 

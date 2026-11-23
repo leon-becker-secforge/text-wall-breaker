@@ -8,7 +8,6 @@ description is what the agent reads, so it is kept under MAX_TOOL_DESCRIPTION_CH
 
 from __future__ import annotations
 
-import os
 import sys
 import threading
 from collections.abc import Callable
@@ -22,6 +21,7 @@ from mcp.server.mcpserver import Context, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import BaseModel, Field
 
+from . import config
 from .ask import (
     AskRequest,
     BrowserUnavailable,
@@ -47,7 +47,6 @@ from .live_common import LiveCall, LiveError, Reply, no_such_session
 from .log import configure as configure_logging
 from .log import logger
 from .opener import find_opener
-from .page import ACCENT_ENV_VAR, InvalidAccent, parse_accent
 from .results import AskResult, LiveResult, ReviewResult, ShowResult, ShowStatusResult
 from .review import (
     InvalidReview,
@@ -62,7 +61,6 @@ from .show import InvalidShow, ShowRequest, run_show, show_status
 
 __all__ = [
     "MAX_TOOL_DESCRIPTION_CHARS",
-    "accent_config_problem",
     "environment_problem",
     "main",
     "server",
@@ -154,23 +152,6 @@ def environment_problem() -> str | None:
     """
     opener = find_opener()
     return opener if isinstance(opener, str) else None
-
-
-def accent_config_problem() -> str | None:
-    """Return why `TEXT_WALL_BREAKER_ACCENT` can't be used, or None if it's unset or valid.
-
-    Checked once at startup, same reasoning as `environment_problem`: a typo in the
-    colour should surface as a connection error the person configuring the server sees
-    immediately, not as a page that silently ignored their setting.
-    """
-    value = os.environ.get(ACCENT_ENV_VAR)
-    if not value:
-        return None
-    try:
-        parse_accent(value)
-    except InvalidAccent as exc:
-        return f"{ACCENT_ENV_VAR} is invalid: {exc}"
-    return None
 
 
 @server.tool(name="ask", description=ASK_DESCRIPTION)
@@ -535,11 +516,12 @@ _reject_unknown_arguments()
 
 
 def main() -> None:
-    for problem in (environment_problem(), accent_config_problem()):
-        if problem is not None:
-            print(f"text-wall-breaker: {problem}", file=sys.stderr)
-            raise SystemExit(2)
-    path = configure_logging()
+    config.current = config.parse_args()
+    problem = environment_problem()
+    if problem is not None:
+        print(f"text-wall-breaker: {problem}", file=sys.stderr)
+        raise SystemExit(2)
+    path = configure_logging(config.current.log_level)
     logger.info("server start, log %s", path)
     server.run(transport="stdio")
 

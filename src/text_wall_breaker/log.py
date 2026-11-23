@@ -4,7 +4,7 @@ The server's stderr lands in the MCP client's own per-session log, which neither
 user nor an agent knows to look in. This writes `text-wall-breaker.log` under
 `$XDG_STATE_HOME/text-wall-breaker/` (default `~/.local/state/text-wall-breaker/`), private
 to the user, and rotated at server start once past 1 MB, keeping two backups.
-`TEXT_WALL_BREAKER_LOG` sets the level (default `info`) or `off`.
+`--log-level` sets the level (default `info`) or `off`.
 """
 
 from __future__ import annotations
@@ -15,9 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-__all__ = ["LOG_ENV_VAR", "active_log", "configure", "log_path", "logger"]
-
-LOG_ENV_VAR = "TEXT_WALL_BREAKER_LOG"
+__all__ = ["active_log", "configure", "log_path", "logger"]
 
 logger = logging.getLogger("text_wall_breaker")
 
@@ -64,22 +62,19 @@ def _rotate(path: Path) -> None:
             source.replace(path.with_name(f"{path.name}.{index}"))
 
 
-def configure() -> Path | None:
-    """Attach the file handler; returns its path, or None if logging is off."""
+def configure(level_name: str = "info") -> Path | None:
+    """Attach the file handler at `level_name` (`config.LOG_LEVELS`); None if logging is off.
+
+    Returns the log file's path.
+    """
     global _active
     for old in list(logger.handlers):
         logger.removeHandler(old)
         old.close()
     _active = None
-    level_name = os.environ.get(LOG_ENV_VAR, "info").strip().lower()
     if level_name == "off":
         return None
-    level = logging.getLevelNamesMapping().get(level_name.upper())
-    if level is None:
-        print(
-            f"text-wall-breaker: unknown {LOG_ENV_VAR}={level_name!r}, using info", file=sys.stderr
-        )
-        level = logging.INFO
+    level = logging.getLevelNamesMapping()[level_name.upper()]
     path = log_path()
     try:
         path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

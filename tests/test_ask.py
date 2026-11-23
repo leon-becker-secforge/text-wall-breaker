@@ -22,25 +22,28 @@ from text_wall_breaker.ask import (
     Question,
     run_ask,
 )
-from text_wall_breaker.page import resolve_accent
+from text_wall_breaker.config import Config
 
 
-def test_resolve_accent_is_none_when_unset(monkeypatch):
-    monkeypatch.delenv("TEXT_WALL_BREAKER_ACCENT", raising=False)
-    assert resolve_accent() is None
+def _page(request: AskRequest) -> str:
+    request = request.validated()
+    return ask_module._build_html(request, request.steps, submit_url="u")
 
 
-def test_resolve_accent_returns_a_valid_value(monkeypatch):
-    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "#2563eb")
-    assert resolve_accent() == "#2563eb"
+def test_the_accent_option_reaches_the_page(monkeypatch):
+    request = AskRequest(question="q", options=[Option(id="a", label="A")])
+    assert "#a1b2c3" not in _page(request)
+    monkeypatch.setattr("text_wall_breaker.config.current", Config(accent="#a1b2c3"))
+    assert "--ntw-accent: #a1b2c3" in _page(request)
 
 
-def test_resolve_accent_falls_back_to_none_when_invalid(monkeypatch):
-    # server.main() is the gate that refuses to start over a bad value — this is the
-    # fallback for run_ask being called directly (as the rest of this file does),
-    # bypassing that gate.
-    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "not-a-colour")
-    assert resolve_accent() is None
+def test_no_glossary_keeps_the_terms_off_the_page(tmp_path, monkeypatch):
+    (tmp_path / ".git").mkdir()
+    (tmp_path / "CONTEXT.md").write_text("**Widget**:\nA thing.\n")
+    request = AskRequest(question="a widget?", options=[], project=str(tmp_path))
+    assert "A thing." in _page(request)
+    monkeypatch.setattr("text_wall_breaker.config.current", Config(glossary=False))
+    assert "A thing." not in _page(request)
 
 
 def test_empty_options_without_free_text_is_rejected():

@@ -41,18 +41,18 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
+from . import config
 from .glossary import load as load_glossary
 from .listener import LoopbackListener, SessionListener, Submission
 from .live_ask import ASK_ATTACH_INSTRUCTION, LiveAsk
 from .live_common import LiveError
-from .log import LOG_ENV_VAR, active_log
+from .log import active_log
 from .markdown import LONG_QUESTION_CHARS, first_paragraph
 from .opener import BrowserUnavailable, find_opener
 from .page import (
     build_multi_page,
     build_page,
     read_saved_theme,
-    resolve_accent,
 )
 from .session import get_shared_session
 
@@ -77,7 +77,7 @@ SHARE_INTERACTION_SIGNALS = True
 # not treat it like an `abandoned` one. See listener.DELIVERY_SECONDS.
 def not_delivered() -> dict[str, Any]:
     path = active_log()
-    details = f"Details: {path}" if path else f"No log is kept ({LOG_ENV_VAR} is off or failed)."
+    details = f"Details: {path}" if path else "No log is kept (--log-level off, or the log failed)."
     return {
         "not_delivered": True,
         "reason": (
@@ -469,7 +469,7 @@ def _build_html(
     `_run_ask_reusing_tab` — and default to "not reused, no discussion" for the one-shot
     path. `live` is "offer" (the operator may start a discussion) or "on" (one has started).
     """
-    glossary = load_glossary(request.project)
+    glossary = load_glossary(request.project) if config.current.glossary else None
     if request.questions is None:
         step = steps[0]
         return build_page(
@@ -479,7 +479,7 @@ def _build_html(
             allow_free_text=step.allow_free_text,
             free_text_prefill=step.free_text or "",
             submit_url=submit_url,
-            accent=resolve_accent(),
+            accent=config.current.accent,
             theme=read_saved_theme(),
             status_url=status_url,
             generation=generation,
@@ -501,7 +501,7 @@ def _build_html(
         ],
         header=request.header,
         submit_url=submit_url,
-        accent=resolve_accent(),
+        accent=config.current.accent,
         theme=read_saved_theme(),
         status_url=status_url,
         generation=generation,

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from text_wall_breaker import glossary
 from text_wall_breaker.page import build_multi_page, build_page
 
@@ -52,14 +50,6 @@ def test_find_file_stops_at_the_git_root(tmp_path: Path):
     repo = tmp_path / "repo"
     (repo / ".git").mkdir(parents=True)
     assert glossary.find_file(repo) is None
-
-
-def test_load_returns_none_when_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    (tmp_path / ".git").mkdir()
-    (tmp_path / "CONTEXT.md").write_text(SAMPLE)
-    assert glossary.load(str(tmp_path)) is not None
-    monkeypatch.setenv(glossary.DISABLE_ENV_VAR, "off")
-    assert glossary.load(str(tmp_path)) is None
 
 
 def test_load_returns_none_without_a_glossary(tmp_path: Path):

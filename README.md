@@ -86,13 +86,51 @@ although interop works; the server then looks for `/mnt/c/Windows/explorer.exe` 
 point at Linux paths the Windows browser can't read; pages on the shared tab load
 images over the loopback listener and are unaffected.
 
+## Options
+
+Options are command-line arguments to `text-wall-breaker-mcp`, placed after it in the
+registration. All are optional. An unknown option, or a value that can't be used, makes
+the server refuse to start with status 2 and a message on stderr, the same way the host
+checks above do. `text-wall-breaker-mcp --help` lists them.
+
+| Option | Effect | Default |
+| --- | --- | --- |
+| `--opener COMMAND` | Open pages with `COMMAND` instead of the platform's opener. See [Opener override](#opener-override). | the table above |
+| `--accent #RRGGBB` | The pages' accent colour. See [Accent colour](#accent-colour). | green |
+| `--log-level LEVEL` | `debug`, `info`, `warning`, `error`, `critical`, or `off` for no log file. See [Log file](#log-file). | `info` |
+| `--no-glossary` | Don't define the project's glossary terms on `ask` pages. See [Glossary hints](docs/ask-tool.md#glossary-hints). | glossary on |
+
+With `claude mcp add`, everything after `--` is the server's command line:
+
+```bash
+claude mcp add text-wall-breaker -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp --accent '#2563eb' --no-glossary
+```
+
+In an `.mcp.json`, the options go in `args`:
+
+```json
+{
+  "mcpServers": {
+    "text-wall-breaker": {
+      "command": "uv",
+      "args": [
+        "run", "--directory", "/path/to/text-wall-breaker", "text-wall-breaker-mcp",
+        "--opener", "firefox --new-tab",
+        "--accent", "#2563eb"
+      ]
+    }
+  }
+}
+```
+
 ### Opener override
 
-Set `TEXT_WALL_BREAKER_OPENER` to a command line to open pages with that instead, for a
-setup the table above gets wrong. The page's path or URL is appended as the last
-argument; the command is split shell-style but not run through a shell. An override
-also skips the display check. At launch, the first word must resolve on `PATH` (or be
-a path to an executable), otherwise the server refuses to start:
+`--opener` takes a command line to open pages with, for a setup the table above gets
+wrong. The page's path or URL is appended as the last argument. The command is split
+shell-style but not run through a shell, so it is one argument: quote it on a shell
+command line, and give it as a single string in `args`. An override also skips the
+display check. At launch, the first word must resolve on `PATH` (or be a path to an
+executable), otherwise the server refuses to start.
 
 An override gets a one-shot page (used when the shared tab is busy) as a plain file path,
 without the `wslpath -w` translation the built-in WSL opener applies. Under WSL, an override
@@ -100,22 +138,29 @@ that hands the target to a Windows program therefore opens such a page only if t
 understands Linux paths. Pages on the shared tab are loopback URLs and are unaffected.
 
 ```bash
-claude mcp add text-wall-breaker --env TEXT_WALL_BREAKER_OPENER="firefox --new-tab" -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp
+claude mcp add text-wall-breaker -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp --opener "firefox --new-tab"
 ```
 
 ### Accent colour
 
-The page's accent — the selected-option border and tint, the submit/Acknowledge button,
-focus rings — defaults to green, for `ask`, `show`, and `review` alike. Set
-`TEXT_WALL_BREAKER_ACCENT` to a `#rrggbb` hex colour to use something else instead, in both
-light and dark theme:
+The page's accent (the selected-option border and tint, the submit/Acknowledge button,
+focus rings) defaults to green, for `ask`, `show`, and `review` alike. `--accent` takes a
+`#rrggbb` hex colour to use instead, in both light and dark theme. Quote it on a shell
+command line, where an unquoted `#` can start a comment:
 
 ```bash
-claude mcp add text-wall-breaker --env TEXT_WALL_BREAKER_ACCENT=#2563eb -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp
+claude mcp add text-wall-breaker -- uv run --directory /path/to/text-wall-breaker text-wall-breaker-mcp --accent '#2563eb'
 ```
 
 The text colour on top of the accent (e.g. the submit button's label) and the tint
 behind a selected option are derived from the colour given, not configured separately.
-An unset or invalid value falls back to the default green; an invalid one also makes
-the server refuse to start, for the same reason as the opener checks
-above — surfaced once at launch rather than as a page that silently ignored it.
+A value that isn't a hex colour makes the server refuse to start, rather than open
+pages that silently ignore it.
+
+### Log file
+
+The server writes `text-wall-breaker.log` under `$XDG_STATE_HOME/text-wall-breaker/`
+(default `~/.local/state/text-wall-breaker/`), readable only by the user. It records
+the opener's command and exit status, each page's delivery and each timeout, and a
+`not_delivered` result names it. It is rotated at server start once past 1 MB, keeping two backups.
+`--log-level` sets how much it records; `--log-level off` keeps no log.

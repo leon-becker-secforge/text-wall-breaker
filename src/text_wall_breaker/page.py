@@ -48,7 +48,6 @@ from .markdown import (
 from .render import Block, split_blocks
 
 __all__ = [
-    "ACCENT_ENV_VAR",
     "InvalidAccent",
     "ReviewNote",
     "ReviewPage",
@@ -59,14 +58,8 @@ __all__ = [
     "build_show_page",
     "parse_accent",
     "read_saved_theme",
-    "resolve_accent",
     "save_theme",
 ]
-
-# Read by both server.py (to validate once at startup) and ask.py (to resolve the
-# colour for each page) — defined here, not in server.py, so ask.py does not have to
-# import from the module that already imports it.
-ACCENT_ENV_VAR = "TEXT_WALL_BREAKER_ACCENT"
 
 # The theme toggle only ever writes localStorage, which is scoped to a `file://` page's
 # storage partition — not guaranteed stable across browsers, profiles, or private
@@ -142,7 +135,7 @@ class ReviewPage(TypedDict):
 
 
 class InvalidAccent(ValueError):
-    """`TEXT_WALL_BREAKER_ACCENT` is set but is not a usable colour."""
+    """An accent colour that is not `#rrggbb` hex."""
 
 
 def _filename_base(title: str) -> str:
@@ -936,32 +929,13 @@ def _load_asset(name: str) -> str:
 def parse_accent(value: str) -> tuple[int, int, int]:
     """Parse a `#rrggbb` (or `rrggbb`) hex colour into its RGB components.
 
-    Raises `InvalidAccent` naming the value, so a bad `TEXT_WALL_BREAKER_ACCENT` fails with
-    a message pointing at the setting rather than a bare `ValueError` from inside a
-    string slice.
+    Raises `InvalidAccent` naming the value, so a bad `--accent` fails with a message
+    pointing at the setting rather than a bare `ValueError` from inside a string slice.
     """
     stripped = value.strip().removeprefix("#")
     if len(stripped) != 6 or not all(c in "0123456789abcdefABCDEF" for c in stripped):
         raise InvalidAccent(f"{value!r} is not a #rrggbb hex colour")
     return (int(stripped[0:2], 16), int(stripped[2:4], 16), int(stripped[4:6], 16))
-
-
-def resolve_accent() -> str | None:
-    """Read `TEXT_WALL_BREAKER_ACCENT`, or None if it's unset or unusable.
-
-    `server.main` validates the same variable at startup and refuses to run rather than
-    let a typo pass silently — this is the fallback for the case that check can't cover
-    (a tool run called directly, as the tests do, without going through `main`), where
-    falling back quietly beats failing every page over one bad environment variable.
-    """
-    value = os.environ.get(ACCENT_ENV_VAR)
-    if not value:
-        return None
-    try:
-        parse_accent(value)
-    except InvalidAccent:
-        return None
-    return value
 
 
 def _relative_luminance(rgb: tuple[int, int, int]) -> float:
@@ -1278,10 +1252,8 @@ def build_page(
     """Return the complete HTML document for one `ask` call.
 
     `accent` is a `#rrggbb` hex colour overriding the built-in green, or None to use it
-    as-is. Raises `InvalidAccent` if set and unparseable — callers reading it from
-    `TEXT_WALL_BREAKER_ACCENT` are expected to validate once at startup (see
-    `server.accent_config_problem`) so this only re-raises the same problem, never
-    surfaces a new one mid-call.
+    as-is. Raises `InvalidAccent` if set and unparseable; `--accent` is validated when
+    the server starts, so a value from there never raises mid-call.
 
     `theme` is `"light"`, `"dark"`, or None to follow the OS preference until the page's
     own toggle is used — see `read_saved_theme`.

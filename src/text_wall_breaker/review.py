@@ -21,6 +21,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, PrivateAttr
 
+from . import config
 from .ask import BrowserUnavailable, not_delivered, open_in_browser
 from .diff import (
     DiffLine,
@@ -38,7 +39,6 @@ from .page import (
     asset_base_url_for,
     build_review_page,
     read_saved_theme,
-    resolve_accent,
 )
 from .render import rendered_view
 from .session import get_shared_session
@@ -252,7 +252,7 @@ def _build_html(
         pages=entries,
         header=request.header,
         title=request.title,
-        accent=resolve_accent(),
+        accent=config.current.accent,
         theme=read_saved_theme(),
         submit_url=submit_url,
         status_url=status_url,

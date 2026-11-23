@@ -124,8 +124,8 @@ whole words, case-insensitive, outside code. The file format is the one the
 `domain-modeling` skill writes: `**Term**:`, then the definition.
 
 `ask` takes `project`, a folder to look in instead of the working directory, for a git
-worktree or a session started elsewhere. Set `TEXT_WALL_BREAKER_GLOSSARY=off` to turn the
-hints off.
+worktree or a session started elsewhere. Start the server with `--no-glossary` to turn the
+hints off (see [Options](../README.md#options)).
 
 ## Result
 

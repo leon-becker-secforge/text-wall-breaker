@@ -5,6 +5,23 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the server is configured with command-line options instead of
+  environment variables, placed after `text-wall-breaker-mcp` in the registration
+  (`args` in an `.mcp.json`). The variables are no longer read:
+
+  | Was | Now |
+  | --- | --- |
+  | `TEXT_WALL_BREAKER_OPENER=<command>` | `--opener <command>` |
+  | `TEXT_WALL_BREAKER_ACCENT=#rrggbb` | `--accent #rrggbb` |
+  | `TEXT_WALL_BREAKER_LOG=<level>` | `--log-level <level>` |
+  | `TEXT_WALL_BREAKER_GLOSSARY=off` | `--no-glossary` |
+
+  A misspelled option, an unknown log level or a bad accent now stops the server at
+  launch with status 2. A misspelled variable was ignored, and an unknown log level fell
+  back to `info`. `text-wall-breaker-mcp --help` lists the options.
+
 ## [0.22.0] - 2026-11-19
 
 ### Changed

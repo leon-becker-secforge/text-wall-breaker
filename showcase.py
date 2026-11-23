@@ -46,11 +46,9 @@ def status_spinner(text: str) -> Generator[Console]:
 
 def _server(accent: str | None) -> StdioServerParameters:
     # The client passes only a handful of variables by default; the server needs
-    # DISPLAY/WAYLAND_DISPLAY and any TEXT_WALL_BREAKER_* override to open a page. This
-    # script's own VIRTUAL_ENV would make `uv run` warn about the repository's .venv.
+    # DISPLAY/WAYLAND_DISPLAY to open a page. This script's own VIRTUAL_ENV would make
+    # `uv run` warn about the repository's .venv.
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    if accent:
-        env["TEXT_WALL_BREAKER_ACCENT"] = accent
     return StdioServerParameters(
         command="uv",
         args=[
@@ -58,6 +56,7 @@ def _server(accent: str | None) -> StdioServerParameters:
             "--directory",
             str(REPO),
             "text-wall-breaker-mcp",
+            *(["--accent", accent] if accent else []),
         ],
         env=env,
     )
@@ -487,7 +486,7 @@ def run(
         list[str] | None, typer.Argument(help="ask, show, review; all when omitted.")
     ] = None,
     accent: Annotated[
-        str | None, typer.Option(help="TEXT_WALL_BREAKER_ACCENT for the server, e.g. '#2563eb'.")
+        str | None, typer.Option(help="--accent for the server, e.g. '#2563eb'.")
     ] = None,
 ) -> None:
     """Start the server and walk each tool through its features."""

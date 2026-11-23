@@ -7,11 +7,9 @@ one the `domain-modeling` skill writes (`**Term**:` followed by its definition, 
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 
-DISABLE_ENV_VAR = "TEXT_WALL_BREAKER_GLOSSARY"
 FILE_NAMES = ("GLOSSARY.md", "CONTEXT.md")
 
 _TERM_LINE = re.compile(r"^\*\*(?P<term>[^*]+)\*\*(?:\s*\([^)]*\))?:\s*(?P<rest>.*)$")
@@ -70,8 +68,6 @@ def load(project: str | None = None) -> list[dict[str, str]] | None:
 
     Never raises: a glossary is a convenience, and an unreadable one must not fail an ask.
     """
-    if os.environ.get(DISABLE_ENV_VAR, "").strip().lower() in {"off", "0", "false", "no"}:
-        return None
     try:
         start = Path(project).expanduser().resolve() if project else Path.cwd()
         path = find_file(start)

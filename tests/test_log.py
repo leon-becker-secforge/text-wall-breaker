@@ -14,7 +14,6 @@ _TOKEN = "0123456789abcdef" * 2
 @pytest.fixture(autouse=True)
 def state_home(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    monkeypatch.delenv(log.LOG_ENV_VAR, raising=False)
     yield tmp_path
     for handler in list(log.logger.handlers):
         handler.close()
@@ -87,21 +86,13 @@ def test_reconfiguring_closes_the_previous_handler():
     assert first.stream is None
 
 
-def test_an_unknown_level_is_reported_and_info_is_used(monkeypatch, capsys):
-    monkeypatch.setenv(log.LOG_ENV_VAR, "verbose")
-    log.configure()
-    assert log.logger.level == logging.INFO
-    assert "verbose" in capsys.readouterr().err
-
-
 def test_not_delivered_names_the_log_in_use():
     path = log.configure()
     assert str(path) in not_delivered()["reason"]
 
 
-def test_not_delivered_says_when_logging_is_off(monkeypatch):
-    monkeypatch.setenv(log.LOG_ENV_VAR, "off")
-    log.configure()
+def test_not_delivered_says_when_logging_is_off():
+    log.configure("off")
     reason = not_delivered()["reason"]
     assert "local/state" not in reason
-    assert log.LOG_ENV_VAR in reason
+    assert "--log-level" in reason

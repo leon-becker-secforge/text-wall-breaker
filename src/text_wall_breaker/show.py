@@ -26,12 +26,12 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from . import config
 from .ask import BrowserUnavailable, not_delivered, open_in_browser
 from .listener import LoopbackListener, SessionListener, Submission
 from .page import (
     build_show_page,
     read_saved_theme,
-    resolve_accent,
 )
 from .session import get_shared_session
 
@@ -99,7 +99,7 @@ def _build_html(
         header=request.header,
         footer=request.footer,
         title=request.title,
-        accent=resolve_accent(),
+        accent=config.current.accent,
         theme=read_saved_theme(),
         save_button=request.save_button,
         acknowledge_button=request.acknowledge_button,

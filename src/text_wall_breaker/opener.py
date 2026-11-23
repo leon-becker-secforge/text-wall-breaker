@@ -2,7 +2,7 @@
 
 `find_opener` picks one, in this order:
 
-  1. `TEXT_WALL_BREAKER_OPENER`, if set: a command line the target is appended to as its
+  1. `--opener`, if given: a command line the target is appended to as its
      last argument. It wins over everything below and skips the display check, since
      whoever set it knows their desktop better than a heuristic does.
   2. Windows: `os.startfile`, the shell's own "open with the default handler".
@@ -31,11 +31,12 @@ import webbrowser
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from . import config
 from .log import logger
 
-__all__ = ["OPENER_ENV_VAR", "BrowserUnavailable", "Opener", "find_opener", "is_wsl"]
+__all__ = ["OPENER_OPTION", "BrowserUnavailable", "Opener", "find_opener", "is_wsl"]
 
-OPENER_ENV_VAR = "TEXT_WALL_BREAKER_OPENER"
+OPENER_OPTION = "--opener"
 
 # Where WSL mounts the Windows system directory by default. `appendWindowsPath = false` in
 # /etc/wsl.conf keeps it off PATH while interop still works, so `which` alone misses it.
@@ -114,8 +115,8 @@ class Opener:
 
 def find_opener() -> Opener | str:
     """Return the opener for this host, or why this host can't show a page."""
-    override = os.environ.get(OPENER_ENV_VAR)
-    if override:
+    override = config.current.opener
+    if override is not None:
         return _parse_override(override)
     if sys.platform == "win32":
         return Opener(name="os.startfile")
@@ -133,7 +134,7 @@ def find_opener() -> Opener | str:
                 "running under WSL, but neither wslview nor explorer.exe was found: not on "
                 f"PATH and not at {WINDOWS_EXPLORER}. Windows interop may be disabled, or "
                 "`appendWindowsPath = false` in /etc/wsl.conf keeps the Windows directories "
-                f"off PATH; set {OPENER_ENV_VAR} to override"
+                f"off PATH; pass {OPENER_OPTION} to override"
             )
         return Opener(name="explorer.exe", argv=(explorer,), check_exit=False, windows_paths=True)
     xdg_open = _on_path("xdg-open")
@@ -167,12 +168,12 @@ def _parse_override(value: str) -> Opener | str:
             _unquote(token) if windows else token for token in shlex.split(value, posix=not windows)
         ]
     except ValueError as exc:
-        return f"{OPENER_ENV_VAR} is invalid: {exc}"
+        return f"{OPENER_OPTION} is invalid: {exc}"
     if not argv:
-        return f"{OPENER_ENV_VAR} is set but empty"
+        return f"{OPENER_OPTION} is empty"
     executable = shutil.which(argv[0])
     if executable is None:
-        return f"{OPENER_ENV_VAR} names {argv[0]!r}, which is not on PATH"
+        return f"{OPENER_OPTION} names {argv[0]!r}, which is not on PATH"
     return Opener(name=argv[0], argv=(executable, *argv[1:]))
 
 

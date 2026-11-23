@@ -69,7 +69,6 @@ def environment() -> None:
         "DESKTOP_SESSION",
         "XDG_SESSION_TYPE",
         "BROWSER",
-        "TEXT_WALL_BREAKER_OPENER",
     ):
         print(f"{name}={os.environ.get(name, '')!r}")
     print(f"xdg-open: {shutil.which('xdg-open')}")

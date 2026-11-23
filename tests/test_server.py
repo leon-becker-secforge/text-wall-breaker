@@ -11,10 +11,10 @@ from support import make_live_review as make_live
 from support import wait_until
 
 import text_wall_breaker.server as server_module
+from text_wall_breaker.config import Config
 from text_wall_breaker.listener import LoopbackListener, SessionListener
 from text_wall_breaker.server import (
     MAX_TOOL_DESCRIPTION_CHARS,
-    accent_config_problem,
     environment_problem,
     server,
 )
@@ -73,7 +73,7 @@ def _plain_linux(monkeypatch):
     """Pin the environment checks to a non-WSL Linux host with no opener override."""
     monkeypatch.setattr("sys.platform", "linux")
     monkeypatch.setattr("text_wall_breaker.opener.is_wsl", lambda: False)
-    monkeypatch.delenv("TEXT_WALL_BREAKER_OPENER", raising=False)
+    monkeypatch.setattr("text_wall_breaker.config.current", Config())
 
 
 def test_environment_is_accepted_when_both_checks_pass(monkeypatch):
@@ -100,23 +100,6 @@ def test_headless_is_refused(monkeypatch):
     monkeypatch.delenv("DISPLAY", raising=False)
     monkeypatch.delenv("WAYLAND_DISPLAY", raising=False)
     assert "DISPLAY" in (environment_problem() or "")
-
-
-def test_accent_config_is_accepted_when_unset(monkeypatch):
-    monkeypatch.delenv("TEXT_WALL_BREAKER_ACCENT", raising=False)
-    assert accent_config_problem() is None
-
-
-def test_accent_config_is_accepted_when_a_valid_hex_colour(monkeypatch):
-    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "#2563eb")
-    assert accent_config_problem() is None
-
-
-def test_accent_config_is_refused_when_not_a_hex_colour(monkeypatch):
-    monkeypatch.setenv("TEXT_WALL_BREAKER_ACCENT", "blue")
-    problem = accent_config_problem() or ""
-    assert "TEXT_WALL_BREAKER_ACCENT" in problem
-    assert "blue" in problem
 
 
 def test_ask_show_show_status_review_and_live_are_the_only_registered_tools():
