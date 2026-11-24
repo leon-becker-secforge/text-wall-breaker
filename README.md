@@ -56,7 +56,7 @@ Or straight from the Git repository, with no checkout (a tag pins a release):
 
 ```bash
 claude mcp add text-wall-breaker \
-  -- uvx --from git+ssh://git@github.com/leon-becker-secforge/text-wall-breaker.git@v0.22.0 text-wall-breaker-mcp
+  -- uvx --from git+ssh://git@github.com/leon-becker-secforge/text-wall-breaker.git@v0.23.0 text-wall-breaker-mcp
 ```
 
 It is not published to PyPI: the name `text-wall-breaker` is not reserved there for this

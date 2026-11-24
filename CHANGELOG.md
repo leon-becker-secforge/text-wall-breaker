@@ -5,6 +5,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-24
+
 ### Changed
 
 - **Breaking:** the server is configured with command-line options instead of

@@ -1,6 +1,6 @@
 [project]
 name = "text-wall-breaker"
-version = "0.22.0"
+version = "0.23.0"
 description = "MCP server that asks the user questions, or shows them results, in a browser page"
 readme = "README.md"
 license = "MIT"
