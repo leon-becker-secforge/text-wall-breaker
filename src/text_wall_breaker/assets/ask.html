@@ -10,32 +10,32 @@ __CSS__
 </head>
 <body>
 <main__MAIN_EXTRA__>
-  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+  <button id="twb-theme" type="button" aria-label="Toggle theme">&#9680;</button>
 __QUESTION_BLOCK__
 
-  <form id="pp-form" novalidate>
+  <form id="twb-form" novalidate>
 __OPTIONS__
 __FREE_TEXT__
-    <div class="pp-actions">
-      <button type="button" id="pp-cancel">Cancel</button>
-      <button type="button" id="pp-stop">Stop here</button>
-      <button type="button" id="pp-stop-undo" hidden>never mind</button>
-      <div class="pp-actions-end">
-        <span id="pp-status">__HINT__</span>
-        <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
-        <button type="submit" id="pp-submit" disabled>Send answer</button>
+    <div class="twb-actions">
+      <button type="button" id="twb-cancel">Cancel</button>
+      <button type="button" id="twb-stop">Stop here</button>
+      <button type="button" id="twb-stop-undo" hidden>never mind</button>
+      <div class="twb-actions-end">
+        <span id="twb-status">__HINT__</span>
+        <button type="button" id="twb-stop-send" hidden disabled>Stop and send</button>
+        <button type="submit" id="twb-submit" disabled>Send answer</button>
       </div>
     </div>
   </form>
 
-  <div id="pp-fallback" hidden>
-    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
-    <p data-role="body" id="pp-fallback-reason"></p>
+  <div id="twb-fallback" hidden>
+    <strong id="twb-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="twb-fallback-reason"></p>
     <textarea readonly rows="6"></textarea>
   </div>
 </main>
 
-<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+<div class="twb-lightbox" id="twb-lightbox" hidden><img id="twb-lightbox-img" alt=""></div>
 
 <script nonce="__NONCE__">
 (function () {
@@ -54,8 +54,8 @@ __FREE_TEXT__
 
   // Any image (a gallery thumbnail or one in an option/question body) expands full-size
   // on click — a thumbnail is otherwise too small to actually compare against another.
-  var lightbox = document.getElementById('pp-lightbox');
-  var lightboxImg = document.getElementById('pp-lightbox-img');
+  var lightbox = document.getElementById('twb-lightbox');
+  var lightboxImg = document.getElementById('twb-lightbox-img');
   document.querySelectorAll('main img').forEach(function (img) {
     img.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -75,14 +75,14 @@ __FREE_TEXT__
     }
   });
 
-  var form = document.getElementById('pp-form');
-  var submitBtn = document.getElementById('pp-submit');
-  var cancelBtn = document.getElementById('pp-cancel');
-  var status = document.getElementById('pp-status');
-  var freeText = document.getElementById('pp-free-text');
+  var form = document.getElementById('twb-form');
+  var submitBtn = document.getElementById('twb-submit');
+  var cancelBtn = document.getElementById('twb-cancel');
+  var status = document.getElementById('twb-status');
+  var freeText = document.getElementById('twb-free-text');
   var inputs = Array.prototype.slice.call(document.querySelectorAll('input[data-option-id]'));
   var drawers = Array.prototype.slice.call(
-    document.querySelectorAll('.pp-option-drawer[data-option-id]')
+    document.querySelectorAll('.twb-option-drawer[data-option-id]')
   );
   // `expanded` (below, in collect()) is "was this ever opened", not "is it open right
   // now" — with several long-bodied options, closing one after reading it to get to the
@@ -125,7 +125,7 @@ __FREE_TEXT__
       if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
     } catch (e) { /* private mode: fall back to the OS preference */ }
   }
-  document.getElementById('pp-theme').addEventListener('click', function () {
+  document.getElementById('twb-theme').addEventListener('click', function () {
     // rgb(30, 30, 30) is --ntw-bg's dark value (#1e1e1e) — kept in sync with the
     // palette in _ADDENDUM by hand, since this runs before that stylesheet's custom
     // properties can be read back out as anything other than a computed colour.
@@ -201,17 +201,17 @@ __FREE_TEXT__
   function wireSummary(s) {
     var input = s.querySelector('input');
     s.addEventListener('click', function (e) {
-      if (e.detail === 0 || e.target.closest('.pp-option-details')) return;
+      if (e.detail === 0 || e.target.closest('.twb-option-details')) return;
       e.preventDefault();
       if (!input.disabled) input.click();
     });
   }
-  document.querySelectorAll('.pp-option-drawer > summary').forEach(wireSummary);
+  document.querySelectorAll('.twb-option-drawer > summary').forEach(wireSummary);
   if (freeText) freeText.addEventListener('input', refresh);
 
   // The page's side of the shared Interruption script below.
   function stopTarget() {
-    return { root: form, before: form.querySelector('.pp-actions'), id: 'pp-free-text' };
+    return { root: form, before: form.querySelector('.twb-actions'), id: 'twb-free-text' };
   }
   function stopMode(on) {
     submitBtn.hidden = on;
@@ -229,9 +229,9 @@ __FREE_TEXT__
   // needs the user's own words there: the question's text box turns required, and one is
   // added where the question has none (allow_free_text off). stopTarget, stopMode and
   // stopPayload above are each page's side of it.
-  var stopBtn = document.getElementById('pp-stop');
-  var stopSend = document.getElementById('pp-stop-send');
-  var stopUndo = document.getElementById('pp-stop-undo');
+  var stopBtn = document.getElementById('twb-stop');
+  var stopSend = document.getElementById('twb-stop-send');
+  var stopUndo = document.getElementById('twb-stop-undo');
   var stopping = null;
   function syncStop() {
     stopSend.disabled = frozen || !stopping || stopping.box.value.trim() === '';
@@ -242,7 +242,7 @@ __FREE_TEXT__
     var made = !box;
     if (made) {
       var holder = document.createElement('label');
-      holder.className = 'pp-free-text';
+      holder.className = 'twb-free-text';
       holder.appendChild(document.createTextNode(''));
       box = document.createElement('textarea');
       box.id = target.id;
@@ -253,7 +253,7 @@ __FREE_TEXT__
     var label = box.parentNode;
     stopping = { box: box, made: made, index: target.index, label: label.firstChild.nodeValue };
     label.firstChild.nodeValue = 'Why stop here? Claude reads this first.';
-    label.classList.add('pp-required');
+    label.classList.add('twb-required');
     box.addEventListener('input', syncStop);
     stopBtn.hidden = true;
     stopSend.hidden = false;
@@ -267,7 +267,7 @@ __FREE_TEXT__
     stopping.box.removeEventListener('input', syncStop);
     if (stopping.made) label.remove();
     else {
-      label.classList.remove('pp-required');
+      label.classList.remove('twb-required');
       label.firstChild.nodeValue = stopping.label;
     }
     stopping = null;
@@ -325,7 +325,7 @@ __FREE_TEXT__
       // In a live session a new generation is the agent's refresh, which ask_live.js
       // follows by reloading; it is not a call that ended.
       if (body.generation !== GENERATION) {
-        if (!(window.ppAsk && window.ppAsk.liveStarted)) expire(false);
+        if (!(window.twbAsk && window.twbAsk.liveStarted)) expire(false);
       }
       else if (!body.open) expire(true);
     } catch (e) { expire(false); }
@@ -365,14 +365,14 @@ __FREE_TEXT__
     // No navigator.clipboard.writeText() here — writing to the clipboard without the
     // user asking for it is a surprise, not a convenience. The textarea is selected
     // instead, so copying is still one keypress away, but it's the user's keypress.
-    var box = document.getElementById('pp-fallback');
+    var box = document.getElementById('twb-fallback');
     var text = JSON.stringify(payload, null, 2);
     box.hidden = false;
     var textarea = box.querySelector('textarea');
     textarea.value = text;
-    document.getElementById('pp-fallback-reason').textContent =
+    document.getElementById('twb-fallback-reason').textContent =
       reason + ' \u2014 copy the text below and paste it to Claude Code.';
-    document.getElementById('pp-fallback-title').textContent =
+    document.getElementById('twb-fallback-title').textContent =
       title || "Couldn't reach Claude Code";
     textarea.select();
   }
@@ -429,7 +429,7 @@ __FREE_TEXT__
   // (STATUS_URL set) is about to reload itself for the next question instead. A tab whose
   // discussion started has left the shared session: nothing reloads it.
   function doneMessage(base) {
-    return STATUS_URL && !(window.ppAsk && window.ppAsk.liveStarted)
+    return STATUS_URL && !(window.twbAsk && window.twbAsk.liveStarted)
       ? base + ' Waiting for the next question\u2026'
       : base + ' You can close this tab.';
   }
@@ -471,7 +471,7 @@ __FREE_TEXT__
   send('probe', {});
   startHeartbeat();
   // What assets/ask_live.js (the live discussion, ADR 0005) works through.
-  window.ppAsk = {
+  window.twbAsk = {
     liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
     collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false,
     generation: GENERATION

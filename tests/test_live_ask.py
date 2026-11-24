@@ -381,15 +381,15 @@ def _page(**kwargs):
 
 def test_a_page_without_live_carries_no_discussion_script():
     for html in (_page(), _page(live="off")):
-        assert "window.ppAsk" in html  # the hooks are always there, cheap and inert
-        assert "pp-live-panel" not in html and "game-icons.net" not in html
+        assert "window.twbAsk" in html  # the hooks are always there, cheap and inert
+        assert "twb-live-panel" not in html and "game-icons.net" not in html
 
 
 @pytest.mark.parametrize("mode", ["offer", "on"])
 def test_a_live_page_carries_the_panel_the_bubble_and_the_attribution(mode):
     html = _page(live=mode)
     assert f"liveMode: {json.dumps(mode)}" in html
-    assert "pp-live-panel" in html and "pp-live-ask" in html
+    assert "twb-live-panel" in html and "twb-live-ask" in html
     assert "SeregaCthtuf" in html and "CC BY 3.0" in html
     assert "__ICON__" not in html and "__LIVE" not in html
 
@@ -401,7 +401,7 @@ def test_the_multi_question_page_is_live_too():
         status_url="http://127.0.0.1:1/status?t=x",
         live="offer",
     )
-    assert "pp-live-panel" in html and 'liveMode: "offer"' in html and "__LIVE" not in html
+    assert "twb-live-panel" in html and 'liveMode: "offer"' in html and "__LIVE" not in html
 
 
 @pytest.mark.parametrize(

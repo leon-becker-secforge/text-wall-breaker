@@ -6,7 +6,7 @@
      body actually carries. JetBrains Mono first because it is what this machine has;
      the generic families after it are the fallback chain if the page is ever opened
      somewhere else. */
-  --pp-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --twb-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
 
   /* Light palette: base.css's default tokens read as flat next to real content, so this
      pushes contrast up — near-black text, a firmer border, and a deeper, more saturated
@@ -61,9 +61,9 @@ html { font-size: 18px; }
 body { margin: 0; padding: 20px 16px 40px; }
 main { max-width: 560px; margin: 0 auto; position: relative; }
 
-code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--ntw-code-bg);
+code { font-family: var(--twb-font-mono); font-size: 0.88em; background: var(--ntw-code-bg);
   padding: 0.1em 0.35em; border-radius: 4px; }
-pre.code-block { font-family: var(--pp-font-mono); }
+pre.code-block { font-family: var(--twb-font-mono); }
 pre.code-block code { background: none; padding: 0; border-radius: 0; }
 
 /* Picked in a four-way visual A/B/C/D over an accent rule (with and without a tint
@@ -83,9 +83,9 @@ table { border-collapse: collapse; width: 100%; margin: 0.6em 0; font-size: 0.9e
 /* Prose breaks inside an unbreakable word (a URL, an identifier) rather than running under
    the neighbouring button or past the card. Not on a table cell: that would squeeze the
    columns instead of letting the wrapper scroll. */
-:is(.pp-question, .pp-option-body, .pp-option-caveat) :is(p, li, blockquote, h1, h2, h3, h4, h5, h6),
-.pp-option-caveat, code { overflow-wrap: anywhere; }
-.pp-option { min-width: 0; }
+:is(.twb-question, .twb-option-body, .twb-option-caveat) :is(p, li, blockquote, h1, h2, h3, h4, h5, h6),
+.twb-option-caveat, code { overflow-wrap: anywhere; }
+.twb-option { min-width: 0; }
 th, td { padding: 6px 10px; text-align: left; border: none;
   border-bottom: 1px solid var(--ntw-border); }
 thead th { border-bottom: 2px solid var(--ntw-accent); color: var(--ntw-accent);
@@ -95,22 +95,22 @@ tbody tr:last-child td { border-bottom: none; }
 /* Picked in the same round as the table style: minimal over a GitHub-style full-line
    background and a gutter-badge style — colour without a solid block, so it reads as
    text with an accent rather than a wall of tinted rows. */
-.pp-diff { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0.6em 0;
+.twb-diff { font-family: var(--twb-font-mono); font-size: 0.85em; margin: 0.6em 0;
   overflow-x: auto; }
-.pp-diff .line { padding: 1px 10px 1px 12px; white-space: pre; border-left: 3px solid transparent; }
-.pp-diff .add { border-left-color: #1f7a4c; }
-.pp-diff .add::before { content: "+ "; color: #1f7a4c; }
-.pp-diff .del { border-left-color: #b3261e; color: var(--ntw-fg-muted);
+.twb-diff .line { padding: 1px 10px 1px 12px; white-space: pre; border-left: 3px solid transparent; }
+.twb-diff .add { border-left-color: #1f7a4c; }
+.twb-diff .add::before { content: "+ "; color: #1f7a4c; }
+.twb-diff .del { border-left-color: #b3261e; color: var(--ntw-fg-muted);
   text-decoration: line-through; }
-.pp-diff .del::before { content: "- "; color: #b3261e; text-decoration: none; }
-.pp-diff .ctx::before { content: "\00a0\00a0"; }
-.pp-diff .hunk, .pp-diff .file { color: var(--ntw-fg-muted); }
+.twb-diff .del::before { content: "- "; color: #b3261e; text-decoration: none; }
+.twb-diff .ctx::before { content: "\00a0\00a0"; }
+.twb-diff .hunk, .twb-diff .file { color: var(--ntw-fg-muted); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .pp-diff .add { border-left-color: #3ddc84; }
-  :root:not([data-theme="light"]) .pp-diff .add::before { color: #3ddc84; }
+  :root:not([data-theme="light"]) .twb-diff .add { border-left-color: #3ddc84; }
+  :root:not([data-theme="light"]) .twb-diff .add::before { color: #3ddc84; }
 }
-:root[data-theme="dark"] .pp-diff .add { border-left-color: #3ddc84; }
-:root[data-theme="dark"] .pp-diff .add::before { color: #3ddc84; }
+:root[data-theme="dark"] .twb-diff .add { border-left-color: #3ddc84; }
+:root[data-theme="dark"] .twb-diff .add::before { color: #3ddc84; }
 
 /* A rendered mermaid diagram is centered rather than left-aligned like the rest of the
    prose around it — it reads as a figure, not a paragraph. mermaid.run() replaces this
@@ -122,98 +122,98 @@ pre.mermaid svg { max-width: 100%; height: auto; }
 
 /* Auto-widened (see page.py's _is_gallery) rather than a manual flag, the same way a
    long option body already auto-collapses into a drawer without the caller asking. */
-main.pp-wide { max-width: 920px; }
+main.twb-wide { max-width: 920px; }
 
-/* `.pp-options.pp-options-gallery`, not `.pp-options-gallery` alone: the element carries
-   both classes, and matching both here beats the later, equal-specificity `.pp-options`
+/* `.twb-options.twb-options-gallery`, not `.twb-options-gallery` alone: the element carries
+   both classes, and matching both here beats the later, equal-specificity `.twb-options`
    rule below regardless of which one comes first in the stylesheet — a single-class
    selector lost that tie to source order once before. */
-.pp-options.pp-options-gallery { display: grid;
+.twb-options.twb-options-gallery { display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-.pp-options-gallery .pp-option { display: flex; flex-direction: column-reverse; gap: 8px;
+.twb-options-gallery .twb-option { display: flex; flex-direction: column-reverse; gap: 8px;
   padding: 10px; }
-.pp-options-gallery .pp-option-body { margin: 0; }
-.pp-options-gallery .pp-option-body img { width: 100%; margin-block: 0; }
+.twb-options-gallery .twb-option-body { margin: 0; }
+.twb-options-gallery .twb-option-body img { width: 100%; margin-block: 0; }
 
 /* Any image, gallery or not, expands full-size on click — a thumbnail-sized screenshot
    is otherwise too small to actually compare against another. */
 main img { cursor: zoom-in; }
-.pp-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000;
+.twb-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000;
   display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
 /* `[hidden]` alone loses this fight: author-origin CSS beats the browser's own default
    `[hidden] { display: none }` regardless of specificity, so the unguarded rule above
    left the overlay visible — and the page looking wrongly, uniformly dark — at all
    times, not just while zoomed. The extra attribute here outranks the plain class. */
-.pp-lightbox[hidden] { display: none; }
-.pp-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
+.twb-lightbox[hidden] { display: none; }
+.twb-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
 
-#pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
+#twb-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
   background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
   font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
-#pp-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
+#twb-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
 
 /* 74px on the right: the theme toggle (30px) and the export icon (30px, 34px in) share the
    top-right corner, and a heading must stop short of both. */
-.pp-question { margin: 0 74px 14px 0; padding: 0; }
-.pp-question > :first-child { margin-block-start: 0; font-weight: 600; font-size: 1.05em; }
-.pp-question.pp-long > :first-child { font-weight: 400; font-size: 1em; }
-.pp-question > :last-child { margin-block-end: 0; }
-.pp-question > :not(:first-child) { color: var(--ntw-fg-muted); font-size: 0.9em; }
-.pp-question img { max-width: 100%; height: auto; border-radius: 6px; }
+.twb-question { margin: 0 74px 14px 0; padding: 0; }
+.twb-question > :first-child { margin-block-start: 0; font-weight: 600; font-size: 1.05em; }
+.twb-question.twb-long > :first-child { font-weight: 400; font-size: 1em; }
+.twb-question > :last-child { margin-block-end: 0; }
+.twb-question > :not(:first-child) { color: var(--ntw-fg-muted); font-size: 0.9em; }
+.twb-question img { max-width: 100%; height: auto; border-radius: 6px; }
 
-.pp-options { display: flex; flex-direction: column; gap: 6px; margin: 0 0 16px;
+.twb-options { display: flex; flex-direction: column; gap: 6px; margin: 0 0 16px;
   padding: 0; list-style: none; }
-.pp-option { border: 1px solid var(--ntw-border); border-radius: 6px;
+.twb-option { border: 1px solid var(--ntw-border); border-radius: 6px;
   background: var(--ntw-bg-elevated); padding: 8px 10px; }
-.pp-option:hover { border-color: var(--ntw-accent); }
-.pp-option:has(input:checked) { border-color: var(--ntw-accent);
+.twb-option:hover { border-color: var(--ntw-accent); }
+.twb-option:has(input:checked) { border-color: var(--ntw-accent);
   background: var(--ntw-verdict-bg); }
-/* An option with a body is a <details class="pp-option-drawer"> whose <summary> is the
+/* An option with a body is a <details class="twb-option-drawer"> whose <summary> is the
    whole row. A click on the row selects, the same as on an option without a body (see
    the script below); only the Details pill opens the drawer. An option with no body is
    just the <label> below, un-nested. The row's text is not selectable: a quick second
    click (selecting, then clearing) otherwise highlights a word of the label. */
-.pp-option-drawer > summary { list-style: none; cursor: pointer; }
-.pp-option-drawer > summary::-webkit-details-marker { display: none; }
-.pp-option-select { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0;
+.twb-option-drawer > summary { list-style: none; cursor: pointer; }
+.twb-option-drawer > summary::-webkit-details-marker { display: none; }
+.twb-option-select { display: flex; gap: 8px; align-items: center; cursor: pointer; margin: 0;
   user-select: none; }
-.pp-option-select input { margin: 0; accent-color: var(--ntw-accent); }
+.twb-option-select input { margin: 0; accent-color: var(--ntw-accent); }
 /* Grows into the row and wraps its own text: the row wraps (for the caveat below), so a
    label left at its natural width would drop onto a line of its own under the input. */
-.pp-option-label { flex: 1 1 9em; min-width: 0; font-family: var(--pp-font-mono);
+.twb-option-label { flex: 1 1 9em; min-width: 0; font-family: var(--twb-font-mono);
   font-weight: 500; font-size: 0.9em; overflow-wrap: anywhere; }
 /* Picked over a muted line (read as body text, easy to miss) and warning-coloured text
    (read as harsh) in a three-way visual A/B/C: a warning-tinted strip running the full
    width of the option's bottom edge. It wraps onto its own line inside the select row
    (flex-basis 100% plus the row's padding), so it stays inside the <summary> a closed
-   drawer still shows. The negative margins cancel .pp-option's padding so the strip
+   drawer still shows. The negative margins cancel .twb-option's padding so the strip
    meets the border; the bottom one only applies when nothing follows it in the row. */
-.pp-option-select { flex-wrap: wrap; row-gap: 0; }
-.pp-option-caveat { flex-basis: calc(100% + 20px); margin: 8px -10px 0;
+.twb-option-select { flex-wrap: wrap; row-gap: 0; }
+.twb-option-caveat { flex-basis: calc(100% + 20px); margin: 8px -10px 0;
   padding: 5px 10px 5px 33px; border-left: 3px solid var(--ntw-warning);
   background: #fdf3e6; color: var(--ntw-fg); font-size: 0.82em; font-family: inherit; }
-.pp-option > .pp-option-select:last-child .pp-option-caveat,
-.pp-option-drawer:not([open]) .pp-option-caveat { margin-bottom: -8px;
+.twb-option > .twb-option-select:last-child .twb-option-caveat,
+.twb-option-drawer:not([open]) .twb-option-caveat { margin-bottom: -8px;
   border-radius: 0 0 5px 5px; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .pp-option-caveat { background: #33280f; }
+  :root:not([data-theme="light"]) .twb-option-caveat { background: #33280f; }
 }
-:root[data-theme="dark"] .pp-option-caveat { background: #33280f; }
+:root[data-theme="dark"] .twb-option-caveat { background: #33280f; }
 /* A gallery card has 10px padding all round, and column-reverse puts its select row at
    the bottom whatever follows it in the markup, so the strip always meets that edge. */
-.pp-options-gallery .pp-option-caveat { margin: 8px -10px -10px; border-radius: 0 0 5px 5px; }
+.twb-options-gallery .twb-option-caveat { margin: 8px -10px -10px; border-radius: 0 0 5px 5px; }
 /* The Recommended tag and the Details pill float top right inside the label, so a long
    label wraps under them rather than running in a narrow column beside them (picked over
    a tag above the label and one after its last word). Line 2 gets the full width only
    while the float's height, bottom margin included, stays within one label line: the
    tag and pill are ~20.5px against a ~24.3px line, so the float takes no bottom margin. */
-.pp-option-tags { float: right; display: flex; gap: 6px; align-items: center;
+.twb-option-tags { float: right; display: flex; gap: 6px; align-items: center;
   margin-inline-start: 10px; }
 /* Picked over the solid show-style pill (loudest thing in the row, read as "already
    chosen") and a tab on the top border (cost vertical space) in a three-way visual
    A/B/C: small outlined accent caps, just before the Details pill. */
-.pp-option-recommended { font-family: var(--pp-font-mono);
+.twb-option-recommended { font-family: var(--twb-font-mono);
   font-size: 0.68em; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--ntw-accent); border: 1px solid var(--ntw-accent); border-radius: 4px;
   padding: 1px 6px; flex: none; white-space: nowrap; }
@@ -223,41 +223,41 @@ main img { cursor: zoom-in; }
    label into a narrow column or sat away from the radio. Drawn by hand because a native
    radio takes no background or pseudo-element in Firefox. :not(:disabled) keeps the
    slash off a page frozen after Send. */
-.pp-option-select input[type="radio"] { appearance: none; width: 16px; height: 16px;
+.twb-option-select input[type="radio"] { appearance: none; width: 16px; height: 16px;
   flex: none; border: 2px solid var(--ntw-fg-muted); border-radius: 50%; cursor: pointer;
   background: transparent; transition: background .12s, border-color .12s; }
-.pp-option-select input[type="radio"]:checked { border-color: var(--ntw-accent);
+.twb-option-select input[type="radio"]:checked { border-color: var(--ntw-accent);
   background: radial-gradient(circle, var(--ntw-accent) 0 3.5px, transparent 4px); }
-.pp-option-select input[type="radio"]:disabled { opacity: 0.5; cursor: default; }
-.pp-option-select input[type="radio"]:focus-visible { outline: 2px solid var(--ntw-accent);
+.twb-option-select input[type="radio"]:disabled { opacity: 0.5; cursor: default; }
+.twb-option-select input[type="radio"]:focus-visible { outline: 2px solid var(--ntw-accent);
   outline-offset: 2px; }
-.pp-option:hover input[type="radio"]:checked:not(:disabled) {
+.twb-option:hover input[type="radio"]:checked:not(:disabled) {
   border-color: var(--ntw-fg-muted);
   background: linear-gradient(-45deg, transparent calc(50% - 1px), var(--ntw-fg-muted)
     calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)); }
-.pp-option-details { flex: none; display: inline-flex;
+.twb-option-details { flex: none; display: inline-flex;
   align-items: center; gap: 2px; padding: 1px 6px 1px 8px; border-radius: 999px;
   border: 1px solid var(--ntw-border); color: var(--ntw-fg-muted);
-  font-family: var(--pp-font-mono); font-size: 0.68em; text-transform: uppercase;
+  font-family: var(--twb-font-mono); font-size: 0.68em; text-transform: uppercase;
   letter-spacing: 0.04em; }
-.pp-option-details:hover { border-color: var(--ntw-accent); color: var(--ntw-accent); }
-.pp-option-details svg { width: 13px; height: 13px; transition: transform .15s; }
-.pp-option-drawer[open] .pp-option-details svg { transform: rotate(180deg); }
-.pp-option-body { color: var(--ntw-fg-muted); font-size: 0.88em; margin: 8px 0 0 26px; }
-.pp-option-body > :first-child { margin-block-start: 0; }
-.pp-option-body > :last-child { margin-block-end: 0; }
-.pp-option-body img { max-width: 100%; height: auto; border-radius: 6px; margin-block: 6px;
+.twb-option-details:hover { border-color: var(--ntw-accent); color: var(--ntw-accent); }
+.twb-option-details svg { width: 13px; height: 13px; transition: transform .15s; }
+.twb-option-drawer[open] .twb-option-details svg { transform: rotate(180deg); }
+.twb-option-body { color: var(--ntw-fg-muted); font-size: 0.88em; margin: 8px 0 0 26px; }
+.twb-option-body > :first-child { margin-block-start: 0; }
+.twb-option-body > :last-child { margin-block-end: 0; }
+.twb-option-body img { max-width: 100%; height: auto; border-radius: 6px; margin-block: 6px;
   display: block; }
 
-.pp-free-text { display: block; margin: 0 0 16px; font-size: 0.9em; color: var(--ntw-fg-muted); }
-.pp-free-text textarea { width: 100%; box-sizing: border-box; margin-block-start: 4px;
+.twb-free-text { display: block; margin: 0 0 16px; font-size: 0.9em; color: var(--ntw-fg-muted); }
+.twb-free-text textarea { width: 100%; box-sizing: border-box; margin-block-start: 4px;
   border: 1px solid var(--ntw-border); border-radius: 6px; background: var(--ntw-bg-elevated);
   color: var(--ntw-fg); font: inherit; font-size: 0.92em; padding: 7px 9px; resize: vertical; }
-.pp-free-text textarea:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px; }
+.twb-free-text textarea:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: 1px; }
 
 /* Interruption ("Stop here"): once pressed, the question's text box turns required and the
    warning-coloured "Stop and send" takes the primary button's place. */
-.pp-free-text.pp-required textarea { border-color: var(--ntw-warning);
+.twb-free-text.twb-required textarea { border-color: var(--ntw-warning);
   box-shadow: 0 0 0 1px var(--ntw-warning); }
 
 /* Danger, not neutral: this only ever appears when the answer failed to reach Claude
@@ -266,13 +266,13 @@ main img { cursor: zoom-in; }
    #f87171) rather than a new token; the tinted background is a second, literal colour
    per theme rather than color-mix(), matching the reasoning in base.css's own comment
    on .badge for not assuming color-mix() support. */
-#pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
+#twb-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
   background: #fef2f2; padding: 12px 14px; margin-block-start: 16px; }
-#pp-fallback strong { color: var(--ntw-danger); }
+#twb-fallback strong { color: var(--ntw-danger); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) #pp-fallback { background: #3f1d1d; }
+  :root:not([data-theme="light"]) #twb-fallback { background: #3f1d1d; }
 }
-:root[data-theme="dark"] #pp-fallback { background: #3f1d1d; }
-#pp-fallback textarea { width: 100%; box-sizing: border-box; margin-block-start: 8px;
+:root[data-theme="dark"] #twb-fallback { background: #3f1d1d; }
+#twb-fallback textarea { width: 100%; box-sizing: border-box; margin-block-start: 8px;
   border: 1px solid var(--ntw-border); border-radius: 6px; background: var(--ntw-bg);
-  color: var(--ntw-fg); font-family: var(--pp-font-mono); font-size: 0.85em; padding: 8px; }
+  color: var(--ntw-fg); font-family: var(--twb-font-mono); font-size: 0.85em; padding: 8px; }

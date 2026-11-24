@@ -1,7 +1,7 @@
 
 * { box-sizing: border-box; }
 :root {
-  --pp-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --twb-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
   --ntw-bg: #fafaf9;
   --ntw-bg-elevated: #ffffff;
   --ntw-fg: #0a0a0a;
@@ -39,320 +39,320 @@
 html { font-size: 18px; }
 /* 8px, not _ADDENDUM/_SHOW_ADDENDUM's 16px: a diff line is often wider than an ask
    question or show report, so review gives it back the few extra px of width before
-   falling into .pp-review-diff's own horizontal scroll — caught by Operator hitting it
+   falling into .twb-review-diff's own horizontal scroll — caught by Operator hitting it
    on an ordinary function-signature-length line. */
 body { margin: 0; padding: 20px 8px 40px; }
 /* A fixed 760px (_ADDENDUM/_SHOW_ADDENDUM's shape) left most of a normal window unused
-   while a diff line still hit .pp-review-diff's horizontal scroll — the real ceiling was
+   while a diff line still hit .twb-review-diff's horizontal scroll — the real ceiling was
    this, not the body padding above. min(1760px, 98vw) instead: still capped so it
    doesn't stretch unreadably wide on an ultrawide monitor, but scales with the window on
    anything smaller instead of a fixed number picked for prose width. */
 main { max-width: min(1760px, 98vw); margin: 0 auto; position: relative; }
 
-#pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
+#twb-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
   background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
   font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
-#pp-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
+#twb-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
 
-.pp-content > :first-child { margin-block-start: 0; }
-.pp-content > :last-child { margin-block-end: 0; }
+.twb-content > :first-child { margin-block-start: 0; }
+.twb-content > :last-child { margin-block-end: 0; }
 
-.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 16px 0; }
-.pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
-.pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
+.twb-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 16px 0; }
+.twb-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
+.twb-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
   overflow: hidden; }
-.pp-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
+.twb-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
   border-radius: 999px; transition: width .15s; }
 
 /* The top of the page (picked over a card and a document layout in a prototype): a slim row,
    the header folded under Details, the path as a breadcrumb, the blurb one quiet line. */
-.pp-head { margin: 0 0 12px; padding: 0 74px 8px 0; border-bottom: 1px solid var(--ntw-border); }
-.pp-head-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.pp-head-title { font-size: 1.1em; font-weight: 700; margin: 0; }
-.pp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.pp-chip { font-family: var(--pp-font-mono); font-size: 0.8em; font-weight: 500;
+.twb-head { margin: 0 0 12px; padding: 0 74px 8px 0; border-bottom: 1px solid var(--ntw-border); }
+.twb-head-row { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.twb-head-title { font-size: 1.1em; font-weight: 700; margin: 0; }
+.twb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.twb-chip { font-family: var(--twb-font-mono); font-size: 0.8em; font-weight: 500;
   padding: 2px 10px; border-radius: 999px; border: 1px solid var(--ntw-border);
   color: var(--ntw-fg-muted); background: var(--ntw-bg-elevated); }
-.pp-chip b { color: var(--ntw-fg); }
-.pp-head-details { margin-top: 6px; font-size: 0.92em; color: var(--ntw-fg-muted); }
-.pp-head-details summary { cursor: pointer; font-family: var(--pp-font-mono); font-size: 0.85em;
+.twb-chip b { color: var(--ntw-fg); }
+.twb-head-details { margin-top: 6px; font-size: 0.92em; color: var(--ntw-fg-muted); }
+.twb-head-details summary { cursor: pointer; font-family: var(--twb-font-mono); font-size: 0.85em;
   font-weight: 500; color: var(--ntw-accent); }
-.pp-head-details .pp-content p, .pp-head-details .pp-content ul { margin: 6px 0; }
-.pp-review-path { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0 0 4px;
+.twb-head-details .twb-content p, .twb-head-details .twb-content ul { margin: 6px 0; }
+.twb-review-path { font-family: var(--twb-font-mono); font-size: 0.85em; margin: 0 0 4px;
   word-break: break-all; }
-.pp-review-path::before { content: "\203A  "; color: var(--ntw-accent); }
-.pp-path-dir { color: var(--ntw-fg-muted); }
-.pp-path-file { color: var(--ntw-fg); font-weight: 700; }
-.pp-blurb { margin: 0 0 8px; font-size: 0.92em; color: var(--ntw-fg-muted); }
-.pp-blurb > p { display: inline; margin: 0; }
-.pp-blurb > p + p::before { content: " "; }
-.pp-blurb::before { content: "\25CF"; color: var(--ntw-accent); font-size: 0.7em;
+.twb-review-path::before { content: "\203A  "; color: var(--ntw-accent); }
+.twb-path-dir { color: var(--ntw-fg-muted); }
+.twb-path-file { color: var(--ntw-fg); font-weight: 700; }
+.twb-blurb { margin: 0 0 8px; font-size: 0.92em; color: var(--ntw-fg-muted); }
+.twb-blurb > p { display: inline; margin: 0; }
+.twb-blurb > p + p::before { content: " "; }
+.twb-blurb::before { content: "\25CF"; color: var(--ntw-accent); font-size: 0.7em;
   vertical-align: 1px; margin-inline-end: 0.6em; }
-.pp-review-diff { font-family: var(--pp-font-mono); font-size: 0.85em; margin: 0.6em 0;
+.twb-review-diff { font-family: var(--twb-font-mono); font-size: 0.85em; margin: 0.6em 0;
   line-height: 1.55; border: 1px solid var(--ntw-border); border-radius: 12px;
   overflow: hidden; overflow-x: auto; }
-.pp-review-row.hunk { color: var(--ntw-fg-muted); padding: 4px 14px;
+.twb-review-row.hunk { color: var(--ntw-fg-muted); padding: 4px 14px;
   background: var(--ntw-code-bg); }
 /* Hidden lines between hunks: a dashed divider with a pill (see _render_review_gap). The
    step buttons show on hover or focus, and always where there is no hover. */
-.pp-review-gap { position: relative; display: flex; justify-content: center; align-items: center;
+.twb-review-gap { position: relative; display: flex; justify-content: center; align-items: center;
   height: 30px; font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 0.85em; color: var(--ntw-fg-muted); user-select: none; }
-.pp-review-gap::before { content: ""; position: absolute; left: 0; right: 0; top: 50%;
+.twb-review-gap::before { content: ""; position: absolute; left: 0; right: 0; top: 50%;
   border-top: 1px dashed var(--ntw-border); }
-.pp-gap-pill { position: relative; display: inline-flex; align-items: stretch;
+.twb-gap-pill { position: relative; display: inline-flex; align-items: stretch;
   border: 1px solid var(--ntw-fg-muted); border-radius: 6px; background: var(--ntw-bg-elevated);
   overflow: hidden; }
-.pp-gap-pill button { border: 0; background: none; font-family: var(--pp-font-mono);
+.twb-gap-pill button { border: 0; background: none; font-family: var(--twb-font-mono);
   font-size: inherit; font-weight: 500; color: var(--ntw-fg-muted); height: 26px;
   padding: 0 12px; cursor: pointer;
   transition: background-color 0.18s ease, color 0.18s ease; }
-.pp-gap-pill .pp-gap-all { color: var(--ntw-fg); }
-.pp-gap-pill .pp-gap-step { display: none; color: var(--ntw-accent);
+.twb-gap-pill .twb-gap-all { color: var(--ntw-fg); }
+.twb-gap-pill .twb-gap-step { display: none; color: var(--ntw-accent);
   border-inline: 1px solid var(--ntw-border); }
-.pp-review-gap:hover .pp-gap-step, .pp-review-gap:focus-within .pp-gap-step {
+.twb-review-gap:hover .twb-gap-step, .twb-review-gap:focus-within .twb-gap-step {
   display: inline-block; }
-@media (hover: none) { .pp-gap-pill .pp-gap-step { display: inline-block; } }
-.pp-gap-pill .pp-gap-step[hidden] { display: none; }
-.pp-gap-pill button:hover { background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
-.pp-gap-pill button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
+@media (hover: none) { .twb-gap-pill .twb-gap-step { display: inline-block; } }
+.twb-gap-pill .twb-gap-step[hidden] { display: none; }
+.twb-gap-pill button:hover { background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
+.twb-gap-pill button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
 /* Whole row is the click/keyboard target — chosen over a separate gutter button in a
    three-variant review (see text-wall-breaker's CLAUDE.md): nothing small to aim for, and the
    bubble glyph below is purely decorative, not itself a click target
    (`pointer-events: none`). Selecting rows or text opens the comment dock below. */
-.pp-review-row-wrap { position: relative; cursor: pointer; }
-/* Once Submit/Cancel has been sent (body.pp-review-frozen, set by the script's freeze())
+.twb-review-row-wrap { position: relative; cursor: pointer; }
+/* Once Submit/Cancel has been sent (body.twb-review-frozen, set by the script's freeze())
    a row no longer looks clickable — the comments it would collect have already left. */
-body.pp-review-frozen .pp-review-row-wrap { cursor: default; }
-.pp-review-diff ::selection { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
+body.twb-review-frozen .twb-review-row-wrap { cursor: default; }
+.twb-review-diff ::selection { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
 /* Soft rows (picked over gutter-coloured and minimal rows in a three-variant prototype,
    palette kept as it was): the change is a tint across the row, a stronger tint behind its
    line numbers, and a plus or minus mark before the text, so no meaning rests on colour
    alone. */
-:root { --pp-add: #1f7a4c; --pp-del: #b3261e; --pp-add-bg: rgba(31, 122, 76, 0.12);
-  --pp-del-bg: rgba(179, 38, 30, 0.10); --pp-add-gut: rgba(31, 122, 76, 0.22);
-  --pp-del-gut: rgba(179, 38, 30, 0.20); --pp-add-chg: rgba(31, 122, 76, 0.38);
-  --pp-del-chg: rgba(179, 38, 30, 0.34); }
+:root { --twb-add: #1f7a4c; --twb-del: #b3261e; --twb-add-bg: rgba(31, 122, 76, 0.12);
+  --twb-del-bg: rgba(179, 38, 30, 0.10); --twb-add-gut: rgba(31, 122, 76, 0.22);
+  --twb-del-gut: rgba(179, 38, 30, 0.20); --twb-add-chg: rgba(31, 122, 76, 0.38);
+  --twb-del-chg: rgba(179, 38, 30, 0.34); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --pp-add: #3fb97a; --pp-del: #f0716a;
-    --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
-    --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24);
-    --pp-add-chg: rgba(63, 185, 122, 0.40); --pp-del-chg: rgba(240, 113, 106, 0.40); }
+  :root:not([data-theme="light"]) { --twb-add: #3fb97a; --twb-del: #f0716a;
+    --twb-add-bg: rgba(63, 185, 122, 0.14); --twb-del-bg: rgba(240, 113, 106, 0.13);
+    --twb-add-gut: rgba(63, 185, 122, 0.26); --twb-del-gut: rgba(240, 113, 106, 0.24);
+    --twb-add-chg: rgba(63, 185, 122, 0.40); --twb-del-chg: rgba(240, 113, 106, 0.40); }
 }
-:root[data-theme="dark"] { --pp-add: #3fb97a; --pp-del: #f0716a;
-  --pp-add-bg: rgba(63, 185, 122, 0.14); --pp-del-bg: rgba(240, 113, 106, 0.13);
-  --pp-add-gut: rgba(63, 185, 122, 0.26); --pp-del-gut: rgba(240, 113, 106, 0.24);
-  --pp-add-chg: rgba(63, 185, 122, 0.40); --pp-del-chg: rgba(240, 113, 106, 0.40); }
+:root[data-theme="dark"] { --twb-add: #3fb97a; --twb-del: #f0716a;
+  --twb-add-bg: rgba(63, 185, 122, 0.14); --twb-del-bg: rgba(240, 113, 106, 0.13);
+  --twb-add-gut: rgba(63, 185, 122, 0.26); --twb-del-gut: rgba(240, 113, 106, 0.24);
+  --twb-add-chg: rgba(63, 185, 122, 0.40); --twb-del-chg: rgba(240, 113, 106, 0.40); }
 /* Long lines wrap; a wrapped line hangs under the text, not under the +/- mark. */
-.pp-review-row { display: flex; align-items: flex-start; padding: 1px 12px 1px 0;
+.twb-review-row { display: flex; align-items: flex-start; padding: 1px 12px 1px 0;
   white-space: pre-wrap; overflow-wrap: anywhere; position: relative; }
-.pp-review-text { flex: 1 1 0; min-width: 0; padding-left: 2ch; text-indent: -2ch; }
-.pp-review-row.add { background: var(--pp-add-bg); }
-.pp-review-row.del { background: var(--pp-del-bg); }
+.twb-review-text { flex: 1 1 0; min-width: 0; padding-left: 2ch; text-indent: -2ch; }
+.twb-review-row.add { background: var(--twb-add-bg); }
+.twb-review-row.del { background: var(--twb-del-bg); }
 /* The characters that changed inside an edited line (intraline.py): square boxes, so the
    edge of a one-character change stays a clean rectangle. */
-.pp-review-row mark.pp-chg { color: inherit; border-radius: 0; }
-.pp-review-row.add mark.pp-chg { background: var(--pp-add-chg); }
-.pp-review-row.del mark.pp-chg { background: var(--pp-del-chg); }
-.pp-review-row.add .pp-review-gutter { background: var(--pp-add-gut); color: var(--pp-add); }
-.pp-review-row.del .pp-review-gutter { background: var(--pp-del-gut); color: var(--pp-del); }
-.pp-review-row.add .pp-review-text::before { content: "+ "; color: var(--pp-add); }
-.pp-review-row.del .pp-review-text::before { content: "\2212  ";
-  color: var(--pp-del); }  /* two spaces: the first ends the escape */
-.pp-review-row.ctx .pp-review-text::before { content: "  "; }
-.pp-review-row-wrap:hover .pp-review-row,
-.pp-review-row-wrap:focus-within .pp-review-row { background: var(--ntw-border); }
-body.pp-review-frozen .pp-review-row-wrap:hover .pp-review-row,
-body.pp-review-frozen .pp-review-row-wrap:focus-within .pp-review-row { background: none; }
+.twb-review-row mark.twb-chg { color: inherit; border-radius: 0; }
+.twb-review-row.add mark.twb-chg { background: var(--twb-add-chg); }
+.twb-review-row.del mark.twb-chg { background: var(--twb-del-chg); }
+.twb-review-row.add .twb-review-gutter { background: var(--twb-add-gut); color: var(--twb-add); }
+.twb-review-row.del .twb-review-gutter { background: var(--twb-del-gut); color: var(--twb-del); }
+.twb-review-row.add .twb-review-text::before { content: "+ "; color: var(--twb-add); }
+.twb-review-row.del .twb-review-text::before { content: "\2212  ";
+  color: var(--twb-del); }  /* two spaces: the first ends the escape */
+.twb-review-row.ctx .twb-review-text::before { content: "  "; }
+.twb-review-row-wrap:hover .twb-review-row,
+.twb-review-row-wrap:focus-within .twb-review-row { background: var(--ntw-border); }
+body.twb-review-frozen .twb-review-row-wrap:hover .twb-review-row,
+body.twb-review-frozen .twb-review-row-wrap:focus-within .twb-review-row { background: none; }
 /* user-select: none on the glyph and the gutters keeps them out of a selected `quote`. */
-.pp-review-comment-icon { position: absolute; right: 8px; top: 1px; font-size: 0.85em;
+.twb-review-comment-icon { position: absolute; right: 8px; top: 1px; font-size: 0.85em;
   opacity: 0; color: var(--ntw-fg-muted); pointer-events: none; user-select: none; }
-.pp-review-row-wrap:hover .pp-review-comment-icon,
-.pp-review-row-wrap.has-comment .pp-review-comment-icon { opacity: 1; }
-.pp-review-row-wrap.has-comment .pp-review-comment-icon { color: var(--ntw-accent); }
-.pp-review-row-wrap.has-comment .pp-review-row { box-shadow: inset -3px 0 0 var(--ntw-accent); }
-.pp-review-gutter { flex: none; width: 3.2em; text-align: right; padding-inline-end: 10px;
+.twb-review-row-wrap:hover .twb-review-comment-icon,
+.twb-review-row-wrap.has-comment .twb-review-comment-icon { opacity: 1; }
+.twb-review-row-wrap.has-comment .twb-review-comment-icon { color: var(--ntw-accent); }
+.twb-review-row-wrap.has-comment .twb-review-row { box-shadow: inset -3px 0 0 var(--ntw-accent); }
+.twb-review-gutter { flex: none; width: 3.2em; text-align: right; padding-inline-end: 10px;
   color: var(--ntw-fg-muted); user-select: none; }
 
 /* Selection: the rest of the diff dims, the selected rows get a ring (picked over a
    floating pill and a gutter bracket in a three-variant prototype). The dock that takes
    the comment sits under the last selected row, so the text stays next to what it is
    about. */
-.pp-review-diff.has-sel .pp-review-row-wrap:not(.is-sel) { opacity: 0.32;
+.twb-review-diff.has-sel .twb-review-row-wrap:not(.is-sel) { opacity: 0.32;
   transition: opacity 0.12s; }
-.pp-review-row-wrap.is-sel .pp-review-row { --pp-tint: inset 0 0 0 100vmax
-  color-mix(in srgb, var(--ntw-accent) 10%, transparent); box-shadow: var(--pp-tint); }
-.pp-review-row-wrap.is-sel.sel-first .pp-review-row {
-  box-shadow: inset 0 3px 0 var(--ntw-accent), var(--pp-tint); }
-.pp-review-row-wrap.is-sel.sel-last .pp-review-row {
-  box-shadow: inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
-.pp-review-row-wrap.is-sel.sel-first.sel-last .pp-review-row {
-  box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--pp-tint); }
+.twb-review-row-wrap.is-sel .twb-review-row { --twb-tint: inset 0 0 0 100vmax
+  color-mix(in srgb, var(--ntw-accent) 10%, transparent); box-shadow: var(--twb-tint); }
+.twb-review-row-wrap.is-sel.sel-first .twb-review-row {
+  box-shadow: inset 0 3px 0 var(--ntw-accent), var(--twb-tint); }
+.twb-review-row-wrap.is-sel.sel-last .twb-review-row {
+  box-shadow: inset 0 -3px 0 var(--ntw-accent), var(--twb-tint); }
+.twb-review-row-wrap.is-sel.sel-first.sel-last .twb-review-row {
+  box-shadow: inset 0 3px 0 var(--ntw-accent), inset 0 -3px 0 var(--ntw-accent), var(--twb-tint); }
 /* A labelled two-state switch (picked over one flip button and a track-and-thumb switch in
    a three-variant prototype): ask's button language, the active side a filled slider that
    moves to the other segment. State is on the container:
-   `.pp-notes-bar[data-state]` (shown, hidden, or mixed with neither lit) for the notes. */
-.pp-switch-label { font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500;
+   `.twb-notes-bar[data-state]` (shown, hidden, or mixed with neither lit) for the notes. */
+.twb-switch-label { font-family: var(--twb-font-mono); font-size: 0.85em; font-weight: 500;
   color: var(--ntw-fg-muted); }
-.pp-switch { position: relative; display: inline-grid; grid-auto-flow: column;
+.twb-switch { position: relative; display: inline-grid; grid-auto-flow: column;
   grid-auto-columns: 1fr; border: 1px solid var(--ntw-fg-muted); border-radius: 6px;
   overflow: hidden; }
-.pp-switch::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 50%;
+.twb-switch::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 50%;
   background: var(--ntw-accent); transition: transform 0.2s ease, opacity 0.2s ease; }
-.pp-switch button { position: relative; height: 28px; padding: 0 12px; border: 0;
+.twb-switch button { position: relative; height: 28px; padding: 0 12px; border: 0;
   border-radius: 0; background: none; color: var(--ntw-fg); cursor: pointer;
-  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; white-space: nowrap;
+  font-family: var(--twb-font-mono); font-size: 0.85em; font-weight: 500; white-space: nowrap;
   transition: color 0.18s ease; }
-.pp-switch button:hover { background: var(--pp-btn-tint); }
-.pp-switch button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
-.pp-notes-bar[data-state="shown"] .pp-switch::before { transform: translateX(100%); }
-.pp-notes-bar[data-state="mixed"] .pp-switch::before { opacity: 0; }
-.pp-notes-bar[data-state="hidden"] .pp-switch [data-all="0"],
-.pp-notes-bar[data-state="shown"] .pp-switch [data-all="1"] {
+.twb-switch button:hover { background: var(--twb-btn-tint); }
+.twb-switch button:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
+.twb-notes-bar[data-state="shown"] .twb-switch::before { transform: translateX(100%); }
+.twb-notes-bar[data-state="mixed"] .twb-switch::before { opacity: 0; }
+.twb-notes-bar[data-state="hidden"] .twb-switch [data-all="0"],
+.twb-notes-bar[data-state="shown"] .twb-switch [data-all="1"] {
   color: var(--ntw-accent-contrast); background: none; }
 /* Rendered view, chunk by chunk (see _render_review_chunks): the rows of a block's source
    lines on the left, the block rendered on the right, a divider between chunks. The font
-   size undoes .pp-review-diff's 0.85em, which is meant for code. */
-.pp-chunk { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
-.pp-chunk + .pp-chunk, .pp-fold-body > .pp-chunk:first-child {
+   size undoes .twb-review-diff's 0.85em, which is meant for code. */
+.twb-chunk { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+.twb-chunk + .twb-chunk, .twb-fold-body > .twb-chunk:first-child {
   border-top: 1px solid var(--ntw-border); }
-.pp-chunk-diff { min-width: 0; border-right: 1px solid var(--ntw-border); }
-.pp-rendered { min-width: 0; padding: 6px 18px; font-size: 1.18em; line-height: 1.55;
+.twb-chunk-diff { min-width: 0; border-right: 1px solid var(--ntw-border); }
+.twb-rendered { min-width: 0; padding: 6px 18px; font-size: 1.18em; line-height: 1.55;
   font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   overflow-wrap: anywhere; background: var(--ntw-bg-elevated); }
-.pp-rendered > :first-child { margin-top: 0; }
-.pp-rendered > :last-child { margin-bottom: 0; }
-.pp-fold { display: block; width: 100%; padding: 6px 12px; border: 0;
+.twb-rendered > :first-child { margin-top: 0; }
+.twb-rendered > :last-child { margin-bottom: 0; }
+.twb-fold { display: block; width: 100%; padding: 6px 12px; border: 0;
   border-block: 1px dashed var(--ntw-border); background: var(--ntw-code-bg);
   color: var(--ntw-fg-muted); font: inherit; cursor: pointer; }
-.pp-fold:hover { color: var(--ntw-fg); }
-.pp-fold:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
-.pp-fold-body[hidden] { display: none; }
+.twb-fold:hover { color: var(--ntw-fg); }
+.twb-fold:focus-visible { outline: 2px solid var(--ntw-accent); outline-offset: -2px; }
+.twb-fold-body[hidden] { display: none; }
 @media (max-width: 999px) {
-  .pp-chunk { grid-template-columns: minmax(0, 1fr); }
-  .pp-chunk-diff { border-right: 0; border-bottom: 1px solid var(--ntw-border); }
+  .twb-chunk { grid-template-columns: minmax(0, 1fr); }
+  .twb-chunk-diff { border-right: 0; border-bottom: 1px solid var(--ntw-border); }
 }
-.pp-rendered h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; }
-.pp-rendered h2 { font-size: 1.25em; margin: 1em 0 0.3em; }
-.pp-rendered h3, .pp-rendered h4 { font-size: 1.05em; margin: 1em 0 0.3em; }
-.pp-rendered p, .pp-rendered li, .pp-rendered pre { margin: 0.35em 0; }
-.pp-rendered code { font-family: var(--pp-font-mono); background: var(--ntw-code-bg);
+.twb-rendered h1 { font-size: 1.5em; margin: 0.6em 0 0.3em; }
+.twb-rendered h2 { font-size: 1.25em; margin: 1em 0 0.3em; }
+.twb-rendered h3, .twb-rendered h4 { font-size: 1.05em; margin: 1em 0 0.3em; }
+.twb-rendered p, .twb-rendered li, .twb-rendered pre { margin: 0.35em 0; }
+.twb-rendered code { font-family: var(--twb-font-mono); background: var(--ntw-code-bg);
   padding: 0 4px; border-radius: 3px; font-size: 0.9em; }
-.pp-rendered pre { background: var(--ntw-code-bg); border-radius: 6px; padding: 8px 10px;
+.twb-rendered pre { background: var(--ntw-code-bg); border-radius: 6px; padding: 8px 10px;
   overflow-x: auto; }
-.pp-rendered pre code { display: block; background: none; padding: 0; }
-.pp-rendered img { max-width: 100%; }
-.pp-rendered table { border-collapse: collapse; margin: 0.6em 0; }
-.pp-rendered td, .pp-rendered th { border: 1px solid var(--ntw-border); padding: 3px 10px; }
-.pp-rendered blockquote { margin: 0.4em 0; padding-left: 12px;
+.twb-rendered pre code { display: block; background: none; padding: 0; }
+.twb-rendered img { max-width: 100%; }
+.twb-rendered table { border-collapse: collapse; margin: 0.6em 0; }
+.twb-rendered td, .twb-rendered th { border: 1px solid var(--ntw-border); padding: 3px 10px; }
+.twb-rendered blockquote { margin: 0.4em 0; padding-left: 12px;
   border-left: 3px solid var(--ntw-border); color: var(--ntw-fg-muted); }
-.pp-rendered [data-first] { cursor: pointer; border-radius: 4px; }
-.pp-rendered [data-first]:hover {
+.twb-rendered [data-first] { cursor: pointer; border-radius: 4px; }
+.twb-rendered [data-first]:hover {
   background: color-mix(in srgb, var(--ntw-accent) 8%, transparent); }
-.pp-rendered .is-sel { outline: 2px solid var(--ntw-accent); outline-offset: 2px;
+.twb-rendered .is-sel { outline: 2px solid var(--ntw-accent); outline-offset: 2px;
   background: color-mix(in srgb, var(--ntw-accent) 10%, transparent); }
-.pp-rendered .has-comment { box-shadow: -4px 0 0 var(--ntw-accent); }
-::highlight(pp-quote) { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
-body.pp-review-frozen .pp-rendered [data-first] { cursor: default; }
-.pp-note { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px; display: none;
+.twb-rendered .has-comment { box-shadow: -4px 0 0 var(--ntw-accent); }
+::highlight(twb-quote) { background: color-mix(in srgb, var(--ntw-accent) 45%, transparent); }
+body.twb-review-frozen .twb-rendered [data-first] { cursor: default; }
+.twb-note { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px; display: none;
   border: 1px dashed var(--ntw-fg-muted); background: var(--ntw-bg-elevated);
   font: 0.95em/1.45 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   white-space: normal; cursor: default; user-select: text; }
-.pp-note.is-open { display: block; }
-.pp-note-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.pp-note-label { font-size: 0.8em; font-weight: 600; color: var(--ntw-fg-muted); }
+.twb-note.is-open { display: block; }
+.twb-note-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.twb-note-label { font-size: 0.8em; font-weight: 600; color: var(--ntw-fg-muted); }
 /* Edit, Delete and Reply are quiet text, not buttons: they sit inside the content. */
-.pp-note-reply, .pp-comment-actions button { border: 0; background: none; cursor: pointer;
+.twb-note-reply, .twb-comment-actions button { border: 0; background: none; cursor: pointer;
   color: var(--ntw-accent); font: 600 13px -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
   sans-serif; padding: 2px 6px; border-radius: 4px;
   transition: background-color 0.15s ease, color 0.15s ease; }
-.pp-note-reply { margin-inline-start: auto; }
-.pp-note-reply:hover, .pp-comment-actions button:hover { background: var(--ntw-border); }
-.pp-comment-actions button[data-act="delete"] { color: var(--ntw-fg-muted); }
-.pp-comment-actions button[data-act="delete"]:hover { color: var(--pp-del); }
-body.pp-review-frozen .pp-note-reply { display: none; }
-.pp-note-body p { margin: 6px 0 0; }
-.pp-note-body p:first-child { margin-top: 0; }
-.pp-note-body pre { overflow-x: auto; }
-.pp-note-mark { position: absolute; right: 34px; top: 1px; z-index: 2; line-height: 18px;
+.twb-note-reply { margin-inline-start: auto; }
+.twb-note-reply:hover, .twb-comment-actions button:hover { background: var(--ntw-border); }
+.twb-comment-actions button[data-act="delete"] { color: var(--ntw-fg-muted); }
+.twb-comment-actions button[data-act="delete"]:hover { color: var(--twb-del); }
+body.twb-review-frozen .twb-note-reply { display: none; }
+.twb-note-body p { margin: 6px 0 0; }
+.twb-note-body p:first-child { margin-top: 0; }
+.twb-note-body pre { overflow-x: auto; }
+.twb-note-mark { position: absolute; right: 34px; top: 1px; z-index: 2; line-height: 18px;
   border: 1px solid var(--ntw-border); border-radius: 999px; padding: 0 8px; cursor: pointer;
   background: var(--ntw-bg-elevated); color: var(--ntw-accent); font: 600 11px system-ui,
   sans-serif; }
-.pp-note-mark ~ .pp-note-mark { right: 92px; }
-.pp-note-mark:hover, .pp-note-mark.is-open { background: var(--ntw-accent);
+.twb-note-mark ~ .twb-note-mark { right: 92px; }
+.twb-note-mark:hover, .twb-note-mark.is-open { background: var(--ntw-accent);
   color: var(--ntw-accent-contrast); border-color: var(--ntw-accent); }
-.pp-notes-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
-.pp-comment, #pp-dock { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+.twb-notes-bar { display: flex; align-items: center; gap: 10px; margin: 0 0 8px; }
+.twb-comment, #twb-dock { font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
   sans-serif; }
-.pp-comment { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px;
+.twb-comment { margin: 6px 10px 14px 46px; padding: 8px 12px; border-radius: 8px;
   border: 1px solid var(--ntw-accent); background: var(--ntw-verdict-bg); font-size: 0.95em;
   white-space: normal; user-select: none; cursor: default; }
-.pp-comment-head { display: flex; align-items: center; gap: 10px; }
-.pp-comment-head b { font-family: var(--pp-font-mono); font-size: 0.9em; }
-.pp-comment-actions { margin-inline-start: auto; display: flex; gap: 6px; }
-body.pp-review-frozen .pp-comment-actions { display: none; }
-.pp-comment-quote, .pp-dock-quote { font-family: var(--pp-font-mono); font-size: 0.85em;
+.twb-comment-head { display: flex; align-items: center; gap: 10px; }
+.twb-comment-head b { font-family: var(--twb-font-mono); font-size: 0.9em; }
+.twb-comment-actions { margin-inline-start: auto; display: flex; gap: 6px; }
+body.twb-review-frozen .twb-comment-actions { display: none; }
+.twb-comment-quote, .twb-dock-quote { font-family: var(--twb-font-mono); font-size: 0.85em;
   background: var(--ntw-code-bg); border-radius: 4px; padding: 1px 8px; }
-.pp-comment-quote { display: block; margin-top: 6px; overflow: hidden; text-overflow: ellipsis;
+.twb-comment-quote { display: block; margin-top: 6px; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
-.pp-comment-quote[hidden] { display: none; }
-.pp-comment-text { margin-top: 6px; white-space: pre-wrap; }
-#pp-dock { position: absolute; z-index: 55; display: none; box-sizing: border-box;
+.twb-comment-quote[hidden] { display: none; }
+.twb-comment-text { margin-top: 6px; white-space: pre-wrap; }
+#twb-dock { position: absolute; z-index: 55; display: none; box-sizing: border-box;
   padding: 16px 18px 14px; border-radius: 14px; background: var(--ntw-bg-elevated);
   color: var(--ntw-fg); border: 2px solid var(--ntw-accent); font-size: 0.85em;
   line-height: 1.4; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4); }
-#pp-dock.is-open { display: block; }
-#pp-dock::before { content: ""; position: absolute; top: -9px; left: 40px; width: 14px;
+#twb-dock.is-open { display: block; }
+#twb-dock::before { content: ""; position: absolute; top: -9px; left: 40px; width: 14px;
   height: 14px; background: var(--ntw-bg-elevated); transform: rotate(45deg);
   border-inline-start: 2px solid var(--ntw-accent);
   border-block-start: 2px solid var(--ntw-accent); }
-.pp-dock-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-.pp-dock-head b { font-family: var(--pp-font-mono); font-size: 0.95em; }
-.pp-dock-head span { color: var(--ntw-fg-muted); }
-.pp-dock-quote { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+.twb-dock-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.twb-dock-head b { font-family: var(--twb-font-mono); font-size: 0.95em; }
+.twb-dock-head span { color: var(--ntw-fg-muted); }
+.twb-dock-quote { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; color: var(--ntw-fg); }
-.pp-dock-quote[hidden] { display: none; }
-#pp-dock-text { width: 100%; min-height: 6.5em; box-sizing: border-box; font: inherit;
+.twb-dock-quote[hidden] { display: none; }
+#twb-dock-text { width: 100%; min-height: 6.5em; box-sizing: border-box; font: inherit;
   padding: 10px 12px; border-radius: 8px; border: 1px solid var(--ntw-border);
   background: var(--ntw-bg); color: var(--ntw-fg); resize: vertical; }
-.pp-dock-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+.twb-dock-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px;
   margin-top: 12px; }
-.pp-dock-hint { margin-inline-end: auto; font-size: 0.85em; color: var(--ntw-fg-muted); }
+.twb-dock-hint { margin-inline-end: auto; font-size: 0.85em; color: var(--ntw-fg-muted); }
 /* The comment box's buttons are ask's: same height, corners, type and hover. */
-.pp-dock-row button { height: 34px; padding: 0 14px; border-radius: 6px; cursor: pointer;
-  font-family: var(--pp-font-mono); font-size: 0.85em; font-weight: 500; white-space: nowrap;
+.twb-dock-row button { height: 34px; padding: 0 14px; border-radius: 6px; cursor: pointer;
+  font-family: var(--twb-font-mono); font-size: 0.85em; font-weight: 500; white-space: nowrap;
   border: 1px solid var(--ntw-accent); background: var(--ntw-accent);
   color: var(--ntw-accent-contrast);
   transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease,
     filter 0.18s ease; }
-.pp-dock-row button:not(.ghost):not(:disabled):hover { filter: brightness(0.9); }
-.pp-dock-row button.ghost { background: transparent; color: var(--ntw-fg);
+.twb-dock-row button:not(.ghost):not(:disabled):hover { filter: brightness(0.9); }
+.twb-dock-row button.ghost { background: transparent; color: var(--ntw-fg);
   border-color: var(--ntw-fg-muted); }
-.pp-dock-row button.ghost:hover { background: var(--pp-btn-tint); }
+.twb-dock-row button.ghost:hover { background: var(--twb-btn-tint); }
 /* Tiny motion for what would otherwise jump (ask's 0.12 to 0.2s ease): a note, a comment, the
    comment box, revealed lines and a switched pane fade in from 4px above; hover and
    selection colours ease. Nothing moves for a reader who asks for reduced motion. */
-@keyframes pp-pop { from { opacity: 0; transform: translateY(-4px); }
+@keyframes twb-pop { from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; } }
-.pp-review-row { transition: background-color 0.12s ease; }
-.pp-rendered [data-first] { transition: background-color 0.12s ease, outline-color 0.12s ease; }
-.pp-note-mark { transition: background-color 0.15s ease, color 0.15s ease,
+.twb-review-row { transition: background-color 0.12s ease; }
+.twb-rendered [data-first] { transition: background-color 0.12s ease, outline-color 0.12s ease; }
+.twb-note-mark { transition: background-color 0.15s ease, color 0.15s ease,
   border-color 0.15s ease; }
 @media (prefers-reduced-motion: no-preference) {
-  .pp-note.is-open, .pp-comment, #pp-dock.is-open, .pp-review-row-wrap.is-revealed,
-  .pp-views-diff, .pp-rendered { animation: pp-pop 0.16s ease; }
+  .twb-note.is-open, .twb-comment, #twb-dock.is-open, .twb-review-row-wrap.is-revealed,
+  .twb-views-diff, .twb-rendered { animation: twb-pop 0.16s ease; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .pp-review-row, .pp-rendered [data-first], .pp-note-mark, .pp-switch::before,
-  .pp-switch button, .pp-gap-pill button, .pp-dock-row button, .pp-note-reply,
-  .pp-comment-actions button { transition: none; }
+  .twb-review-row, .twb-rendered [data-first], .twb-note-mark, .twb-switch::before,
+  .twb-switch button, .twb-gap-pill button, .twb-dock-row button, .twb-note-reply,
+  .twb-comment-actions button { transition: none; }
 }
-.pp-dock-row button:disabled { background: transparent; color: var(--ntw-fg-muted);
+.twb-dock-row button:disabled { background: transparent; color: var(--ntw-fg-muted);
   border: 1px dashed var(--ntw-border); cursor: not-allowed; }
 
-#pp-overall-note-label, .pp-page-note-label { font-size: 0.8em; color: var(--ntw-fg-muted);
+#twb-overall-note-label, .twb-page-note-label { font-size: 0.8em; color: var(--ntw-fg-muted);
   display: block; margin: 18px 0 4px; }
-#pp-overall-note, .pp-page-note { width: 100%; min-height: 4em; font: inherit; font-size: 0.9em;
+#twb-overall-note, .twb-page-note { width: 100%; min-height: 4em; font: inherit; font-size: 0.9em;
   padding: 8px 10px; border-radius: 6px; border: 1px solid var(--ntw-border);
   background: var(--ntw-bg-elevated); color: var(--ntw-fg); resize: vertical; }
 
@@ -360,87 +360,87 @@ body.pp-review-frozen .pp-comment-actions { display: none; }
    tab strip and a files card in a three-variant prototype: always in view, one row per
    file with room for the directory. Below 900px the sidebar becomes a drawer opened from
    a sticky bar, so the diff keeps the full width. */
-body.pp-has-files { padding-left: 296px; }
-#pp-files { position: fixed; left: 0; top: 0; bottom: 0; width: 280px; overflow-y: auto;
+body.twb-has-files { padding-left: 296px; }
+#twb-files { position: fixed; left: 0; top: 0; bottom: 0; width: 280px; overflow-y: auto;
   box-sizing: border-box; padding: 16px 10px 24px; background: var(--ntw-bg-elevated);
   border-right: 1px solid var(--ntw-border); font-size: 0.72em; z-index: 20; }
-.pp-files-head { margin: 0 6px 10px; font-size: 0.92em; text-transform: uppercase;
+.twb-files-head { margin: 0 6px 10px; font-size: 0.92em; text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--ntw-fg-muted); font-weight: 600; }
-.pp-files-head span { float: right; text-transform: none; letter-spacing: 0; }
+.twb-files-head span { float: right; text-transform: none; letter-spacing: 0; }
 /* Filter and "with comments" toggle, only for a long list (_FILTER_FROM files). */
-.pp-files-tools { margin: 0 6px 8px; }
-.pp-files-tools input[type="search"] { width: 100%; box-sizing: border-box; padding: 6px 8px;
+.twb-files-tools { margin: 0 6px 8px; }
+.twb-files-tools input[type="search"] { width: 100%; box-sizing: border-box; padding: 6px 8px;
   border: 1px solid var(--ntw-border); border-radius: 6px; background: var(--ntw-bg);
   color: var(--ntw-fg); font: inherit; }
-.pp-files-tools label { display: block; margin-top: 6px; color: var(--ntw-fg-muted);
+.twb-files-tools label { display: block; margin-top: 6px; color: var(--ntw-fg-muted);
   cursor: pointer; }
-.pp-file[hidden] { display: none; }
-#pp-files-empty { margin: 8px 6px; color: var(--ntw-fg-muted); }
-.pp-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px;
+.twb-file[hidden] { display: none; }
+#twb-files-empty { margin: 8px 6px; color: var(--ntw-fg-muted); }
+.twb-file { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 8px;
   border-radius: 8px; cursor: pointer; border: 0; background: none; color: var(--ntw-fg);
   text-align: left; font: inherit; }
-.pp-file:hover { background: var(--ntw-border); }
-.pp-file.is-current { background: color-mix(in srgb, var(--ntw-accent) 18%, transparent);
+.twb-file:hover { background: var(--ntw-border); }
+.twb-file.is-current { background: color-mix(in srgb, var(--ntw-accent) 18%, transparent);
   box-shadow: inset 3px 0 0 var(--ntw-accent); }
-.pp-file-paths { flex: 1; min-width: 0; line-height: 1.25; }
-.pp-file-name, .pp-file-dir { display: block; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; font-family: var(--pp-font-mono); }
-.pp-file.is-current .pp-file-name { font-weight: 700; }
-.pp-file-dir { font-size: 0.85em; color: var(--ntw-fg-muted); }
-.pp-file-note { color: var(--ntw-accent); }
-.pp-file-count { display: inline-flex; align-items: center; justify-content: center;
+.twb-file-paths { flex: 1; min-width: 0; line-height: 1.25; }
+.twb-file-name, .twb-file-dir { display: block; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-family: var(--twb-font-mono); }
+.twb-file.is-current .twb-file-name { font-weight: 700; }
+.twb-file-dir { font-size: 0.85em; color: var(--ntw-fg-muted); }
+.twb-file-note { color: var(--ntw-accent); }
+.twb-file-count { display: inline-flex; align-items: center; justify-content: center;
   min-width: 1.6em; height: 1.6em; padding: 0 0.45em; box-sizing: border-box;
   border-radius: 999px; font-size: 0.85em; font-weight: 600; background: var(--ntw-accent);
   color: var(--ntw-accent-contrast); }
-.pp-file-count.is-zero { background: transparent; color: var(--ntw-fg-muted);
+.twb-file-count.is-zero { background: transparent; color: var(--ntw-fg-muted);
   border: 1px solid var(--ntw-border); font-weight: 400; }
 /* How the file changed: A added, M modified, D deleted, R renamed (neutral). */
-:root { --pp-st-a: #1a7f37; --pp-st-m: #9a6700; --pp-st-d: #cf222e; --pp-st-r: #57606a;
-  --pp-st-fg: #ffffff; }
+:root { --twb-st-a: #1a7f37; --twb-st-m: #9a6700; --twb-st-d: #cf222e; --twb-st-r: #57606a;
+  --twb-st-fg: #ffffff; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --pp-st-a: #3fb950; --pp-st-m: #d29922;
-    --pp-st-d: #f85149; --pp-st-r: #9198a1; --pp-st-fg: #111111; }
+  :root:not([data-theme="light"]) { --twb-st-a: #3fb950; --twb-st-m: #d29922;
+    --twb-st-d: #f85149; --twb-st-r: #9198a1; --twb-st-fg: #111111; }
 }
-:root[data-theme="dark"] { --pp-st-a: #3fb950; --pp-st-m: #d29922; --pp-st-d: #f85149;
-  --pp-st-r: #9198a1; --pp-st-fg: #111111; }
-.pp-status { flex: none; display: inline-flex; align-items: center; justify-content: center;
-  width: 1.55em; height: 1.55em; border-radius: 4px; font: 700 0.72em var(--pp-font-mono);
-  color: var(--pp-st-fg); background: var(--pp-st-m); cursor: default; }
-.pp-status-A { background: var(--pp-st-a); }
-.pp-status-D { background: var(--pp-st-d); }
-.pp-status-R { background: var(--pp-st-r); }
-.pp-review-path .pp-status { margin-inline: 0 8px; font-size: 0.8em; vertical-align: 1px; }
-#pp-filebar, #pp-files-backdrop { display: none; }
+:root[data-theme="dark"] { --twb-st-a: #3fb950; --twb-st-m: #d29922; --twb-st-d: #f85149;
+  --twb-st-r: #9198a1; --twb-st-fg: #111111; }
+.twb-status { flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 1.55em; height: 1.55em; border-radius: 4px; font: 700 0.72em var(--twb-font-mono);
+  color: var(--twb-st-fg); background: var(--twb-st-m); cursor: default; }
+.twb-status-A { background: var(--twb-st-a); }
+.twb-status-D { background: var(--twb-st-d); }
+.twb-status-R { background: var(--twb-st-r); }
+.twb-review-path .twb-status { margin-inline: 0 8px; font-size: 0.8em; vertical-align: 1px; }
+#twb-filebar, #twb-files-backdrop { display: none; }
 @media (max-width: 900px) {
-  body.pp-has-files { padding-left: 8px; }
-  #pp-filebar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center;
+  body.twb-has-files { padding-left: 8px; }
+  #twb-filebar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center;
     gap: 8px; margin: 0 40px 14px 0; padding: 7px 10px; font-size: 0.78em;
     background: var(--ntw-bg-elevated); border: 1px solid var(--ntw-border);
     border-radius: 8px; }
-  #pp-filebar button { border: 1px solid var(--ntw-border); background: var(--ntw-bg);
+  #twb-filebar button { border: 1px solid var(--ntw-border); background: var(--ntw-bg);
     color: var(--ntw-fg); border-radius: 6px; padding: 3px 10px; cursor: pointer;
     font: inherit; }
-  #pp-filebar-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-    white-space: nowrap; font-family: var(--pp-font-mono); }
-  #pp-filebar-pos { color: var(--ntw-fg-muted); white-space: nowrap; }
-  #pp-files { width: min(320px, 86vw); z-index: 60; transform: translateX(-100%);
+  #twb-filebar-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; font-family: var(--twb-font-mono); }
+  #twb-filebar-pos { color: var(--ntw-fg-muted); white-space: nowrap; }
+  #twb-files { width: min(320px, 86vw); z-index: 60; transform: translateX(-100%);
     transition: transform 0.18s; }
-  #pp-files.is-open { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, 0.4); }
-  #pp-files-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 50;
+  #twb-files.is-open { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, 0.4); }
+  #twb-files-backdrop:not([hidden]) { display: block; position: fixed; inset: 0; z-index: 50;
     background: rgba(0, 0, 0, 0.45); }
 }
 @media (max-width: 900px) and (prefers-reduced-motion: reduce) {
-  #pp-files { transition: none; }
+  #twb-files { transition: none; }
 }
 
-.pp-actions { margin-block-start: 22px; }
+.twb-actions { margin-block-start: 22px; }
 
-#pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
+#twb-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
   background: #fef2f2; padding: 12px 14px; margin-block-start: 12px; }
-#pp-fallback strong { color: var(--ntw-danger); }
-#pp-fallback textarea { width: 100%; font-family: var(--pp-font-mono); font-size: 0.8em;
+#twb-fallback strong { color: var(--ntw-danger); }
+#twb-fallback textarea { width: 100%; font-family: var(--twb-font-mono); font-size: 0.8em;
   margin-block-start: 8px; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) #pp-fallback { background: #3f1d1d; }
+  :root:not([data-theme="light"]) #twb-fallback { background: #3f1d1d; }
 }
-:root[data-theme="dark"] #pp-fallback { background: #3f1d1d; }
+:root[data-theme="dark"] #twb-fallback { background: #3f1d1d; }

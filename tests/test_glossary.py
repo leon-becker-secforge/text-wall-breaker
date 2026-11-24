@@ -64,7 +64,7 @@ def test_pages_embed_the_glossary_only_when_given_one():
     single = build_page(
         question="q", options=[], multi_select=False, allow_free_text=True, submit_url="u"
     )
-    assert "__PP_GLOSSARY__" not in single
+    assert "__TWB_GLOSSARY__" not in single
     with_glossary = build_page(
         question="q",
         options=[],
@@ -73,7 +73,7 @@ def test_pages_embed_the_glossary_only_when_given_one():
         submit_url="u",
         glossary=ENTRIES,
     )
-    assert "__PP_GLOSSARY__" in with_glossary and "One choice." in with_glossary
+    assert "__TWB_GLOSSARY__" in with_glossary and "One choice." in with_glossary
     multi = build_multi_page(
         questions=[
             {"question": "q", "options": [], "multi_select": False, "allow_free_text": True}
@@ -81,4 +81,4 @@ def test_pages_embed_the_glossary_only_when_given_one():
         submit_url="u",
         glossary=ENTRIES,
     )
-    assert "__PP_GLOSSARY__" in multi
+    assert "__TWB_GLOSSARY__" in multi

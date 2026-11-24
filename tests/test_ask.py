@@ -286,7 +286,7 @@ def test_multi_select_switches_the_input_type(browser):
 def test_free_text_box_is_omitted_when_not_allowed(browser):
     fake = browser(lambda page: {"kind": "cancel", "data": {}})
     run_ask(AskRequest(question="q", options=[Option(id="a", label="A")], allow_free_text=False))
-    assert 'id="pp-free-text"' not in fake.page
+    assert 'id="twb-free-text"' not in fake.page
     assert "<textarea" not in fake.page.split("</form>")[0]
 
 
@@ -902,9 +902,9 @@ def test_a_ranking_answer_lists_every_option_once(browser):
     assert answer["excluded"] == []
     assert answer["free_text"] == "ok"
     assert "selected" not in answer and "changed_from" not in answer
-    assert 'class="pp-rank"' in fake.page
+    assert 'class="twb-rank"' in fake.page
     # The cut line starts last, so nothing is left out until the user moves it.
-    assert re.search(r'data-option-id="c".*?</li>\s*<li class="pp-rank-cut"', fake.page, re.S)
+    assert re.search(r'data-option-id="c".*?</li>\s*<li class="twb-rank-cut"', fake.page, re.S)
 
 
 def test_options_below_the_cut_line_come_back_excluded(browser):
@@ -924,7 +924,7 @@ def test_leaving_an_option_out_counts_as_entered_and_resumes_below_the_cut(brows
     resume = run_ask(_rank_ask(True))["resume"]
     fake = browser(lambda page: {"kind": "cancel", "data": {}})
     run_ask(AskRequest(resume=resume))
-    below = fake.page.split('class="pp-rank-cut"', 1)[1].split("</ol>", 1)[0]
+    below = fake.page.split('class="twb-rank-cut"', 1)[1].split("</ol>", 1)[0]
     assert 'data-option-id="c"' in below
     assert 'data-option-id="a"' not in below
 
@@ -941,7 +941,7 @@ def test_a_tiers_answer_puts_each_option_in_one_tier_or_unsorted(browser):
     answer = run_ask(_rank_ask(["Now", "Later"]))["answers"][0]
     assert answer["tiers"] == {"Now": ["b"], "Later": ["a"]}
     assert answer["unsorted"] == ["c"]
-    assert 'class="pp-tiers"' in fake.page
+    assert 'class="twb-tiers"' in fake.page
     assert 'data-tier="Later"' in fake.page
 
 
@@ -955,7 +955,7 @@ def test_a_resumed_ranking_starts_in_the_users_order(browser):
     resume = run_ask(_rank_ask(True))["resume"]
     fake = browser(lambda page: _cancel_after({"answers": [{"order": ["c", "b", "a"]}]}))
     result = run_ask(AskRequest(resume=resume))
-    items = re.findall(r'class="pp-rank-item"[^>]*data-option-id="(\w)"', fake.page)
+    items = re.findall(r'class="twb-rank-item"[^>]*data-option-id="(\w)"', fake.page)
     assert items == ["c", "b", "a"]
     # The resumed order counts as entered (it differs from the agent's), so a second
     # cancel without further moves still keeps a draft.

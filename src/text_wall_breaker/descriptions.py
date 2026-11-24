@@ -166,8 +166,8 @@ report) cannot be tracked: its title comes as `own_tab`, and its acknowledgement
 unknown. `title` tells you which shared-tab report the state is about."""
 
 
-def pp_review_prompt(base: str | None) -> str:
-    """The text of the `pp-review` prompt: review the current branch against its base."""
+def twb_review_prompt(base: str | None) -> str:
+    """The text of the `twb-review` prompt: review the current branch against its base."""
     base_step = (
         f"The base is `{base}`."
         if base

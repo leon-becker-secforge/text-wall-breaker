@@ -30,7 +30,7 @@ more Markdown block, shown above every page.
 
 When a deleted line is followed by a replacement that shares at least half of its tokens,
 the page marks the words that differ on both lines, in square boxes darker than the row
-(`mark.pp-chg`). A changed word is marked whole, and changes separated only by spaces merge
+(`mark.twb-chg`). A changed word is marked whole, and changes separated only by spaces merge
 into one box. Lines that look nothing alike, and lines over 2000 characters, get no marks.
 
 For a change in git, pass `repo` instead of `pages` (never both): the server runs
@@ -115,13 +115,13 @@ Each page has a "Note on this file" box below its diff for a remark about the wh
 and an "Overall note" box below the pages holds one for the whole call; neither is tied to
 a line. Once Submit or Cancel is sent, nothing accepts further input.
 
-## The `pp-review` prompt
+## The `twb-review` prompt
 
-The server offers one MCP prompt, `pp-review`. It asks the agent to find the current
+The server offers one MCP prompt, `twb-review`. It asks the agent to find the current
 branch's base, read the diff, call `review` with `repo` and a `git_range` of
 `<merge-base>..HEAD`, and add `notes` on the most important changes. The optional `base`
 argument names the base; without it the agent uses the branch's upstream, else the default
-branch. Claude Code lists an MCP prompt as `/mcp__text-wall-breaker__pp-review`, with `base` as
+branch. Claude Code lists an MCP prompt as `/mcp__text-wall-breaker__twb-review`, with `base` as
 the argument.
 
 ## Result

@@ -2,7 +2,7 @@
 
 A review row already shows whole lines as added or deleted. When a deleted line is followed
 by a replacement that looks like it, the words that differ are wrapped in
-`<mark class="pp-chg">`, so a one-word edit in a long line is found at a glance.
+`<mark class="twb-chg">`, so a one-word edit in a long line is found at a glance.
 """
 
 from __future__ import annotations
@@ -93,7 +93,7 @@ def mark_ranges(row_html: str, ranges: list[Range]) -> str:
             continue
         inside = any(start <= position < end for start, end in ranges)
         if inside and not open_mark:
-            out.append('<mark class="pp-chg">')
+            out.append('<mark class="twb-chg">')
             open_mark = True
         elif not inside and open_mark:
             out.append("</mark>")

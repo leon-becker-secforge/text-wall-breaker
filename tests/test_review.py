@@ -319,10 +319,10 @@ def _unified(old: list[str], new: list[str]) -> str:
 
 def test_a_markdown_page_with_its_file_gets_a_rendered_view():
     html = _md_html("docs/a.md", {"docs/a.md": "\n".join(MD_NEW) + "\n"})
-    assert '<div class="pp-rendered"' in html
+    assert '<div class="twb-rendered"' in html
     assert '<p data-first="3" data-last="3">one!</p>' in html
-    assert '<div class="pp-views">' in html
-    assert '<div class="pp-chunk">' in html
+    assert '<div class="twb-views">' in html
+    assert '<div class="twb-chunk">' in html
 
 
 def test_a_mermaid_fence_in_the_rendered_view_loads_the_diagram_script():
@@ -353,9 +353,9 @@ def test_the_sidebar_and_the_header_show_how_each_file_changed():
         ]
     )
     html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
-    assert html.count('class="pp-status pp-status-A"') == 2  # sidebar row and header
-    assert html.count('class="pp-status pp-status-R" title="renamed from o.py"') == 2
-    assert html.count('class="pp-status pp-status-M"') == 2
+    assert html.count('class="twb-status twb-status-A"') == 2  # sidebar row and header
+    assert html.count('class="twb-status twb-status-R" title="renamed from o.py"') == 2
+    assert html.count('class="twb-status twb-status-M"') == 2
     # the filter matches a renamed file by its old path too
     assert 'title="n.py (renamed from o.py)"' in html
 
@@ -363,12 +363,12 @@ def test_the_sidebar_and_the_header_show_how_each_file_changed():
 def test_a_single_file_review_shows_the_status_in_its_header():
     request = ReviewRequest(pages=[Page(path="x.py", diff="@@ -1,2 +0,0 @@\n-a\n-b\n")])
     html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
-    assert html.count('class="pp-status pp-status-D"') == 1
+    assert html.count('class="twb-status twb-status-D"') == 1
 
 
 def test_a_page_of_another_kind_has_none():
     text = {"docs/a.py": "\n".join(MD_NEW) + "\n"}
-    assert '<div class="pp-rendered"' not in _md_html("docs/a.py", text)
+    assert '<div class="twb-rendered"' not in _md_html("docs/a.py", text)
 
 
 def test_a_markdown_page_without_its_file_renders_what_the_diff_shows():
@@ -381,8 +381,8 @@ def test_a_markdown_page_without_its_file_renders_what_the_diff_shows():
     # Lines outside the hunk are not invented, and there is nothing to expand.
     assert ">para 0</p>" not in html
     assert ">para 11</p>" not in html
-    assert 'class="pp-review-lines"' not in html
-    assert '<div class="pp-chunk">' in html
+    assert 'class="twb-review-lines"' not in html
+    assert '<div class="twb-chunk">' in html
 
 
 def _long_doc() -> tuple[list[str], list[str]]:
@@ -401,14 +401,14 @@ def test_a_long_document_is_chunked_and_unchanged_runs_fold_behind_a_bar():
     )
     html = _build_html(request.validated(), submit_url="http://127.0.0.1:1/submit")
     # Block 5 changed: it and its two neighbours show; the 4 blocks before and 5 after fold.
-    assert html.count('<div class="pp-chunk">') == 12
+    assert html.count('<div class="twb-chunk">') == 12
     assert ">4 unchanged blocks</button>" in html
     assert ">5 unchanged blocks</button>" in html
     # Folded rows are still in the page, so every line stays addressable.
     for line in range(1, len(new) + 1):
         assert f'data-side="new" data-line="{line}"' in html
     # The deleted line sits in the chunk of the line that replaces it.
-    chunk = html[html.index('<div class="pp-chunk">', html.index("para 4")) :]
+    chunk = html[html.index('<div class="twb-chunk">', html.index("para 4")) :]
     assert chunk.index('data-side="old" data-line="11"') < chunk.index("para 5 changed")
 
 

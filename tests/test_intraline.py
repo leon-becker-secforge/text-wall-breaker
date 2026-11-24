@@ -14,7 +14,7 @@ def text_of(row_html: str) -> str:
 
 
 def marked(row_html: str) -> list[str]:
-    return [html.unescape(m) for m in re.findall(r'<mark class="pp-chg">(.*?)</mark>', row_html)]
+    return [html.unescape(m) for m in re.findall(r'<mark class="twb-chg">(.*?)</mark>', row_html)]
 
 
 def alike(old: str, new: str):
@@ -83,7 +83,7 @@ def test_decorated_rows_mark_a_paired_edit_in_a_file_without_a_lexer():
 def test_decorated_rows_keep_the_syntax_colors():
     rows = parse_unified_diff(DIFF.replace("total", "x").replace("price", "1"))
     out = decorated_rows("x.py", rows)
-    assert "tk-" in out[2] and "pp-chg" in out[2]
+    assert "tk-" in out[2] and "twb-chg" in out[2]
     assert text_of(out[2]) == "x = 1 * count" and text_of(out[3]) == "x = 1 * quantity"
 
 
@@ -91,7 +91,7 @@ def test_a_lone_deletion_or_addition_is_left_alone():
     only_del = parse_unified_diff("@@ -1,2 +1,1 @@\n keep\n-gone\n")
     only_add = parse_unified_diff("@@ -1,1 +1,2 @@\n keep\n+new\n")
     for rows in (only_del, only_add):
-        assert not any("pp-chg" in value for value in decorated_rows("x.txt", rows).values())
+        assert not any("twb-chg" in value for value in decorated_rows("x.txt", rows).values())
 
 
 @pytest.mark.parametrize("count", [2, 3])

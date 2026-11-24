@@ -1,9 +1,9 @@
 // Live review (ADR 0004): the session card with its chat, threads under comments, the
 // comment box's "Ask the agent now" switch, updates held while that box is open,
 // outdated comments, and the "since you looked" view. Runs after the review script and
-// works through its window.ppReview hooks; the server side is live.LiveSession.
+// works through its window.twbReview hooks; the server side is live.LiveSession.
 (function () {
-  var R = window.ppReview;
+  var R = window.twbReview;
   if (!R || R.liveMode === 'off') return;
   var LIVE_URL = R.statusUrl.replace('/status?', '/live?');
   var SILENT_AFTER = 180;
@@ -23,10 +23,10 @@
     return e;
   }
   function message(m) {
-    var box = el('div', 'pp-live-msg');
-    var author = el('div', 'pp-live-author' + (m.from === 'agent' ? ' agent' : ''),
+    var box = el('div', 'twb-live-msg');
+    var author = el('div', 'twb-live-author' + (m.from === 'agent' ? ' agent' : ''),
       m.from === 'agent' ? 'Agent' : 'You');
-    var text = el('div', 'pp-live-text' + (m.html ? ' md' : ''));
+    var text = el('div', 'twb-live-text' + (m.html ? ' md' : ''));
     if (m.html) text.innerHTML = m.html; else text.textContent = m.text;
     box.appendChild(author);
     box.appendChild(text);
@@ -44,26 +44,26 @@
   }
 
   // ---- the session card, fixed at the top of the file list ----
-  var nav = document.getElementById('pp-files');
-  var card = el('div', 'pp-live-card');
+  var nav = document.getElementById('twb-files');
+  var card = el('div', 'twb-live-card');
   card.innerHTML =
-    '<div class="pp-live-head">Live session</div>' +
-    '<div class="pp-live-state"><span class="pp-live-dot"></span><span></span></div>' +
-    '<p class="pp-live-desc"></p>';
-  var stateText = card.querySelector('.pp-live-state span:last-child');
-  var desc = card.querySelector('.pp-live-desc');
-  var start = el('button', 'pp-live-start');
+    '<div class="twb-live-head">Live session</div>' +
+    '<div class="twb-live-state"><span class="twb-live-dot"></span><span></span></div>' +
+    '<p class="twb-live-desc"></p>';
+  var stateText = card.querySelector('.twb-live-state span:last-child');
+  var desc = card.querySelector('.twb-live-desc');
+  var start = el('button', 'twb-live-start');
   start.type = 'button';
-  start.innerHTML = '<span class="pp-live-dot"></span>Start live session';
-  var chat = el('div', 'pp-live-chat is-folded');
+  start.innerHTML = '<span class="twb-live-dot"></span>Start live session';
+  var chat = el('div', 'twb-live-chat is-folded');
   chat.innerHTML =
-    '<div class="pp-live-chat-list"></div>' +
-    '<button type="button" class="pp-live-chat-toggle"></button>' +
-    '<div class="pp-live-in pp-live-chat-in">' +
+    '<div class="twb-live-chat-list"></div>' +
+    '<button type="button" class="twb-live-chat-toggle"></button>' +
+    '<div class="twb-live-in twb-live-chat-in">' +
     '<textarea placeholder="Message the agent about the whole change"></textarea>' +
-    '<button type="button" class="pp-live-btn">Send</button></div>';
-  var chatList = chat.querySelector('.pp-live-chat-list');
-  var chatToggle = chat.querySelector('.pp-live-chat-toggle');
+    '<button type="button" class="twb-live-btn">Send</button></div>';
+  var chatList = chat.querySelector('.twb-live-chat-list');
+  var chatToggle = chat.querySelector('.twb-live-chat-toggle');
   var chatText = chat.querySelector('textarea');
   card.appendChild(start);
   card.appendChild(chat);
@@ -90,7 +90,7 @@
       poll(false);
     }
   }
-  chat.querySelector('.pp-live-btn').addEventListener('click', sendChat);
+  chat.querySelector('.twb-live-btn').addEventListener('click', sendChat);
   chatText.addEventListener('keydown', function (event) {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
@@ -115,7 +115,7 @@
   function renderCard() {
     start.hidden = active;
     chat.hidden = !active;
-    document.body.classList.toggle('pp-live-on', active);
+    document.body.classList.toggle('twb-live-on', active);
     if (!active) {
       card.dataset.state = 'offer';
       desc.textContent = 'Ask the agent about lines and let it change code while you review.';
@@ -132,7 +132,7 @@
     chat.classList.toggle('is-folded', !chatOpen);
     chatList.textContent = '';
     if (!messages.length && !chatOpen) {
-      chatList.appendChild(el('div', 'pp-live-empty',
+      chatList.appendChild(el('div', 'twb-live-empty',
         'Chat: requests about the whole change. Questions about a line go in a comment.'));
     }
     (chatOpen ? messages : messages.slice(-1)).forEach(function (m) {
@@ -145,13 +145,13 @@
   }
 
   // ---- the comment box: "Ask the agent now" and the held-update notice ----
-  var row = document.querySelector('.pp-dock-row');
-  var sw = el('span', 'pp-live-switch is-on');
+  var row = document.querySelector('.twb-dock-row');
+  var sw = el('span', 'twb-live-switch is-on');
   sw.innerHTML = '<i></i>Ask the agent now';
   sw.setAttribute('role', 'switch');
   sw.tabIndex = 0;
   row.insertBefore(sw, row.firstChild);
-  var heldNote = el('div', 'pp-live-held',
+  var heldNote = el('div', 'twb-live-held',
     '↻ The agent updated the review. The new version loads once you add or clear this comment.');
   heldNote.hidden = true;
   R.dockText.parentNode.insertBefore(heldNote, R.dockText);
@@ -174,36 +174,36 @@
   function decorate(c) {
     if (!c.thread || !c.el) return;
     var t = threadOf(c.thread);
-    var old = c.el.querySelector('.pp-live-body');
+    var old = c.el.querySelector('.twb-live-body');
     if (old) old.remove();
-    c.el.querySelectorAll('.pp-live-x').forEach(function (e) { e.remove(); });
-    c.el.classList.add('pp-live-thread');
+    c.el.querySelectorAll('.twb-live-x').forEach(function (e) { e.remove(); });
+    c.el.classList.add('twb-live-thread');
     var messages = t ? t.messages : [{ from: 'operator', text: c.text }];
     var resolved = !!(t && t.resolved);
-    c.el.classList.toggle('pp-live-resolved', resolved);
-    var actions = c.el.querySelector('.pp-comment-actions');
+    c.el.classList.toggle('twb-live-resolved', resolved);
+    var actions = c.el.querySelector('.twb-comment-actions');
     if (resolved) {
       var last = messages[messages.length - 1];
-      c.el.querySelector('.pp-comment-head b').insertAdjacentElement('afterend',
-        el('span', 'pp-live-muted pp-live-x', 'Resolved · ' +
+      c.el.querySelector('.twb-comment-head b').insertAdjacentElement('afterend',
+        el('span', 'twb-live-muted twb-live-x', 'Resolved · ' +
           (last.from === 'agent' ? 'Agent: ' : 'You: ') + last.text));
-      var reopen = el('button', 'pp-live-x', 'Reopen');
+      var reopen = el('button', 'twb-live-x', 'Reopen');
       reopen.type = 'button';
       reopen.addEventListener('click', function () { act('reopen', c.thread); });
       actions.insertBefore(reopen, actions.firstChild);
       return;
     }
-    var body = el('div', 'pp-live-body');
+    var body = el('div', 'twb-live-body');
     messages.forEach(function (m) { body.appendChild(message(m)); });
-    var strip = el('div', 'pp-live-strip');
+    var strip = el('div', 'twb-live-strip');
     var lastMsg = messages[messages.length - 1];
-    var resolve = el('button', 'pp-live-btn', 'Resolve');
+    var resolve = el('button', 'twb-live-btn', 'Resolve');
     resolve.type = 'button';
     resolve.addEventListener('click', function () { act('resolve', c.thread); });
     if (t && t.done) {
       strip.appendChild(el('span', '', '✓ The agent marked this done.'));
     } else if (lastMsg.from !== 'agent') {
-      strip.appendChild(el('span', 'pp-live-muted', 'Sent to the agent, no reply yet'));
+      strip.appendChild(el('span', 'twb-live-muted', 'Sent to the agent, no reply yet'));
       resolve.classList.add('ghost');
     } else {
       strip.appendChild(el('span', ''));
@@ -211,8 +211,8 @@
     }
     strip.appendChild(resolve);
     body.appendChild(strip);
-    var input = el('div', 'pp-live-in');
-    input.innerHTML = '<input placeholder="Reply"><button type="button" class="pp-live-btn">Send</button>';
+    var input = el('div', 'twb-live-in');
+    input.innerHTML = '<input placeholder="Reply"><button type="button" class="twb-live-btn">Send</button>';
     var field = input.querySelector('input');
     async function reply() {
       var text = field.value.trim();
@@ -236,39 +236,39 @@
 
   // ---- after a refresh: changed files, outdated comments, the interdiff ----
   function slideOf(path) {
-    var diff = document.querySelector('.pp-review-diff[data-path="' + CSS.escape(path) + '"]');
+    var diff = document.querySelector('.twb-review-diff[data-path="' + CSS.escape(path) + '"]');
     return diff && diff.closest('.deck-slide');
   }
   function fileButton(slide) {
     var index = Array.prototype.indexOf.call(document.querySelectorAll('.deck-slide'), slide);
-    return document.querySelector('.pp-file[data-index="' + index + '"]');
+    return document.querySelector('.twb-file[data-index="' + index + '"]');
   }
   function label(o) { return (o.side || 'new') + ' ' + o.line; }
   function showOutdated(list) {
     list.forEach(function (o) {
       var slide = slideOf(o.path);
       if (!slide || !o.near) return;
-      var diff = slide.querySelector('.pp-review-diff');
-      var after = diff.querySelector('.pp-review-row-wrap[data-side="' + o.near.side +
+      var diff = slide.querySelector('.twb-review-diff');
+      var after = diff.querySelector('.twb-review-row-wrap[data-side="' + o.near.side +
         '"][data-line="' + o.near.line + '"]');
       if (!after) return;
       while (after.nextElementSibling &&
-          after.nextElementSibling.matches('.pp-comment, .pp-note, .pp-live-outdated')) {
+          after.nextElementSibling.matches('.twb-comment, .twb-note, .twb-live-outdated')) {
         after = after.nextElementSibling;
       }
       var t = o.thread && threadOf(o.thread);
-      var box = el('details', 'pp-live-outdated');
+      var box = el('details', 'twb-live-outdated');
       var summary = el('summary');
       summary.appendChild(el('b', '', label(o)));
       summary.appendChild(document.createTextNode('outdated · ' +
         (t ? 'thread, ' + t.messages.length + ' messages · ' : '') + o.text));
       box.appendChild(summary);
-      var body = el('div', 'pp-live-outdated-body');
-      body.appendChild(el('span', 'pp-live-old', o.context));
+      var body = el('div', 'twb-live-outdated-body');
+      body.appendChild(el('span', 'twb-live-old', o.context));
       (t ? t.messages : [{ from: 'operator', text: o.text }]).forEach(function (m) {
         body.appendChild(message(m));
       });
-      var drop = el('button', 'pp-live-btn ghost', 'Delete');
+      var drop = el('button', 'twb-live-btn ghost', 'Delete');
       drop.type = 'button';
       drop.addEventListener('click', async function () {
         if (frozen) return;
@@ -280,17 +280,17 @@
     });
   }
   function interdiffBlock(rows) {
-    var box = el('div', 'pp-review-diff pp-live-interdiff');
+    var box = el('div', 'twb-review-diff twb-live-interdiff');
     box.hidden = true;
     var changed = rows.filter(function (r) { return r.kind === 'add' || r.kind === 'del'; }).length;
-    box.appendChild(el('div', 'pp-live-interdiff-note', 'Only what the agent changed since you ' +
+    box.appendChild(el('div', 'twb-live-interdiff-note', 'Only what the agent changed since you ' +
       'last looked (' + changed + ' lines). Left numbers: the version you saw; right: now.'));
     rows.forEach(function (r) {
-      var line = el('div', 'pp-review-row ' + r.kind);
+      var line = el('div', 'twb-review-row ' + r.kind);
       if (r.kind === 'hunk') { line.textContent = r.text; box.appendChild(line); return; }
-      line.appendChild(el('span', 'pp-review-gutter', r.old == null ? '' : String(r.old)));
-      line.appendChild(el('span', 'pp-review-gutter', r.new == null ? '' : String(r.new)));
-      line.appendChild(el('span', 'pp-review-text', r.text || ' '));
+      line.appendChild(el('span', 'twb-review-gutter', r.old == null ? '' : String(r.old)));
+      line.appendChild(el('span', 'twb-review-gutter', r.new == null ? '' : String(r.new)));
+      line.appendChild(el('span', 'twb-review-text', r.text || ' '));
       box.appendChild(line);
     });
     return { box: box, changed: changed };
@@ -301,16 +301,16 @@
       if (!slide) return;
       var file = fileButton(slide);
       if (file && !file.classList.contains('is-current')) {
-        var dot = el('span', 'pp-live-changed');
+        var dot = el('span', 'twb-live-changed');
         file.title += '\nChanged by the agent since you last looked';
-        file.querySelector('.pp-file-name').insertAdjacentElement('afterbegin', dot);
+        file.querySelector('.twb-file-name').insertAdjacentElement('afterbegin', dot);
       }
-      var whole = slide.querySelector('.pp-views') || slide.querySelector('.pp-review-diff');
+      var whole = slide.querySelector('.twb-views') || slide.querySelector('.twb-review-diff');
       var made = interdiffBlock(map[path]);
       whole.insertAdjacentElement('afterend', made.box);
-      var head = slide.querySelector('.pp-review-path');
-      head.classList.add('pp-live-has-switch');
-      var seg = el('span', 'pp-live-seg');
+      var head = slide.querySelector('.twb-review-path');
+      head.classList.add('twb-live-has-switch');
+      var seg = el('span', 'twb-live-seg');
       seg.innerHTML = '<button type="button" class="is-on">Whole change</button>' +
         '<button type="button">Since you looked (' + made.changed + ')</button>';
       seg.addEventListener('click', function (event) {
@@ -327,20 +327,20 @@
   }
   function markSeen() {
     var slide = document.querySelector('.deck-slide.is-active');
-    var diff = slide && slide.querySelector('.pp-review-diff[data-path]');
+    var diff = slide && slide.querySelector('.twb-review-diff[data-path]');
     if (!diff) return;
     var file = fileButton(slide);
-    var dot = file && file.querySelector('.pp-live-changed');
+    var dot = file && file.querySelector('.twb-live-changed');
     if (dot) dot.remove();
     if (active && !frozen) post({ type: 'seen', path: diff.dataset.path });
   }
-  document.addEventListener('pp-file-change', function () { setTimeout(markSeen, 0); });
+  document.addEventListener('twb-file-change', function () { setTimeout(markSeen, 0); });
 
   function restore(r) {
     (r.comments || []).forEach(R.restore);
     var notes = {};
     (Array.isArray(r.page_notes) ? r.page_notes : []).forEach(function (n) { notes[n.path] = n.text; });
-    document.querySelectorAll('.pp-page-note').forEach(function (t) {
+    document.querySelectorAll('.twb-page-note').forEach(function (t) {
       if (notes[t.dataset.path]) t.value = notes[t.dataset.path];
     });
     if (typeof r.overall_note === 'string') R.overallNote.value = r.overall_note;
@@ -352,11 +352,11 @@
   // ---- polling ----
   var timer = null;
   var version = -1;
-  var VIEW_KEY = 'pp-live:view';
+  var VIEW_KEY = 'twb-live:view';
   async function reloadNow() {
     await R.send('progress', R.collect());
     var slide = document.querySelector('.deck-slide.is-active');
-    var diff = slide && slide.querySelector('.pp-review-diff[data-path]');
+    var diff = slide && slide.querySelector('.twb-review-diff[data-path]');
     try {
       sessionStorage.setItem(VIEW_KEY, JSON.stringify({
         path: diff ? diff.dataset.path : null, y: window.scrollY
@@ -403,7 +403,7 @@
   }
   function stopPolling() { if (timer) { clearInterval(timer); timer = null; } }
 
-  window.ppLive = {
+  window.twbLive = {
     added: async function (c) {
       if (!active || !askNow || frozen) return;
       var spec = R.spec(c);

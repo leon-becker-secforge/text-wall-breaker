@@ -1,9 +1,9 @@
-.pp-term {
+.twb-term {
   text-decoration: underline dotted var(--ntw-info);
   text-underline-offset: 3px;
   cursor: help;
 }
-#pp-glossary-pop {
+#twb-glossary-pop {
   position: fixed;
   z-index: 50;
   display: none;
@@ -17,5 +17,5 @@
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   pointer-events: none;
 }
-#pp-glossary-pop b { display: block; margin-bottom: 2px; }
-@media print { #pp-glossary-pop { display: none !important; } }
+#twb-glossary-pop b { display: block; margin-bottom: 2px; }
+@media print { #twb-glossary-pop { display: none !important; } }

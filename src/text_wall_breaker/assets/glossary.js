@@ -1,5 +1,5 @@
 (function () {
-  var entries = window.__PP_GLOSSARY__ || [];
+  var entries = window.__TWB_GLOSSARY__ || [];
   if (!entries.length) return;
   var escape = function (s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); };
   var byTerm = {};
@@ -7,10 +7,10 @@
   var names = entries.map(function (e) { return e.term; })
     .sort(function (a, b) { return b.length - a.length; });
   var rx = new RegExp("\\b(" + names.map(escape).join("|") + ")(?:s|es)?\\b", "gi");
-  var skip = "code, pre, a, button, textarea, input, label.pp-free-text, .pp-term";
+  var skip = "code, pre, a, button, textarea, input, label.twb-free-text, .twb-term";
 
   var pop = document.createElement("div");
-  pop.id = "pp-glossary-pop";
+  pop.id = "twb-glossary-pop";
   pop.setAttribute("role", "tooltip");
   document.body.appendChild(pop);
   function show(span) {
@@ -30,7 +30,7 @@
 
   // One marked occurrence per term and per step, so a repeated term does not underline
   // the whole page.
-  var roots = document.querySelectorAll(".pp-step");
+  var roots = document.querySelectorAll(".twb-step");
   if (!roots.length) roots = [document.querySelector("main") || document.body];
   Array.prototype.forEach.call(roots, function (root) {
     var seen = {};
@@ -50,7 +50,7 @@
         hit = true;
         frag.appendChild(document.createTextNode(text.slice(pos, m.index)));
         var span = document.createElement("span");
-        span.className = "pp-term";
+        span.className = "twb-term";
         span.dataset.term = key;
         span.tabIndex = 0;
         span.textContent = m[0];

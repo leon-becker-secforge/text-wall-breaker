@@ -322,23 +322,23 @@ def test_a_note_side_is_an_enum_in_the_schema():
 
 
 def _prompt_text(**arguments: str) -> str:
-    result = anyio.run(server.get_prompt, "pp-review", arguments)
+    result = anyio.run(server.get_prompt, "twb-review", arguments)
     assert isinstance(result, GetPromptResult)
     content = result.messages[0].content
     assert isinstance(content, TextContent)
     return content.text
 
 
-def test_pp_review_prompt_is_listed_and_asks_for_a_review_with_notes():
+def test_twb_review_prompt_is_listed_and_asks_for_a_review_with_notes():
     [prompt] = anyio.run(server.list_prompts)
-    assert prompt.name == "pp-review"
+    assert prompt.name == "twb-review"
     assert [arg.name for arg in prompt.arguments or []] == ["base"]
     text = _prompt_text()
     assert "`review`" in text and "merge-base" in text and "`notes`" in text
     assert "branch's upstream" in text
 
 
-def test_pp_review_prompt_takes_an_explicit_base():
+def test_twb_review_prompt_takes_an_explicit_base():
     text = _prompt_text(base="release/1.x")
     assert "The base is `release/1.x`." in text
     assert "upstream" not in text

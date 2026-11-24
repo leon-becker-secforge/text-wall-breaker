@@ -38,7 +38,7 @@ from .descriptions import (
     REVIEW_DESCRIPTION,
     SHOW_DESCRIPTION,
     SHOW_STATUS_DESCRIPTION,
-    pp_review_prompt,
+    twb_review_prompt,
 )
 from .gitdiff import GitDiffError, pages_from_git, repo_root
 from .listener import SessionListener, cancellable
@@ -294,13 +294,13 @@ async def show(
 
 
 @server.prompt(
-    name="pp-review",
+    name="twb-review",
     title="Review the current branch",
     description="Review the current branch against its base in the browser, with your "
     "annotations on the most important changes.",
 )
-def pp_review(base: str | None = None) -> str:
-    return pp_review_prompt(base)
+def twb_review(base: str | None = None) -> str:
+    return twb_review_prompt(base)
 
 
 @server.tool(name="show_status", description=SHOW_STATUS_DESCRIPTION)

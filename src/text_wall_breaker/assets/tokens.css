@@ -8,9 +8,9 @@
 }
 :root[data-theme="dark"] { --tk-kw: #ff7b72; --tk-str: #a5d6ff; --tk-com: #8b949e;
   --tk-num: #79c0ff; --tk-fn: #d2a8ff; --tk-ty: #ffa657; }
-:is(.pp-review-text, pre.code-block) [class^="tk-k"] { color: var(--tk-kw); }
-:is(.pp-review-text, pre.code-block) [class^="tk-s"] { color: var(--tk-str); }
-:is(.pp-review-text, pre.code-block) [class^="tk-c"] { color: var(--tk-com); font-style: italic; }
-:is(.pp-review-text, pre.code-block) [class^="tk-m"] { color: var(--tk-num); }
-:is(.pp-review-text, pre.code-block) :is(.tk-nf, .tk-fm, .tk-nd) { color: var(--tk-fn); }
-:is(.pp-review-text, pre.code-block) :is(.tk-nc, .tk-nb, .tk-ne, .tk-nn) { color: var(--tk-ty); }
+:is(.twb-review-text, pre.code-block) [class^="tk-k"] { color: var(--tk-kw); }
+:is(.twb-review-text, pre.code-block) [class^="tk-s"] { color: var(--tk-str); }
+:is(.twb-review-text, pre.code-block) [class^="tk-c"] { color: var(--tk-com); font-style: italic; }
+:is(.twb-review-text, pre.code-block) [class^="tk-m"] { color: var(--tk-num); }
+:is(.twb-review-text, pre.code-block) :is(.tk-nf, .tk-fm, .tk-nd) { color: var(--tk-fn); }
+:is(.twb-review-text, pre.code-block) :is(.tk-nc, .tk-nb, .tk-ne, .tk-nn) { color: var(--tk-ty); }

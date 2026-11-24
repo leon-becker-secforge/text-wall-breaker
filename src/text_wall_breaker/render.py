@@ -159,7 +159,7 @@ _TAGS = {
 # survives cleaning to use one.
 _ATTRS = {"title", "colspan", "rowspan", "start", "type", "alt", "data-first"}
 # Class prefixes the page's own styles and script select on; a file must not borrow them.
-_PAGE_CLASS_PREFIXES = ("pp-", "is-", "has-", "deck-")
+_PAGE_CLASS_PREFIXES = ("twb-", "is-", "has-", "deck-")
 
 
 def _file_classes(value: str) -> str:

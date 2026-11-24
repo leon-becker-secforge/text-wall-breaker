@@ -367,7 +367,7 @@ def _render_diff_block(body_lines: list[str]) -> str:
         else:
             text = line[1:] if line.startswith(" ") else line
             rows.append(f'<div class="line ctx">{_escape(text) or "&nbsp;"}</div>')
-    return '<div class="pp-diff">' + "".join(rows) + "</div>"
+    return '<div class="twb-diff">' + "".join(rows) + "</div>"
 
 
 def _expand_literal_newlines(lines: list[str]) -> list[str]:

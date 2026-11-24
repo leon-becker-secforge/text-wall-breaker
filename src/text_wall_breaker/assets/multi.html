@@ -10,37 +10,37 @@ __CSS__
 </head>
 <body>
 <main__MAIN_EXTRA__>
-  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+  <button id="twb-theme" type="button" aria-label="Toggle theme">&#9680;</button>
 
 __HEADER__
-  <div class="pp-progress">
-    <span class="pp-progress-label" id="pp-progress-label">__INITIAL_LABEL__</span>
-    <span class="pp-segments" id="pp-segments">__SEGMENTS__</span>
+  <div class="twb-progress">
+    <span class="twb-progress-label" id="twb-progress-label">__INITIAL_LABEL__</span>
+    <span class="twb-segments" id="twb-segments">__SEGMENTS__</span>
   </div>
 
-  <form id="pp-form" novalidate>
+  <form id="twb-form" novalidate>
 __STEPS__
-    <div class="pp-actions">
-      <button type="button" id="pp-cancel">Cancel</button>
-      <button type="button" id="pp-stop">Stop here</button>
-      <button type="button" id="pp-stop-undo" hidden>never mind</button>
-      <div class="pp-actions-end">
-        <span id="pp-status"></span>
-        <button type="button" id="pp-stop-send" hidden disabled>Stop and send</button>
-        <button type="button" id="pp-back" disabled>Back</button>
-        <button type="button" id="pp-next" disabled>__INITIAL_NEXT_LABEL__</button>
+    <div class="twb-actions">
+      <button type="button" id="twb-cancel">Cancel</button>
+      <button type="button" id="twb-stop">Stop here</button>
+      <button type="button" id="twb-stop-undo" hidden>never mind</button>
+      <div class="twb-actions-end">
+        <span id="twb-status"></span>
+        <button type="button" id="twb-stop-send" hidden disabled>Stop and send</button>
+        <button type="button" id="twb-back" disabled>Back</button>
+        <button type="button" id="twb-next" disabled>__INITIAL_NEXT_LABEL__</button>
       </div>
     </div>
   </form>
 
-  <div id="pp-fallback" hidden>
-    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
-    <p data-role="body" id="pp-fallback-reason"></p>
+  <div id="twb-fallback" hidden>
+    <strong id="twb-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="twb-fallback-reason"></p>
     <textarea readonly rows="6"></textarea>
   </div>
 </main>
 
-<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+<div class="twb-lightbox" id="twb-lightbox" hidden><img id="twb-lightbox-img" alt=""></div>
 
 <script nonce="__NONCE__">
 (function () {
@@ -62,8 +62,8 @@ __STEPS__
 
   // Any image (a gallery thumbnail or one in an option/question body) expands full-size
   // on click — a thumbnail is otherwise too small to actually compare against another.
-  var lightbox = document.getElementById('pp-lightbox');
-  var lightboxImg = document.getElementById('pp-lightbox-img');
+  var lightbox = document.getElementById('twb-lightbox');
+  var lightboxImg = document.getElementById('twb-lightbox-img');
   function wireLightbox(img) {
     img.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -84,14 +84,14 @@ __STEPS__
     }
   });
 
-  var form = document.getElementById('pp-form');
-  var actions = form.querySelector('.pp-actions');
-  var backBtn = document.getElementById('pp-back');
-  var nextBtn = document.getElementById('pp-next');
-  var cancelBtn = document.getElementById('pp-cancel');
-  var status = document.getElementById('pp-status');
-  var progressLabel = document.getElementById('pp-progress-label');
-  var segments = Array.prototype.slice.call(document.querySelectorAll('.pp-seg'));
+  var form = document.getElementById('twb-form');
+  var actions = form.querySelector('.twb-actions');
+  var backBtn = document.getElementById('twb-back');
+  var nextBtn = document.getElementById('twb-next');
+  var cancelBtn = document.getElementById('twb-cancel');
+  var status = document.getElementById('twb-status');
+  var progressLabel = document.getElementById('twb-progress-label');
+  var segments = Array.prototype.slice.call(document.querySelectorAll('.twb-seg'));
   // True while "Stop here" is open: the segments, like Back, stop navigating.
   var segmentsLocked = false;
   var steps = [];
@@ -114,7 +114,7 @@ __STEPS__
   function wireSummary(s) {
     var input = s.querySelector('input');
     s.addEventListener('click', function (e) {
-      if (e.detail === 0 || e.target.closest('.pp-option-details')) return;
+      if (e.detail === 0 || e.target.closest('.twb-option-details')) return;
       e.preventDefault();
       if (!input.disabled) input.click();
     });
@@ -147,17 +147,17 @@ __STEPS__
     // the next is the expected motion, and a snapshot at submit time would read that as
     // never having been opened. The initial `open` attribute (recommended: true) counts
     // as having been shown too, seeded here rather than waiting for a first `toggle`.
-    el.querySelectorAll('.pp-option-drawer[data-option-id]').forEach(function (d) {
+    el.querySelectorAll('.twb-option-drawer[data-option-id]').forEach(function (d) {
       drawers.push(d);
       d._wasExpanded = d.open;
       d.addEventListener('toggle', function () { if (d.open) d._wasExpanded = true; });
     });
-    el.querySelectorAll('.pp-option-drawer > summary').forEach(wireSummary);
+    el.querySelectorAll('.twb-option-drawer > summary').forEach(wireSummary);
     el.querySelectorAll('textarea[data-step]').forEach(function (t) {
       freeTexts.push(t);
       t.addEventListener('input', refresh);
     });
-    var widget = el.querySelector('.pp-rank, .pp-tiers');
+    var widget = el.querySelector('.twb-rank, .twb-tiers');
     if (widget) wireRank(widget);
   }
 
@@ -166,23 +166,23 @@ __STEPS__
   var rankWidgets = [];
   function wireRank(widget) {
     rankWidgets.push(widget);
-    var tiered = widget.classList.contains('pp-tiers');
+    var tiered = widget.classList.contains('twb-tiers');
     // What moves: an option, or an ordered list's cut line, which moves like a row.
-    var MOVABLE = tiered ? '[data-option-id]' : '.pp-rank-item, .pp-rank-cut';
+    var MOVABLE = tiered ? '[data-option-id]' : '.twb-rank-item, .twb-rank-cut';
     var dragged = null;
     function clearDrop() {
-      widget.querySelectorAll('.pp-drop').forEach(function (n) { n.classList.remove('pp-drop'); });
+      widget.querySelectorAll('.twb-drop').forEach(function (n) { n.classList.remove('twb-drop'); });
     }
     widget.addEventListener('click', function (e) {
-      var btn = e.target.closest('.pp-rank-move');
+      var btn = e.target.closest('.twb-rank-move');
       if (!btn || frozen) return;
       var item = btn.closest(MOVABLE);
       var up = btn.dataset.move === '-1';
       if (tiered) {
-        var tier = item.closest('.pp-tier');
+        var tier = item.closest('.twb-tier');
         var to = up ? tier.previousElementSibling : tier.nextElementSibling;
         if (!to) return;
-        to.querySelector('.pp-tier-items').appendChild(item);
+        to.querySelector('.twb-tier-items').appendChild(item);
       } else {
         var sib = up ? item.previousElementSibling : item.nextElementSibling;
         if (!sib) return;
@@ -192,38 +192,38 @@ __STEPS__
       var same = item.querySelector('[data-move="' + btn.dataset.move + '"]');
       var shown = getComputedStyle(same);
       if (shown.visibility !== 'hidden' && shown.display !== 'none') same.focus();
-      else item.querySelector('.pp-rank-move:not([data-move="' + btn.dataset.move + '"])').focus();
+      else item.querySelector('.twb-rank-move:not([data-move="' + btn.dataset.move + '"])').focus();
       refresh();
     });
     widget.addEventListener('dragstart', function (e) {
       var item = e.target.closest(MOVABLE);
       if (!item || frozen) { e.preventDefault(); return; }
       dragged = item;
-      item.classList.add('pp-dragging');
+      item.classList.add('twb-dragging');
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', item.dataset.optionId || '');
     });
     widget.addEventListener('dragend', function () {
-      if (dragged) dragged.classList.remove('pp-dragging');
+      if (dragged) dragged.classList.remove('twb-dragging');
       dragged = null;
       clearDrop();
     });
     widget.addEventListener('dragover', function (e) {
       if (!dragged) return;
-      var zone = e.target.closest(tiered ? '.pp-tier' : MOVABLE);
+      var zone = e.target.closest(tiered ? '.twb-tier' : MOVABLE);
       if (!zone) return;
       e.preventDefault();
-      if (!zone.classList.contains('pp-drop')) { clearDrop(); zone.classList.add('pp-drop'); }
+      if (!zone.classList.contains('twb-drop')) { clearDrop(); zone.classList.add('twb-drop'); }
     });
     widget.addEventListener('drop', function (e) {
       if (!dragged) return;
       e.preventDefault();
       clearDrop();
       if (tiered) {
-        var tier = e.target.closest('.pp-tier');
+        var tier = e.target.closest('.twb-tier');
         if (!tier) return;
-        var chip = e.target.closest('.pp-tier-chip');
-        var box = tier.querySelector('.pp-tier-items');
+        var chip = e.target.closest('.twb-tier-chip');
+        var box = tier.querySelector('.twb-tier-items');
         if (!chip) box.appendChild(dragged);
         else if (chip !== dragged) box.insertBefore(dragged, chip);
       } else {
@@ -243,17 +243,17 @@ __STEPS__
                                     function (n) { return n.dataset.optionId; });
   }
   function rankAnswer(widget) {
-    if (!widget.classList.contains('pp-tiers')) {
+    if (!widget.classList.contains('twb-tiers')) {
       var answer = { order: [], excluded: [] };
       var into = answer.order;
       Array.prototype.forEach.call(widget.children, function (n) {
-        if (n.classList.contains('pp-rank-cut')) into = answer.excluded;
+        if (n.classList.contains('twb-rank-cut')) into = answer.excluded;
         else into.push(n.dataset.optionId);
       });
       return answer;
     }
     var tiers = {};
-    widget.querySelectorAll('.pp-tier').forEach(function (t) {
+    widget.querySelectorAll('.twb-tier').forEach(function (t) {
       if (t.dataset.tier) tiers[t.dataset.tier] = itemIds(t);
     });
     return { tiers: tiers };
@@ -271,7 +271,7 @@ __STEPS__
   document.querySelectorAll('textarea[data-step]').forEach(function (t) {
     t.value = t.defaultValue;
   });
-  document.querySelectorAll('.pp-step').forEach(wireStep);
+  document.querySelectorAll('.twb-step').forEach(wireStep);
 
   // The server already set the theme attribute from its own saved state whenever it has
   // one (see page.py's __THEME_ATTR__); localStorage is only the fallback for the very
@@ -282,7 +282,7 @@ __STEPS__
       if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
     } catch (e) { /* private mode: fall back to the OS preference */ }
   }
-  document.getElementById('pp-theme').addEventListener('click', function () {
+  document.getElementById('twb-theme').addEventListener('click', function () {
     var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
     var next = document.documentElement.dataset.theme
       ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
@@ -301,11 +301,11 @@ __STEPS__
   // <section>) instead, the same way stepFreeText's id already ties a field to a step.
   function stepDrawers(step) {
     return Array.prototype.slice.call(
-      steps[step].querySelectorAll('.pp-option-drawer[data-option-id]')
+      steps[step].querySelectorAll('.twb-option-drawer[data-option-id]')
     );
   }
   function stepFreeText(step) {
-    return document.getElementById('pp-free-text-' + step);
+    return document.getElementById('twb-free-text-' + step);
   }
   // A ranking in the agent's order is a valid answer; a tiers question needs one item
   // sorted into a tier.
@@ -314,8 +314,8 @@ __STEPS__
     if (ft && ft.value.trim() !== '') return true;
     var widget = stepRank(step);
     if (widget) {
-      return !widget.classList.contains('pp-tiers') ||
-        widget.querySelector('.pp-tier:not(.pp-tier-unsorted) [data-option-id]') !== null;
+      return !widget.classList.contains('twb-tiers') ||
+        widget.querySelector('.twb-tier:not(.twb-tier-unsorted) [data-option-id]') !== null;
     }
     return stepInputs(step).some(function (i) { return i.checked; });
   }
@@ -345,8 +345,8 @@ __STEPS__
   // as Back (forward stays with Next, which checks the answer on the way).
   function syncSegments() {
     segments.forEach(function (seg, i) {
-      seg.classList.toggle('pp-seg-done', i < current || stepAnswered(i));
-      seg.classList.toggle('pp-seg-cur', i === current);
+      seg.classList.toggle('twb-seg-done', i < current || stepAnswered(i));
+      seg.classList.toggle('twb-seg-cur', i === current);
       if (i === current) seg.setAttribute('aria-current', 'step');
       else seg.removeAttribute('aria-current');
       seg.disabled = frozen || segmentsLocked || i >= current;
@@ -364,7 +364,7 @@ __STEPS__
   function showStep(index) {
     visits[index] += 1;
     furthest = Math.max(furthest, index);
-    steps.forEach(function (el, i) { el.classList.toggle('pp-step-active', i === index); });
+    steps.forEach(function (el, i) { el.classList.toggle('twb-step-active', i === index); });
     backBtn.disabled = index === 0;
     refresh();
   }
@@ -382,7 +382,7 @@ __STEPS__
     nextBtn.textContent = last ? (skipping ? 'Skip and send' : 'Send answers')
                                : (skipping ? 'Skip' : 'Next');
     nextBtn.disabled = false;
-    nextBtn.classList.toggle('pp-skip', skipping);
+    nextBtn.classList.toggle('twb-skip', skipping);
     reportProgress();
   }
 
@@ -420,7 +420,7 @@ __STEPS__
 
   // The page's side of the shared Interruption script below.
   function stopTarget() {
-    return { root: steps[current], before: null, id: 'pp-free-text-' + current, index: current };
+    return { root: steps[current], before: null, id: 'twb-free-text-' + current, index: current };
   }
   function stopMode(on) {
     nextBtn.hidden = on;
@@ -438,9 +438,9 @@ __STEPS__
   // needs the user's own words there: the question's text box turns required, and one is
   // added where the question has none (allow_free_text off). stopTarget, stopMode and
   // stopPayload above are each page's side of it.
-  var stopBtn = document.getElementById('pp-stop');
-  var stopSend = document.getElementById('pp-stop-send');
-  var stopUndo = document.getElementById('pp-stop-undo');
+  var stopBtn = document.getElementById('twb-stop');
+  var stopSend = document.getElementById('twb-stop-send');
+  var stopUndo = document.getElementById('twb-stop-undo');
   var stopping = null;
   function syncStop() {
     stopSend.disabled = frozen || !stopping || stopping.box.value.trim() === '';
@@ -451,7 +451,7 @@ __STEPS__
     var made = !box;
     if (made) {
       var holder = document.createElement('label');
-      holder.className = 'pp-free-text';
+      holder.className = 'twb-free-text';
       holder.appendChild(document.createTextNode(''));
       box = document.createElement('textarea');
       box.id = target.id;
@@ -462,7 +462,7 @@ __STEPS__
     var label = box.parentNode;
     stopping = { box: box, made: made, index: target.index, label: label.firstChild.nodeValue };
     label.firstChild.nodeValue = 'Why stop here? Claude reads this first.';
-    label.classList.add('pp-required');
+    label.classList.add('twb-required');
     box.addEventListener('input', syncStop);
     stopBtn.hidden = true;
     stopSend.hidden = false;
@@ -476,7 +476,7 @@ __STEPS__
     stopping.box.removeEventListener('input', syncStop);
     if (stopping.made) label.remove();
     else {
-      label.classList.remove('pp-required');
+      label.classList.remove('twb-required');
       label.firstChild.nodeValue = stopping.label;
     }
     stopping = null;
@@ -534,7 +534,7 @@ __STEPS__
       // In a live session a new generation is the agent's refresh, which ask_live.js
       // follows by reloading; it is not a call that ended.
       if (body.generation !== GENERATION) {
-        if (!(window.ppAsk && window.ppAsk.liveStarted)) expire(false);
+        if (!(window.twbAsk && window.twbAsk.liveStarted)) expire(false);
       }
       else if (!body.open) expire(true);
     } catch (e) { expire(false); }
@@ -569,14 +569,14 @@ __STEPS__
   }
 
   function fallback(payload, reason, title) {
-    var box = document.getElementById('pp-fallback');
+    var box = document.getElementById('twb-fallback');
     var text = JSON.stringify(payload, null, 2);
     box.hidden = false;
     var textarea = box.querySelector('textarea');
     textarea.value = text;
-    document.getElementById('pp-fallback-reason').textContent =
+    document.getElementById('twb-fallback-reason').textContent =
       reason + ' \u2014 copy the text below and paste it to Claude Code.';
-    document.getElementById('pp-fallback-title').textContent =
+    document.getElementById('twb-fallback-title').textContent =
       title || "Couldn't reach Claude Code";
     textarea.select();
   }
@@ -631,7 +631,7 @@ __STEPS__
   // (STATUS_URL set) is about to reload itself for the next question instead. A tab whose
   // discussion started has left the shared session: nothing reloads it.
   function doneMessage(base) {
-    return STATUS_URL && !(window.ppAsk && window.ppAsk.liveStarted)
+    return STATUS_URL && !(window.twbAsk && window.twbAsk.liveStarted)
       ? base + ' Waiting for the next question\u2026'
       : base + ' You can close this tab.';
   }
@@ -676,7 +676,7 @@ __STEPS__
   send('probe', {});
   startHeartbeat();
   // What assets/ask_live.js (the live discussion, ADR 0005) works through.
-  window.ppAsk = {
+  window.twbAsk = {
     liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
     collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false,
     generation: GENERATION

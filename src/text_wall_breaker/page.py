@@ -164,10 +164,10 @@ def _render_deck(
     total = len(slides)
     initial_progress = round(100 / total) if total else 0
     progress_html = (
-        '<div class="pp-progress">'
-        f'<span class="pp-progress-label" id="pp-deck-progress-label">Slide 1 of {total}</span>'
-        '<span class="pp-progress-track">'
-        f'<span class="pp-progress-fill" id="pp-deck-progress-fill" '
+        '<div class="twb-progress">'
+        f'<span class="twb-progress-label" id="twb-deck-progress-label">Slide 1 of {total}</span>'
+        '<span class="twb-progress-track">'
+        f'<span class="twb-progress-fill" id="twb-deck-progress-fill" '
         f'style="width: {initial_progress}%"></span>'
         "</span>"
         "</div>"
@@ -256,15 +256,15 @@ def build_show_page(
     save_html = ""
     if save_button:
         save_html = (
-            '    <button type="button" id="pp-save">Save report</button>\n'
-            '    <div class="pp-save-menu" id="pp-save-menu" hidden>\n'
-            '      <button type="button" id="pp-save-md">as Markdown (.md)</button>\n'
-            '      <button type="button" id="pp-save-html">as HTML (.html)</button>\n'
+            '    <button type="button" id="twb-save">Save report</button>\n'
+            '    <div class="twb-save-menu" id="twb-save-menu" hidden>\n'
+            '      <button type="button" id="twb-save-md">as Markdown (.md)</button>\n'
+            '      <button type="button" id="twb-save-html">as HTML (.html)</button>\n'
             "    </div>"
         )
     ack_html = ""
     if acknowledge_button:
-        ack_html = '      <button type="button" id="pp-ack">Acknowledge</button>'
+        ack_html = '      <button type="button" id="twb-ack">Acknowledge</button>'
 
     asset_base_url = asset_base_url_for(status_url)
     if slides is not None:
@@ -279,7 +279,7 @@ def build_show_page(
         {
             "__CSS__": css,
             "__THEME_ATTR__": _theme_attr(theme),
-            "__MAIN_EXTRA__": ' class="pp-wide"' if wide else "",
+            "__MAIN_EXTRA__": ' class="twb-wide"' if wide else "",
             "__TITLE__": html.escape(title, quote=True),
             "__CONTENT__": content_html,
             "__DECK_SCRIPT__": _deck_script(slides is not None),
@@ -309,22 +309,22 @@ def _render_review_gap(gap: Gap) -> str:
     size = gap.size
     many = "" if size > _GAP_STEP else " hidden"
     down = (
-        f'<button type="button" class="pp-gap-step" data-step="down"{many} '
+        f'<button type="button" class="twb-gap-step" data-step="down"{many} '
         f'aria-label="Show {_GAP_STEP} lines below the hunk above">&darr; {_GAP_STEP}</button>'
         if gap.position != "top"
         else ""
     )
     up = (
-        f'<button type="button" class="pp-gap-step" data-step="up"{many} '
+        f'<button type="button" class="twb-gap-step" data-step="up"{many} '
         f'aria-label="Show {_GAP_STEP} lines above the hunk below">&uarr; {_GAP_STEP}</button>'
         if gap.position != "end"
         else ""
     )
     label = f"{size} hidden line{'' if size == 1 else 's'}"
     return (
-        f'<div class="pp-review-gap" data-position="{gap.position}" '
+        f'<div class="twb-review-gap" data-position="{gap.position}" '
         f'data-first="{gap.new_first}" data-last="{gap.new_last}" data-delta="{gap.delta}">'
-        f'<span class="pp-gap-pill">{down}<button type="button" class="pp-gap-all" '
+        f'<span class="twb-gap-pill">{down}<button type="button" class="twb-gap-all" '
         f'aria-label="Show all {size} hidden lines">{label}</button>{up}</span></div>'
     )
 
@@ -342,10 +342,10 @@ def _render_review_note(index: int, note: ReviewNote, asset_base_url: str | None
     label = html.escape(_note_label(note))
     body = render_markdown(note["text"], asset_base_url=asset_base_url)
     return (
-        f'<div class="pp-note is-open" data-note="{index}">'
-        f'<div class="pp-note-head"><span class="pp-note-label">&#10022; Agent &middot; '
-        f'{label}</span><button type="button" class="pp-note-reply" data-act="reply">Reply'
-        f'</button></div><div class="pp-note-body">{body}</div></div>'
+        f'<div class="twb-note is-open" data-note="{index}">'
+        f'<div class="twb-note-head"><span class="twb-note-label">&#10022; Agent &middot; '
+        f'{label}</span><button type="button" class="twb-note-reply" data-act="reply">Reply'
+        f'</button></div><div class="twb-note-body">{body}</div></div>'
     )
 
 
@@ -364,17 +364,17 @@ def _render_review_row(
     side = row.side or "new"
     line = row.line if row.line is not None else 0
     return (
-        f'<div class="pp-review-row-wrap" data-path="{escaped_path}" '
+        f'<div class="twb-review-row-wrap" data-path="{escaped_path}" '
         f'data-side="{side}" data-line="{line}">'
-        f'<div class="pp-review-row {row.kind}" role="button" tabindex="0" '
+        f'<div class="twb-review-row {row.kind}" role="button" tabindex="0" '
         'aria-label="Select this line to comment">'
-        f'<span class="pp-review-gutter">{old}</span>'
-        f'<span class="pp-review-gutter">{new}</span>'
-        f'<span class="pp-review-text">{text_html}</span>'
-        '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span>'
+        f'<span class="twb-review-gutter">{old}</span>'
+        f'<span class="twb-review-gutter">{new}</span>'
+        f'<span class="twb-review-text">{text_html}</span>'
+        '<span class="twb-review-comment-icon" aria-hidden="true">&#128172;</span>'
         "</div>"
         + "".join(
-            f'<button type="button" class="pp-note-mark is-open" data-note="{i}" '
+            f'<button type="button" class="twb-note-mark is-open" data-note="{i}" '
             'aria-expanded="true">&#10022; note</button>'
             for i in marks.get((side, line), [])
         )
@@ -443,8 +443,8 @@ def _render_review_chunks(
             for j in chunk_rows[i]
         )
         return (
-            f'<div class="pp-chunk"><div class="pp-chunk-diff">{body}</div>'
-            f'<div class="pp-rendered">{blocks[i].html}</div></div>'
+            f'<div class="twb-chunk"><div class="twb-chunk-diff">{body}</div>'
+            f'<div class="twb-rendered">{blocks[i].html}</div></div>'
         )
 
     parts: list[str] = []
@@ -459,9 +459,9 @@ def _render_review_chunks(
             end += 1
         count = end - i
         parts.append(
-            f'<button type="button" class="pp-fold" aria-expanded="false">'
+            f'<button type="button" class="twb-fold" aria-expanded="false">'
             f"{count} unchanged block{'' if count == 1 else 's'}</button>"
-            f'<div class="pp-fold-body" hidden>{"".join(chunk(k) for k in range(i, end))}</div>'
+            f'<div class="twb-fold-body" hidden>{"".join(chunk(k) for k in range(i, end))}</div>'
         )
         i = end
     return "".join(parts)
@@ -475,7 +475,7 @@ def _render_review_diff(
     asset_base_url: str | None = None,
     rendered: str | None = None,
 ) -> str:
-    """One page's diff as `.pp-review-row` rows, each wrapped in `.pp-review-row-wrap`.
+    """One page's diff as `.twb-review-row` rows, each wrapped in `.twb-review-row-wrap`.
 
     With `rendered` (a Markdown or AsciiDoc page) the page is cut into chunks instead, see
     `_render_review_chunks`.
@@ -512,7 +512,7 @@ def _render_review_diff(
         )
         marks.setdefault(start, []).append(index)
         closings.setdefault(end, []).append(index)
-    parts = [f'<div class="pp-review-diff" data-path="{escaped_path}">']
+    parts = [f'<div class="twb-review-diff" data-path="{escaped_path}">']
     blocks = split_blocks(rendered) if rendered else []
     if blocks:
         # With the file text every line gets a row, so the gap bars have nothing left to
@@ -537,7 +537,7 @@ def _render_review_diff(
                 hunk += 1
                 if hunk in gap_before:
                     parts.append(_render_review_gap(gap_before[hunk]))
-                parts.append(f'<div class="pp-review-row hunk">{text_html}</div>')
+                parts.append(f'<div class="twb-review-row hunk">{text_html}</div>')
                 continue
             parts.append(
                 _render_review_row(
@@ -550,16 +550,16 @@ def _render_review_diff(
             payload = json.dumps([lines[gap.new_first - 1 : gap.new_last] for gap in gaps])
             escaped = payload.replace("<", "\\u003c")
             parts.append(
-                f'<script type="application/json" class="pp-review-lines">{escaped}</script>'
+                f'<script type="application/json" class="twb-review-lines">{escaped}</script>'
             )
         parts.append("</div>")
     if notes:
         count = len(notes)
         parts.insert(
             0,
-            '<div class="pp-notes-bar" data-state="shown">'
-            f'<span class="pp-switch-label">&#10022; {count} note{"" if count == 1 else "s"} '
-            'from the agent</span><span class="pp-switch">'
+            '<div class="twb-notes-bar" data-state="shown">'
+            f'<span class="twb-switch-label">&#10022; {count} note{"" if count == 1 else "s"} '
+            'from the agent</span><span class="twb-switch">'
             '<button type="button" data-all="0">Hide all</button>'
             '<button type="button" data-all="1">Show all</button></span></div>',
         )
@@ -587,27 +587,27 @@ def _render_review_header(
     body = render_markdown(header, asset_base_url=asset_base_url) if header else ""
     lead = _LEADING_H1.match(body)
     title = (
-        f'<h1 class="pp-head-title">{lead.group(1)}</h1>'
+        f'<h1 class="twb-head-title">{lead.group(1)}</h1>'
         if lead
-        else ('<span class="pp-head-title">Review</span>')
+        else ('<span class="twb-head-title">Review</span>')
     )
     rest = lead.group(2) if lead else body
     notes = sum(len(n) for page in pages if isinstance(n := page.get("notes"), list))
     chips = (
-        f'<span class="pp-chip">{_plural(len(pages), "file")}</span>'
-        f'<span class="pp-chip" id="pp-chip-comments">{_plural(0, "comment")}</span>'
-        + (f'<span class="pp-chip">{_plural(notes, "agent note")}</span>' if notes else "")
+        f'<span class="twb-chip">{_plural(len(pages), "file")}</span>'
+        f'<span class="twb-chip" id="twb-chip-comments">{_plural(0, "comment")}</span>'
+        + (f'<span class="twb-chip">{_plural(notes, "agent note")}</span>' if notes else "")
     )
     fold = ""
     if rest.strip():
         opened = "" if lead else " open"
         fold = (
-            f'<details class="pp-head-details"{opened}><summary>Details</summary>'
-            f'<div class="pp-content">{rest}</div></details>'
+            f'<details class="twb-head-details"{opened}><summary>Details</summary>'
+            f'<div class="twb-content">{rest}</div></details>'
         )
     return (
-        f'<header class="pp-head"><div class="pp-head-row">{title}'
-        f'<span class="pp-chips">{chips}</span></div>{fold}</header>'
+        f'<header class="twb-head"><div class="twb-head-row">{title}'
+        f'<span class="twb-chips">{chips}</span></div>{fold}</header>'
     )
 
 
@@ -630,12 +630,12 @@ def _render_review_pages(
         path = str(page["path"])
         blurb = page.get("blurb")
         blurb_md = render_markdown(str(blurb), asset_base_url=asset_base_url) if blurb else ""
-        blurb_html = f'<div class="pp-blurb">{blurb_md}</div>' if blurb else ""
+        blurb_html = f'<div class="twb-blurb">{blurb_md}</div>' if blurb else ""
         folder, _, name = path.rpartition("/")
         path_html = (
             _status_badge(page)
-            + f'<span class="pp-path-dir">{html.escape(folder + "/" if folder else "")}</span>'
-            f'<span class="pp-path-file">{html.escape(name)}</span>'
+            + f'<span class="twb-path-dir">{html.escape(folder + "/" if folder else "")}</span>'
+            f'<span class="twb-path-file">{html.escape(name)}</span>'
         )
         page_lines = page.get("lines")
         page_notes = page.get("notes")
@@ -648,17 +648,17 @@ def _render_review_pages(
             asset_base_url,
             rendered if isinstance(rendered, str) else None,
         )
-        if 'class="pp-chunk"' in diff_html:
-            diff_html = f'<div class="pp-views">{diff_html}</div>'
-        note_id = f"pp-page-note-{index}"
+        if 'class="twb-chunk"' in diff_html:
+            diff_html = f'<div class="twb-views">{diff_html}</div>'
+        note_id = f"twb-page-note-{index}"
         slide_parts.append(
             f'<section class="deck-slide card{active}">'
-            f'<div class="pp-review-path">{path_html}</div>'
+            f'<div class="twb-review-path">{path_html}</div>'
             f"{blurb_html}"
             f"{diff_html}"
-            f'<label class="pp-page-note-label" for="{note_id}">'
+            f'<label class="twb-page-note-label" for="{note_id}">'
             "Note on this file (optional)</label>"
-            f'<textarea class="pp-page-note" id="{note_id}" '
+            f'<textarea class="twb-page-note" id="{note_id}" '
             f'data-path="{html.escape(path, quote=True)}" '
             'placeholder="Anything about this file as a whole, beyond the line comments">'
             "</textarea>"
@@ -686,7 +686,7 @@ def _status_badge(page: ReviewPage) -> str:
     if status == "R" and page.get("renamed_from"):
         title += f" from {page['renamed_from']}"
     return (
-        f'<span class="pp-status pp-status-{status}" '
+        f'<span class="twb-status twb-status-{status}" '
         f'title="{html.escape(title, quote=True)}">{status}</span>'
     )
 
@@ -709,39 +709,39 @@ def _render_review_files(pages: list[ReviewPage]) -> str:
         old_path = page.get("renamed_from")
         row_title = f"{path} (renamed from {old_path})" if old_path else path
         rows.append(
-            f'<button type="button" class="pp-file{current}" data-index="{index}" '
+            f'<button type="button" class="twb-file{current}" data-index="{index}" '
             f'title="{html.escape(row_title, quote=True)}">'
             f"{_status_badge(page)}"
-            '<span class="pp-file-paths">'
-            f'<span class="pp-file-name">{html.escape(name)}</span>'
-            f'<span class="pp-file-dir">{shown_directory}</span>'
+            '<span class="twb-file-paths">'
+            f'<span class="twb-file-name">{html.escape(name)}</span>'
+            f'<span class="twb-file-dir">{shown_directory}</span>'
             "</span>"
-            '<span class="pp-file-note" title="Note on this file" hidden>&#9998;</span>'
-            '<span class="pp-file-count is-zero" title="0 comments">0</span>'
+            '<span class="twb-file-note" title="Note on this file" hidden>&#9998;</span>'
+            '<span class="twb-file-count is-zero" title="0 comments">0</span>'
             "</button>"
         )
     tools = (
-        '<div class="pp-files-tools">'
-        '<input type="search" id="pp-files-filter" aria-label="Filter files" '
+        '<div class="twb-files-tools">'
+        '<input type="search" id="twb-files-filter" aria-label="Filter files" '
         'placeholder="Filter files&hellip;">'
-        '<label><input type="checkbox" id="pp-files-marked"> only with comments or a note'
+        '<label><input type="checkbox" id="twb-files-marked"> only with comments or a note'
         "</label></div>"
-        '<div id="pp-files-empty" hidden>No file matches.</div>'
+        '<div id="twb-files-empty" hidden>No file matches.</div>'
         if len(pages) >= _FILTER_FROM
         else ""
     )
     return (
-        '<nav id="pp-files" aria-label="Files">'
-        '<h3 class="pp-files-head">Files <span id="pp-files-total">0 comments</span></h3>'
+        '<nav id="twb-files" aria-label="Files">'
+        '<h3 class="twb-files-head">Files <span id="twb-files-total">0 comments</span></h3>'
         + tools
         + "".join(rows)
         + "</nav>"
-        '<div id="pp-files-backdrop" hidden></div>'
-        '<div id="pp-filebar">'
-        '<button type="button" id="pp-files-toggle" aria-expanded="false" '
-        'aria-controls="pp-files">Files</button>'
-        '<span id="pp-filebar-name"></span>'
-        '<span id="pp-filebar-pos"></span>'
+        '<div id="twb-files-backdrop" hidden></div>'
+        '<div id="twb-filebar">'
+        '<button type="button" id="twb-files-toggle" aria-expanded="false" '
+        'aria-controls="twb-files">Files</button>'
+        '<span id="twb-filebar-name"></span>'
+        '<span id="twb-filebar-pos"></span>'
         '<button type="button" data-file-step="-1" aria-label="Previous file">&larr;</button>'
         '<button type="button" data-file-step="1" aria-label="Next file">&rarr;</button>'
         "</div>"
@@ -821,7 +821,7 @@ def build_review_page(
             "__TITLE__": html.escape(title, quote=True),
             "__HEADER_BLOCK__": header_html,
             "__CONTENT__": content_html,
-            "__BODY_CLASS__": ' class="pp-has-files"' if with_files else "",
+            "__BODY_CLASS__": ' class="twb-has-files"' if with_files else "",
             "__DECK_SCRIPT__": _review_files_script(with_files),
             "__LIVE_SCRIPT__": live_script,
             "__EXPORT_SCRIPT__": _export_script(),
@@ -885,7 +885,7 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
     return (
         _load_asset("glossary.css"),
         _script(
-            "window.__PP_GLOSSARY__ = " + _js_string(glossary) + ";\n" + _load_asset("glossary.js")
+            "window.__TWB_GLOSSARY__ = " + _js_string(glossary) + ";\n" + _load_asset("glossary.js")
         ),
     )
 
@@ -896,7 +896,7 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
 #   drift. Three looks only: solid accent (the one primary action), outlined (every other
 #   action), dashed and transparent (disabled, never a fill, so it cannot pass for an
 #   outlined button). The row is split: leave actions (Cancel, Stop here) left, forward
-#   actions (Back, primary) in `.pp-actions-end` right.
+#   actions (Back, primary) in `.twb-actions-end` right.
 # - ask.css: ask's own components, sized for one short question rather than a long report;
 #   see the module docstring for why this stopped composing onto base.css's `.card` and
 #   `.theme-toggle`. multi.css is layered onto it (not merged) for the wizard page only:
@@ -904,10 +904,10 @@ def _glossary_assets(glossary: list[dict[str, str]] | None) -> tuple[str, str]:
 # - export.css: the export button and popover of ask, the wizard and review (export.js).
 # - show.css and review.css deliberately duplicate ask.css's palette, font, actions and
 #   fallback rules rather than share them, so a page does not carry rules for elements it
-#   never renders. review.css's own pieces (from `.pp-review-path` down) are a whole-row
+#   never renders. review.css's own pieces (from `.twb-review-path` down) are a whole-row
 #   comment target per diff line and the overall-note box; see CONTEXT.md's "Review".
-# Page templates: ask.html, multi.html (a wizard: one `.pp-step` visible at a time, toggled
-# by `.pp-step-active` and not by removing the others from the DOM, so every step's markup
+# Page templates: ask.html, multi.html (a wizard: one `.twb-step` visible at a time, toggled
+# by `.twb-step-active` and not by removing the others from the DOM, so every step's markup
 # is still present for a static read), show.html and review.html. show.html copies
 # ask.html's fallback box, heartbeat and reuse-polling script, since a listener-backed
 # show page needs the same abandonment-heartbeat and tab-reuse behaviour.
@@ -1052,7 +1052,7 @@ def _render_options(
     options: list[dict[str, object]],
     multi_select: bool,
     *,
-    name: str = "pp-option",
+    name: str = "twb-option",
     data_step: str | None = None,
     gallery: bool = False,
     asset_base_url: str | None = None,
@@ -1084,21 +1084,21 @@ def _render_options(
         # The row is the drawer's <summary>, but only the Details pill opens it; the
         # page's script turns any other click on the row into selecting the option.
         tags = (
-            '<span class="pp-option-recommended">Recommended</span>'
+            '<span class="twb-option-recommended">Recommended</span>'
             if option.get("recommended")
             else ""
         ) + (
-            f'<span class="pp-option-details" aria-hidden="true">Details{_CHEVRON_SVG}</span>'
+            f'<span class="twb-option-details" aria-hidden="true">Details{_CHEVRON_SVG}</span>'
             if drawer
             else ""
         )
         # The tag and the Details pill float inside the label, ahead of its text, so a
         # long label wraps under them instead of being squeezed into a column beside them.
-        tags_html = f'<span class="pp-option-tags">{tags}</span>' if tags else ""
+        tags_html = f'<span class="twb-option-tags">{tags}</span>' if tags else ""
         select_html = (
             f'<input type="{kind}" name="{name}" data-option-id="{option_id}"{step_attr}'
             f'{checked_attr} aria-label="{label}">'
-            f'<span class="pp-option-label">{tags_html}{label_html}</span>'
+            f'<span class="twb-option-label">{tags_html}{label_html}</span>'
         )
 
         # Inside the select row (the <label> or the drawer's <summary>) rather than a
@@ -1107,32 +1107,32 @@ def _render_options(
         # block syntax in a caveat stays literal text instead of breaking the row.
         caveat = option.get("caveat")
         caveat_inline = render_inline(str(caveat), asset_base_url=asset_base_url) if caveat else ""
-        caveat_html = f'<div class="pp-option-caveat">{caveat_inline}</div>' if caveat else ""
+        caveat_html = f'<div class="twb-option-caveat">{caveat_inline}</div>' if caveat else ""
 
         if not body:
             rows.append(
-                f'    <li class="pp-option"><label class="pp-option-select">'
+                f'    <li class="twb-option"><label class="twb-option-select">'
                 f"{select_html}{caveat_html}</label></li>"
             )
             continue
 
-        body_div = f'<div class="pp-option-body">{body_html}</div>'
+        body_div = f'<div class="twb-option-body">{body_html}</div>'
 
         if not drawer:
             rows.append(
-                f'    <li class="pp-option"><label class="pp-option-select">'
+                f'    <li class="twb-option"><label class="twb-option-select">'
                 f"{select_html}{caveat_html}</label>{body_div}</li>"
             )
             continue
 
         open_attr = " open" if option.get("recommended") else ""
         rows.append(
-            f'    <li class="pp-option"><details class="pp-option-drawer" '
+            f'    <li class="twb-option"><details class="twb-option-drawer" '
             f'data-option-id="{option_id}"{open_attr}>'
-            f'<summary class="pp-option-select">{select_html}{caveat_html}</summary>'
+            f'<summary class="twb-option-select">{select_html}{caveat_html}</summary>'
             f"{body_div}</details></li>"
         )
-    ul_class = "pp-options pp-options-gallery" if gallery else "pp-options"
+    ul_class = "twb-options twb-options-gallery" if gallery else "twb-options"
     return f'  <ul class="{ul_class}">\n' + "\n".join(rows) + "\n  </ul>"
 
 
@@ -1167,7 +1167,7 @@ def _needs_wide_layout(*fragments: str) -> bool:
     """True if any rendered fragment carries a ```diff/code fence or a table.
 
     These are exactly the content shapes that hit their own horizontal scrollbar
-    (`.pp-diff`/`pre.code-block`/`table` all set `overflow-x: auto` or scroll their
+    (`.twb-diff`/`pre.code-block`/`table` all set `overflow-x: auto` or scroll their
     container) well before an ordinary question or report would — `review`'s page hit
     this with a fixed max-width that left most of the window unused (see its own
     width fix). Widened the same way a gallery question already is (`_is_gallery`),
@@ -1176,7 +1176,7 @@ def _needs_wide_layout(*fragments: str) -> bool:
     easier.
     """
     return any(
-        'class="pp-diff"' in fragment or 'class="code-block"' in fragment or "<table" in fragment
+        'class="twb-diff"' in fragment or 'class="code-block"' in fragment or "<table" in fragment
         for fragment in fragments
     )
 
@@ -1205,7 +1205,7 @@ def _deck_script(needed: bool) -> str:
     `.deck-slide` elements for this to act on. The nav mechanics (prev/next, keyboard,
     wraparound) are the same ones exercised in no-text-wall's `TEMPLATES.md` `deck`
     template; the progress bar it drives instead of that template's plain "N / total"
-    span reuses `ask`'s own wizard-progress widget (`.pp-progress`) for visual
+    span reuses `ask`'s own wizard-progress widget (`.twb-progress`) for visual
     consistency across text-wall-breaker's two multi-step surfaces.
     """
     if not needed:
@@ -1286,8 +1286,8 @@ def build_page(
     free_text = ""
     if allow_free_text:
         free_text = (
-            '  <label class="pp-free-text">Anything else'
-            '<textarea id="pp-free-text" rows="4" '
+            '  <label class="twb-free-text">Anything else'
+            '<textarea id="twb-free-text" rows="4" '
             'placeholder="Optional — type a free-text answer">\n'
             f"{html.escape(free_text_prefill)}</textarea></label>"
         )
@@ -1312,14 +1312,14 @@ def build_page(
     )
 
     question_block = (
-        f'  <section class="pp-question{question_class}">\n{question_html}\n  </section>'
+        f'  <section class="twb-question{question_class}">\n{question_html}\n  </section>'
     )
     return _document(
         _load_asset("ask.html"),
         {
             "__CSS__": css,
             "__THEME_ATTR__": _theme_attr(theme),
-            "__MAIN_EXTRA__": ' class="pp-wide"' if wide else "",
+            "__MAIN_EXTRA__": ' class="twb-wide"' if wide else "",
             "__TITLE__": html.escape(title, quote=True),
             "__QUESTION_BLOCK__": question_block,
             "__OPTIONS__": options_html,
@@ -1341,7 +1341,7 @@ def _question_html(question: str, asset_base_url: str | None) -> tuple[str, str]
     if len(first_paragraph(question)) <= LONG_QUESTION_CHARS:
         return render_markdown(question, asset_base_url=asset_base_url), ""
     leading = bold_lead(question) or question
-    return render_markdown(leading, asset_base_url=asset_base_url), " pp-long"
+    return render_markdown(leading, asset_base_url=asset_base_url), " twb-long"
 
 
 def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None = None) -> str:
@@ -1363,7 +1363,7 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
         options_html = _render_options(
             options,
             multi_select,
-            name=f"pp-option-step-{index}",
+            name=f"twb-option-step-{index}",
             data_step=str(index),
             gallery=_is_gallery(options),
             asset_base_url=asset_base_url,
@@ -1371,17 +1371,17 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
     free_text_html = ""
     if spec.get("allow_free_text", True):
         free_text_html = (
-            f'    <label class="pp-free-text">Anything else'
-            f'<textarea id="pp-free-text-{index}" data-step="{index}" rows="3" '
+            f'    <label class="twb-free-text">Anything else'
+            f'<textarea id="twb-free-text-{index}" data-step="{index}" rows="3" '
             'placeholder="Optional — type a free-text answer">\n'
             f"{html.escape(str(spec.get('free_text') or ''))}</textarea></label>"
         )
-    # The wizard's JS toggles `pp-step-active` on navigation; the first step starts with
+    # The wizard's JS toggles `twb-step-active` on navigation; the first step starts with
     # it already set so the page shows question one even before the script has run.
-    active = " pp-step-active" if index == 0 else ""
-    question_block = f'    <div class="pp-question{question_class}">{question_html}</div>'
+    active = " twb-step-active" if index == 0 else ""
+    question_block = f'    <div class="twb-question{question_class}">{question_html}</div>'
     return (
-        f'  <section class="pp-step{active}" data-step-index="{index}">\n'
+        f'  <section class="twb-step{active}" data-step-index="{index}">\n'
         f"{question_block}\n"
         f"{options_html}\n"
         f"{free_text_html}\n"
@@ -1390,8 +1390,8 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
 
 
 _RANK_MOVES = (
-    '<button type="button" class="pp-rank-move" data-move="-1" aria-label="{up}">&#8593;</button>'
-    '<button type="button" class="pp-rank-move" data-move="1" aria-label="{down}">&#8595;</button>'
+    '<button type="button" class="twb-rank-move" data-move="-1" aria-label="{up}">&#8593;</button>'
+    '<button type="button" class="twb-rank-move" data-move="1" aria-label="{down}">&#8595;</button>'
 )
 
 
@@ -1425,11 +1425,11 @@ def _render_rank(
         items = []
         # The cut line is a list entry of its own: rows after it are left out.
         cut = (
-            '<li class="pp-rank-cut" draggable="true">'
-            '<button type="button" class="pp-rank-move" data-move="-1" '
+            '<li class="twb-rank-cut" draggable="true">'
+            '<button type="button" class="twb-rank-move" data-move="-1" '
             'aria-label="Move the cut line up">&#8593;</button>'
             "<span>left out below</span>"
-            '<button type="button" class="pp-rank-move" data-move="1" '
+            '<button type="button" class="twb-rank-move" data-move="1" '
             'aria-label="Move the cut line down">&#8595;</button></li>'
         )
         for option_id in [*order, None, *excluded]:
@@ -1442,22 +1442,22 @@ def _render_rank(
             body_html = ""
             if body:
                 body_html = render_markdown(str(body), asset_base_url=asset_base_url)
-                body_html = f'<div class="pp-rank-body">{body_html}</div>'
+                body_html = f'<div class="twb-rank-body">{body_html}</div>'
             caveat_html = ""
             if caveat:
                 caveat_html = render_inline(str(caveat), asset_base_url=asset_base_url)
-                caveat_html = f'<div class="pp-rank-caveat">{caveat_html}</div>'
+                caveat_html = f'<div class="twb-rank-caveat">{caveat_html}</div>'
             items.append(
-                f'<li class="pp-rank-item" draggable="true" '
+                f'<li class="twb-rank-item" draggable="true" '
                 f'data-option-id="{html.escape(option_id, quote=True)}">'
-                '<span class="pp-rank-grip" aria-hidden="true">&#10303;</span>'
-                '<span class="pp-rank-pos" aria-hidden="true"></span>'
-                f'<div class="pp-rank-text"><div class="pp-option-label">{label(option_id)}</div>'
+                '<span class="twb-rank-grip" aria-hidden="true">&#10303;</span>'
+                '<span class="twb-rank-pos" aria-hidden="true"></span>'
+                f'<div class="twb-rank-text"><div class="twb-option-label">{label(option_id)}</div>'
                 f"{body_html}{caveat_html}</div>"
                 + _RANK_MOVES.format(up="Move up", down="Move down")
                 + "</li>"
             )
-        return f'  <ol class="pp-rank" data-step="{index}">\n' + "\n".join(items) + "\n  </ol>"
+        return f'  <ol class="twb-rank" data-step="{index}">\n' + "\n".join(items) + "\n  </ol>"
 
     tiers = [str(name) for name in rank]
     sent_tiers = prefill.get("tiers")
@@ -1474,27 +1474,27 @@ def _render_rank(
     rows = []
     for name in [*tiers, ""]:
         chips = "".join(
-            f'<span class="pp-tier-chip" draggable="true" '
+            f'<span class="twb-tier-chip" draggable="true" '
             f'data-option-id="{html.escape(option_id, quote=True)}">'
-            f'<span class="pp-option-label">{label(option_id)}</span>'
+            f'<span class="twb-option-label">{label(option_id)}</span>'
             + _RANK_MOVES.format(up="Move up a tier", down="Move down a tier")
             + "</span>"
             for option_id in members[name]
         )
         shown = html.escape(name) if name else "Unsorted"
-        extra = "" if name else " pp-tier-unsorted"
+        extra = "" if name else " twb-tier-unsorted"
         rows.append(
-            f'<div class="pp-tier{extra}" data-tier="{html.escape(name, quote=True)}">'
-            f'<div class="pp-tier-name">{shown}</div>'
-            f'<div class="pp-tier-items">{chips}</div></div>'
+            f'<div class="twb-tier{extra}" data-tier="{html.escape(name, quote=True)}">'
+            f'<div class="twb-tier-name">{shown}</div>'
+            f'<div class="twb-tier-items">{chips}</div></div>'
         )
-    return f'  <div class="pp-tiers" data-step="{index}">\n' + "\n".join(rows) + "\n  </div>"
+    return f'  <div class="twb-tiers" data-step="{index}">\n' + "\n".join(rows) + "\n  </div>"
 
 
 def build_step_fragments(
     questions: list[dict[str, object]], asset_base_url: str | None = None
 ) -> list[str]:
-    """One `<section class="pp-step">` per question, what `build_multi_page` puts in the page.
+    """One `<section class="twb-step">` per question, what `build_multi_page` puts in the page.
 
     `asset_base_url` is the value `build_multi_page` derived from its own `status_url`.
     """
@@ -1515,14 +1515,14 @@ def _render_header(header: str, asset_base_url: str | None = None) -> str:
         return ""
     header_html = render_markdown(header, asset_base_url=asset_base_url)
     if not _is_long_body(header_html):
-        return f'  <div class="pp-header">{header_html}</div>'
+        return f'  <div class="twb-header">{header_html}</div>'
     lists = header_html.count("<ul>") + header_html.count("<ol>")
     count = ""
     if lists == 1:
-        count = f' <span class="pp-header-count">{header_html.count("<li>")} items</span>'
+        count = f' <span class="twb-header-count">{header_html.count("<li>")} items</span>'
     return (
-        f'  <details class="pp-header"><summary>Context{count}</summary>'
-        f'<div class="pp-header-body">{header_html}</div></details>'
+        f'  <details class="twb-header"><summary>Context{count}</summary>'
+        f'<div class="twb-header-body">{header_html}</div></details>'
     )
 
 
@@ -1580,7 +1580,7 @@ def build_multi_page(
     steps_html = "\n".join(build_step_fragments(questions, asset_base_url=asset_base_url))
     header_html = _render_header(header, asset_base_url=asset_base_url)
     segments_html = "".join(
-        f'<button type="button" class="pp-seg{" pp-seg-cur" if i == 0 else ""}" '
+        f'<button type="button" class="twb-seg{" twb-seg-cur" if i == 0 else ""}" '
         f'data-step="{i}" aria-label="Question {i + 1}" disabled></button>'
         for i in range(total)
     )
@@ -1601,7 +1601,7 @@ def build_multi_page(
         {
             "__CSS__": css,
             "__THEME_ATTR__": _theme_attr(theme),
-            "__MAIN_EXTRA__": ' class="pp-wide"' if wide else "",
+            "__MAIN_EXTRA__": ' class="twb-wide"' if wide else "",
             "__TITLE__": html.escape(title, quote=True),
             "__HEADER__": header_html,
             "__STEPS__": steps_html,

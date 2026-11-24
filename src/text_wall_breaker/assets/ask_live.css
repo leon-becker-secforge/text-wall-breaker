@@ -1,78 +1,78 @@
 /* Live ask (ADR 0005): the discussion panel and the per-option bubble. */
-:root { --pp-live-amber: #b7791f; }
+:root { --twb-live-amber: #b7791f; }
 
-.pp-live-ask { position: absolute; right: 8px; top: 6px; width: 26px; height: 26px; padding: 0;
+.twb-live-ask { position: absolute; right: 8px; top: 6px; width: 26px; height: 26px; padding: 0;
   border: 0; border-radius: 6px; background: transparent; color: var(--ntw-accent);
   cursor: pointer; opacity: 0; transition: opacity .12s; display: inline-flex;
   align-items: center; justify-content: center; }
-.pp-live-ask svg { width: 1.5em; height: 1.5em; }
-.pp-live-ask:hover { background: var(--ntw-border); }
-.pp-option:hover .pp-live-ask, .pp-option:focus-within .pp-live-ask,
-.pp-live-ask:focus-visible, .pp-question:hover .pp-live-ask { opacity: 1; }
-@media (hover: none) { .pp-live-ask { opacity: 1; } }
-.pp-option { position: relative; }
+.twb-live-ask svg { width: 1.5em; height: 1.5em; }
+.twb-live-ask:hover { background: var(--ntw-border); }
+.twb-option:hover .twb-live-ask, .twb-option:focus-within .twb-live-ask,
+.twb-live-ask:focus-visible, .twb-question:hover .twb-live-ask { opacity: 1; }
+@media (hover: none) { .twb-live-ask { opacity: 1; } }
+.twb-option { position: relative; }
 /* Beside the card, in the gutter where the question's bubble is, so the row's right edge
    stays the Recommended tag's and the Details pill's. The strip keeps the card hovered
    while the pointer crosses the gap to the bubble. A narrow window has no gutter: the
    bubble then takes a slot inside the row. */
 @media (min-width: 700px) {
-  .pp-option .pp-live-ask { right: -38px; top: 4px; z-index: 1; }  /* above the strip */
-  .pp-option::after { content: ""; position: absolute; top: 0; bottom: 0; right: -44px;
+  .twb-option .twb-live-ask { right: -38px; top: 4px; z-index: 1; }  /* above the strip */
+  .twb-option::after { content: ""; position: absolute; top: 0; bottom: 0; right: -44px;
     width: 44px; }
 }
-@media (max-width: 699px) { .pp-option .pp-option-select { padding-right: 40px; } }
-.pp-question { position: relative; }
+@media (max-width: 699px) { .twb-option .twb-option-select { padding-right: 40px; } }
+.twb-question { position: relative; }
 /* Below the theme toggle and the export icon, which fill the corner above it. */
-.pp-question .pp-live-ask { top: 30px; right: -36px; }
+.twb-question .twb-live-ask { top: 30px; right: -36px; }
 
 /* Same text size as the page: the panel is read at the same distance as the question. */
-#pp-live-panel { position: fixed; right: 16px; top: 64px; bottom: 16px; width: 360px;
+#twb-live-panel { position: fixed; right: 16px; top: 64px; bottom: 16px; width: 360px;
   display: flex; flex-direction: column; box-sizing: border-box;
   font: inherit; line-height: 1.45;
   color: var(--ntw-fg); background: var(--ntw-bg-elevated);
   border: 1px solid var(--ntw-border); border-radius: 10px; z-index: 5; }
-#pp-live-panel[hidden] { display: none; }
+#twb-live-panel[hidden] { display: none; }
 /* The side gutter holds the 360px panel only on a wide viewport (the wide column is 920px
    plus 2 x 376px); below that the panel sits in the flow under the form, so it never
    covers the buttons. */
 @media (max-width: 1671px) {
-  #pp-live-panel { position: static; width: auto; margin-top: 16px; }
-  .pp-live-list { max-height: 260px; }
+  #twb-live-panel { position: static; width: auto; margin-top: 16px; }
+  .twb-live-list { max-height: 260px; }
 }
-.pp-live-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+.twb-live-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
   font-weight: 600; cursor: pointer; user-select: none; }
-.pp-live-ring { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box;
-  border: 2px solid var(--ntw-accent); animation: pp-live-pulse 1.2s ease-in-out infinite; }
-@keyframes pp-live-pulse { 50% { opacity: .25; } }
-#pp-live-panel[data-state="joined"] .pp-live-ring { animation: none; background: var(--ntw-accent); }
-#pp-live-panel[data-state="working"] .pp-live-ring { animation: none; }
-#pp-live-panel[data-state="silent"] .pp-live-ring { animation: none; border-color: var(--pp-live-amber);
-  background: var(--pp-live-amber); }
-#pp-live-panel[data-state="ended"] .pp-live-ring { animation: none; border-color: var(--ntw-fg-muted); }
-.pp-live-status { padding: 0 12px 8px; color: var(--ntw-fg-muted); font-size: .92em; }
-#pp-live-panel[data-state="silent"] .pp-live-status { color: var(--pp-live-amber); }
-.pp-live-list { flex: 1; min-height: 40px; overflow: auto; padding: 4px 12px;
+.twb-live-ring { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box;
+  border: 2px solid var(--ntw-accent); animation: twb-live-pulse 1.2s ease-in-out infinite; }
+@keyframes twb-live-pulse { 50% { opacity: .25; } }
+#twb-live-panel[data-state="joined"] .twb-live-ring { animation: none; background: var(--ntw-accent); }
+#twb-live-panel[data-state="working"] .twb-live-ring { animation: none; }
+#twb-live-panel[data-state="silent"] .twb-live-ring { animation: none; border-color: var(--twb-live-amber);
+  background: var(--twb-live-amber); }
+#twb-live-panel[data-state="ended"] .twb-live-ring { animation: none; border-color: var(--ntw-fg-muted); }
+.twb-live-status { padding: 0 12px 8px; color: var(--ntw-fg-muted); font-size: .92em; }
+#twb-live-panel[data-state="silent"] .twb-live-status { color: var(--twb-live-amber); }
+.twb-live-list { flex: 1; min-height: 40px; overflow: auto; padding: 4px 12px;
   border-top: 1px solid var(--ntw-border); }
-.pp-live-msg { padding: 7px 0; border-top: 1px solid var(--ntw-border); }
-.pp-live-msg:first-child { border-top: 0; }
-.pp-live-who { font-weight: 600; font-size: .85em; }
-.pp-live-who.agent { color: var(--ntw-accent); }
-.pp-live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
-.pp-live-text.md { white-space: normal; }
-.pp-live-text.md > :first-child { margin-top: 0; }
-.pp-live-text.md > :last-child { margin-bottom: 0; }
-.pp-live-chip { display: inline-block; margin: 0 0 3px; padding: 0 7px; border-radius: 999px;
+.twb-live-msg { padding: 7px 0; border-top: 1px solid var(--ntw-border); }
+.twb-live-msg:first-child { border-top: 0; }
+.twb-live-who { font-weight: 600; font-size: .85em; }
+.twb-live-who.agent { color: var(--ntw-accent); }
+.twb-live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.twb-live-text.md { white-space: normal; }
+.twb-live-text.md > :first-child { margin-top: 0; }
+.twb-live-text.md > :last-child { margin-bottom: 0; }
+.twb-live-chip { display: inline-block; margin: 0 0 3px; padding: 0 7px; border-radius: 999px;
   font-size: .7em; border: 1px solid var(--ntw-accent); color: var(--ntw-accent); }
-.pp-live-ref { padding: 8px 12px 0; border-top: 1px solid var(--ntw-border); }
-.pp-live-ref .pp-live-chip { cursor: pointer; }
-.pp-live-in { display: flex; gap: 6px; padding: 8px 12px 12px; }
-.pp-live-in textarea { flex: 1; font: inherit; min-height: 2.4em; padding: 6px 8px;
+.twb-live-ref { padding: 8px 12px 0; border-top: 1px solid var(--ntw-border); }
+.twb-live-ref .twb-live-chip { cursor: pointer; }
+.twb-live-in { display: flex; gap: 6px; padding: 8px 12px 12px; }
+.twb-live-in textarea { flex: 1; font: inherit; min-height: 2.4em; padding: 6px 8px;
   border-radius: 6px; border: 1px solid var(--ntw-border); background: var(--ntw-bg);
   color: var(--ntw-fg); resize: vertical; }
-.pp-live-send { align-self: flex-end; height: 2.1em; padding: 0 12px; border-radius: 6px;
+.twb-live-send { align-self: flex-end; height: 2.1em; padding: 0 12px; border-radius: 6px;
   cursor: pointer; font: inherit; font-size: .85em; border: 1px solid var(--ntw-accent);
   background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
-.pp-live-send:disabled { opacity: .5; cursor: default; }
-#pp-live-panel.is-folded .pp-live-status, #pp-live-panel.is-folded .pp-live-list,
-#pp-live-panel.is-folded .pp-live-ref, #pp-live-panel.is-folded .pp-live-in { display: none; }
-@media (min-width: 1672px) { #pp-live-panel.is-folded { bottom: auto; } }
+.twb-live-send:disabled { opacity: .5; cursor: default; }
+#twb-live-panel.is-folded .twb-live-status, #twb-live-panel.is-folded .twb-live-list,
+#twb-live-panel.is-folded .twb-live-ref, #twb-live-panel.is-folded .twb-live-in { display: none; }
+@media (min-width: 1672px) { #twb-live-panel.is-folded { bottom: auto; } }

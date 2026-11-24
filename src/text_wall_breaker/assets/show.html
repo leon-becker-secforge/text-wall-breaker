@@ -10,26 +10,26 @@ __CSS__
 </head>
 <body>
 <main__MAIN_EXTRA__>
-  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
-  <div class="pp-content">
+  <button id="twb-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+  <div class="twb-content">
 __CONTENT__
   </div>
 
-  <div class="pp-actions">
+  <div class="twb-actions">
 __SAVE_BUTTON__
-    <div class="pp-actions-end">
-      <span id="pp-status"></span>
+    <div class="twb-actions-end">
+      <span id="twb-status"></span>
 __ACK_BUTTON__
     </div>
   </div>
 
-  <div id="pp-fallback" hidden>
-    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
-    <p data-role="body" id="pp-fallback-reason"></p>
+  <div id="twb-fallback" hidden>
+    <strong id="twb-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="twb-fallback-reason"></p>
   </div>
 </main>
 
-<div class="pp-lightbox" id="pp-lightbox" hidden><img id="pp-lightbox-img" alt=""></div>
+<div class="twb-lightbox" id="twb-lightbox" hidden><img id="twb-lightbox-img" alt=""></div>
 
 <script nonce="__NONCE__">
 (function () {
@@ -41,8 +41,8 @@ __ACK_BUTTON__
   var THEME_KEY = 'no-text-wall:theme';
   var BASE_TITLE = document.title;
 
-  var lightbox = document.getElementById('pp-lightbox');
-  var lightboxImg = document.getElementById('pp-lightbox-img');
+  var lightbox = document.getElementById('twb-lightbox');
+  var lightboxImg = document.getElementById('twb-lightbox-img');
   document.querySelectorAll('main img').forEach(function (img) {
     img.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -68,7 +68,7 @@ __ACK_BUTTON__
       if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
     } catch (e) { /* private mode: fall back to the OS preference */ }
   }
-  document.getElementById('pp-theme').addEventListener('click', function () {
+  document.getElementById('twb-theme').addEventListener('click', function () {
     var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
     var next = document.documentElement.dataset.theme
       ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
@@ -93,8 +93,8 @@ __ACK_BUTTON__
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
-  var saveBtn = document.getElementById('pp-save');
-  var saveMenu = document.getElementById('pp-save-menu');
+  var saveBtn = document.getElementById('twb-save');
+  var saveMenu = document.getElementById('twb-save-menu');
   if (saveBtn && saveMenu) {
     saveBtn.addEventListener('click', function (e) {
       e.stopPropagation();
@@ -104,17 +104,17 @@ __ACK_BUTTON__
     document.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') saveMenu.hidden = true;
     });
-    document.getElementById('pp-save-md').addEventListener('click', function () {
+    document.getElementById('twb-save-md').addEventListener('click', function () {
       download(FILENAME_BASE + '.md', 'text/markdown', RAW_CONTENT);
       saveMenu.hidden = true;
     });
-    document.getElementById('pp-save-html').addEventListener('click', function () {
+    document.getElementById('twb-save-html').addEventListener('click', function () {
       // A static snapshot of the content, not a serialization of this live page: the
       // theme toggle, Save/Acknowledge actions (and the save menu itself, open right
       // now) and the scripts that drive them have no meaning once this is a plain file
       // on disk, so they're stripped rather than saved half-working.
       var clone = document.documentElement.cloneNode(true);
-      ['#pp-theme', '.pp-actions', '#pp-fallback', '.pp-lightbox', 'script'].forEach(
+      ['#twb-theme', '.twb-actions', '#twb-fallback', '.twb-lightbox', 'script'].forEach(
         function (selector) {
           clone.querySelectorAll(selector).forEach(function (el) { el.remove(); });
         }
@@ -150,13 +150,13 @@ __ACK_BUTTON__
       });
   }
 
-  var ackBtn = document.getElementById('pp-ack');
-  var status = document.getElementById('pp-status');
+  var ackBtn = document.getElementById('twb-ack');
+  var status = document.getElementById('twb-status');
 
   function fallback(payload, reason) {
-    var box = document.getElementById('pp-fallback');
+    var box = document.getElementById('twb-fallback');
     box.hidden = false;
-    document.getElementById('pp-fallback-reason').textContent =
+    document.getElementById('twb-fallback-reason').textContent =
       reason + ' \u2014 the report is still on screen; only the acknowledgement failed to send.';
   }
 

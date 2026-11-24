@@ -21,6 +21,10 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   A misspelled option, an unknown log level or a bad accent now stops the server at
   launch with status 2. A misspelled variable was ignored, and an unknown log level fell
   back to `info`. `text-wall-breaker-mcp --help` lists the options.
+- **Breaking:** the `pp-review` MCP prompt is now `twb-review`. The page's CSS classes and
+  ids, CSS custom properties and the page scripts' globals move from the `pp-` / `PP_`
+  prefix to `twb-` / `TWB_` (`pp-note` → `twb-note`, `--pp-font` → `--twb-font`). A saved
+  report or a custom opener stylesheet that targets the old names needs the same rename.
 
 ## [0.22.0] - 2026-11-19
 

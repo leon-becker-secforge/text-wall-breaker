@@ -10,41 +10,41 @@ __CSS__
 </head>
 <body__BODY_CLASS__>
 <main>
-  <button id="pp-theme" type="button" aria-label="Toggle theme">&#9680;</button>
+  <button id="twb-theme" type="button" aria-label="Toggle theme">&#9680;</button>
 __HEADER_BLOCK__
-  <div class="pp-content">
+  <div class="twb-content">
 __CONTENT__
   </div>
 
-  <label id="pp-overall-note-label" for="pp-overall-note">Overall note (optional)</label>
-  <textarea id="pp-overall-note"
+  <label id="twb-overall-note-label" for="twb-overall-note">Overall note (optional)</label>
+  <textarea id="twb-overall-note"
     placeholder="Anything for the whole call, beyond the per-line comments above"></textarea>
 
-  <div class="pp-actions">
-    <button type="button" id="pp-cancel">Cancel</button>
-    <div class="pp-actions-end">
-      <span id="pp-status"></span>
-      <button type="button" id="pp-submit">Send review</button>
+  <div class="twb-actions">
+    <button type="button" id="twb-cancel">Cancel</button>
+    <div class="twb-actions-end">
+      <span id="twb-status"></span>
+      <button type="button" id="twb-submit">Send review</button>
     </div>
   </div>
 
-  <div id="pp-fallback" hidden>
-    <strong id="pp-fallback-title">Couldn't reach Claude Code</strong>
-    <p data-role="body" id="pp-fallback-reason"></p>
+  <div id="twb-fallback" hidden>
+    <strong id="twb-fallback-title">Couldn't reach Claude Code</strong>
+    <p data-role="body" id="twb-fallback-reason"></p>
     <textarea readonly rows="6"></textarea>
   </div>
 </main>
 
-<div id="pp-dock" role="dialog" aria-label="Comment on the selected lines">
-  <div class="pp-dock-head">
-    <b id="pp-dock-label"></b><span id="pp-dock-count"></span>
-    <span class="pp-dock-quote" id="pp-dock-quote" hidden></span>
+<div id="twb-dock" role="dialog" aria-label="Comment on the selected lines">
+  <div class="twb-dock-head">
+    <b id="twb-dock-label"></b><span id="twb-dock-count"></span>
+    <span class="twb-dock-quote" id="twb-dock-quote" hidden></span>
   </div>
-  <textarea id="pp-dock-text" placeholder="Comment on the highlighted lines"></textarea>
-  <div class="pp-dock-row">
-    <span class="pp-dock-hint" id="pp-dock-hint">Ctrl+Enter adds &middot; Esc clears</span>
-    <button type="button" class="ghost" id="pp-dock-clear">Clear</button>
-    <button type="button" id="pp-dock-add">Comment</button>
+  <textarea id="twb-dock-text" placeholder="Comment on the highlighted lines"></textarea>
+  <div class="twb-dock-row">
+    <span class="twb-dock-hint" id="twb-dock-hint">Ctrl+Enter adds &middot; Esc clears</span>
+    <button type="button" class="ghost" id="twb-dock-clear">Clear</button>
+    <button type="button" id="twb-dock-add">Comment</button>
   </div>
 </div>
 
@@ -64,7 +64,7 @@ __CONTENT__
       if (stored === 'light' || stored === 'dark') document.documentElement.dataset.theme = stored;
     } catch (e) { /* private mode: fall back to the OS preference */ }
   }
-  document.getElementById('pp-theme').addEventListener('click', function () {
+  document.getElementById('twb-theme').addEventListener('click', function () {
     var dark = getComputedStyle(document.body).backgroundColor === 'rgb(30, 30, 30)';
     var next = document.documentElement.dataset.theme
       ? (document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark')
@@ -87,19 +87,19 @@ __CONTENT__
   var comments = [];   // {diff, first, last, quote, text, el}: first/last are row wraps
   var sel = null;      // {diff, first, last, quote, editing}
   var anchor = null;   // {diff, wrap} of the last plain click, for shift-click
-  var dock = document.getElementById('pp-dock');
-  var dockText = document.getElementById('pp-dock-text');
-  var dockAdd = document.getElementById('pp-dock-add');
-  var dockHint = document.getElementById('pp-dock-hint');
+  var dock = document.getElementById('twb-dock');
+  var dockText = document.getElementById('twb-dock-text');
+  var dockAdd = document.getElementById('twb-dock-add');
+  var dockHint = document.getElementById('twb-dock-hint');
   var DOCK_HINT = dockHint.textContent;
   var slideEls = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
 
   function wrapsOf(diff) {
-    return Array.prototype.slice.call(diff.querySelectorAll('.pp-review-row-wrap'));
+    return Array.prototype.slice.call(diff.querySelectorAll('.twb-review-row-wrap'));
   }
   function wrapOf(node) {
     var el = node && (node.nodeType === 1 ? node : node.parentElement);
-    return el ? el.closest('.pp-review-row-wrap') : null;
+    return el ? el.closest('.twb-review-row-wrap') : null;
   }
   function coord(wrap) {
     return { side: wrap.dataset.side, line: parseInt(wrap.dataset.line, 10) };
@@ -117,7 +117,7 @@ __CONTENT__
   }
   function rowsText(ws, from, to) {
     return ws.slice(from, to + 1)
-      .map(function (w) { return w.querySelector('.pp-review-text').textContent; })
+      .map(function (w) { return w.querySelector('.twb-review-text').textContent; })
       .join('\n');
   }
   function plain(text) { return text.replace(/\u00a0/g, ' ').replace(/\s+$/, ''); }
@@ -126,7 +126,7 @@ __CONTENT__
   function spansHiddenLines(o) {
     if (o.first === o.last) return false;
     for (var el = o.first.nextElementSibling; el && el !== o.last; el = el.nextElementSibling) {
-      if (el.classList.contains('pp-review-gap')) return true;
+      if (el.classList.contains('twb-review-gap')) return true;
     }
     return false;
   }
@@ -145,12 +145,12 @@ __CONTENT__
     if (sel.diff.offsetParent === null && sel.block) {
       // The diff is not on screen (one view at a time): the box goes under the block.
       after = sel.block;
-      box = sel.block.closest('.pp-rendered').getBoundingClientRect();
+      box = sel.block.closest('.twb-rendered').getBoundingClientRect();
       inset = 18;
     } else {
       // Under the last selected row and any comment already shown there, not over it.
       while (after.nextElementSibling &&
-          after.nextElementSibling.matches('.pp-comment, .pp-note')) {
+          after.nextElementSibling.matches('.twb-comment, .twb-note')) {
         after = after.nextElementSibling;
       }
     }
@@ -163,11 +163,11 @@ __CONTENT__
   // (outermost only), marked with `cls`. A selection or comment is made on the diff's rows;
   // this is how it shows on the rendered file as well.
   function markRendered(cls, o, all) {
-    Array.prototype.forEach.call(document.querySelectorAll('.pp-rendered .' + cls), function (e) {
+    Array.prototype.forEach.call(document.querySelectorAll('.twb-rendered .' + cls), function (e) {
       e.classList.remove(cls);
     });
     (all || (o ? [o] : [])).forEach(function (c) {
-      var views = c.diff.closest('.pp-views');
+      var views = c.diff.closest('.twb-views');
       var nums = [], covered = span(c);
       for (var i = covered.from; i <= covered.to; i++) {
         var w = covered.ws[i];
@@ -178,7 +178,7 @@ __CONTENT__
       var inside = function (e) {
         return e && parseInt(e.dataset.first, 10) >= lo && parseInt(e.dataset.last, 10) <= hi;
       };
-      var blocks = views.querySelectorAll('.pp-rendered [data-first]');
+      var blocks = views.querySelectorAll('.twb-rendered [data-first]');
       Array.prototype.forEach.call(blocks, function (e) {
         var up = e.parentElement && e.parentElement.closest('[data-first]');
         if (inside(e) && !inside(up)) e.classList.add(cls);
@@ -186,7 +186,7 @@ __CONTENT__
     });
   }
   function revealLines(diff, a, z) {
-    Array.prototype.forEach.call(diff.querySelectorAll('.pp-review-gap'), function (el) {
+    Array.prototype.forEach.call(diff.querySelectorAll('.twb-review-gap'), function (el) {
       var g = el._gap;
       if (g && g.last - g.bottom >= a && g.first + g.top <= z) {
         revealGap(g, g.size, g.position === 'end' ? 'down' : 'up');
@@ -195,17 +195,17 @@ __CONTENT__
   }
   var blockAnchor = null, textSelectedAt = 0;
   document.addEventListener('click', function (event) {
-    var block =event.target.closest('.pp-rendered [data-first]');
+    var block =event.target.closest('.twb-rendered [data-first]');
     if (!block || frozen) return;
     var picked = window.getSelection();
     if (picked && !picked.isCollapsed) return;
     // The click that ends a drag follows its mouseup at once; focusing the box has already
     // collapsed the text selection by then, and must not replace the quote's selection.
     if (Date.now() - textSelectedAt < 300) return;
-    var diff = block.closest('.pp-views').querySelector('.pp-review-diff');
+    var diff = block.closest('.twb-views').querySelector('.twb-review-diff');
     var from = block, to = block;
     if (event.shiftKey && blockAnchor && blockAnchor.isConnected &&
-        blockAnchor.closest('.pp-views') === block.closest('.pp-views')) {
+        blockAnchor.closest('.twb-views') === block.closest('.twb-views')) {
       var early = parseInt(blockAnchor.dataset.first, 10) <= parseInt(block.dataset.first, 10);
       from = early ? blockAnchor : block;
       to = early ? block : blockAnchor;
@@ -218,7 +218,7 @@ __CONTENT__
     var a = parseInt(from.dataset.first, 10), z = parseInt(to.dataset.last, 10);
     revealLines(diff, a, z);
     var rowFor = function (n) {
-      return diff.querySelector('.pp-review-row-wrap[data-side="new"][data-line="' + n + '"]');
+      return diff.querySelector('.twb-review-row-wrap[data-side="new"][data-line="' + n + '"]');
     };
     var first = rowFor(a), last = rowFor(z);
     if (!first || !last) return;
@@ -239,28 +239,28 @@ __CONTENT__
       var n = node;
       if (n.nodeType === 1) n = n.childNodes[atEnd ? offset - 1 : offset] || n;
       var el = n.nodeType === 1 ? n : n.parentElement;
-      return el && el.closest('.pp-rendered [data-first]');
+      return el && el.closest('.twb-rendered [data-first]');
     }
     var from = blockAt(r.startContainer, r.startOffset, false);
     var to = blockAt(r.endContainer, r.endOffset, true);
-    var views = from && from.closest('.pp-views');
-    if (!views || !to || to.closest('.pp-views') !== views) return false;
+    var views = from && from.closest('.twb-views');
+    if (!views || !to || to.closest('.twb-views') !== views) return false;
     if (parseInt(to.dataset.first, 10) < parseInt(from.dataset.first, 10)) return false;
     blockAnchor = from;
     textSelectedAt = Date.now();
-    selectBlocks(views.querySelector('.pp-review-diff'), from, to, plain(s.toString()));
+    selectBlocks(views.querySelector('.twb-review-diff'), from, to, plain(s.toString()));
     return true;
   }
   // The quote shown in the diff as well, where it can be found as written.
   function markQuote() {
     if (!window.CSS || !CSS.highlights || typeof Highlight === 'undefined') return;
-    CSS.highlights.delete('pp-quote');
+    CSS.highlights.delete('twb-quote');
     if (!sel || !sel.quote) return;
     var covered = span(sel), texts = [], joined = '';
     for (var i = covered.from; i <= covered.to; i++) {
       // Token spans split a row's text into several text nodes.
       var walker = document.createTreeWalker(
-        covered.ws[i].querySelector('.pp-review-text'), NodeFilter.SHOW_TEXT);
+        covered.ws[i].querySelector('.twb-review-text'), NodeFilter.SHOW_TEXT);
       var node;
       while ((node = walker.nextNode())) {
         texts.push({ node: node, start: joined.length });
@@ -281,12 +281,12 @@ __CONTENT__
     var range = new Range();
     range.setStart(a[0], Math.min(a[1], a[0].length));
     range.setEnd(b[0], Math.min(b[1], b[0].length));
-    CSS.highlights.set('pp-quote', new Highlight(range));
+    CSS.highlights.set('twb-quote', new Highlight(range));
   }
   // A run of unchanged blocks behind one bar (see _render_review_chunks): the bar opens it
   // and goes, so what was folded cannot be folded again.
   document.addEventListener('click', function (event) {
-    var bar = event.target.closest('.pp-fold');
+    var bar = event.target.closest('.twb-fold');
     if (!bar) return;
     bar.nextElementSibling.hidden = false;
     bar.remove();
@@ -308,15 +308,15 @@ __CONTENT__
     for (var i = covered.from; i <= covered.to; i++) ws[i].classList.add('is-sel');
     sel.first.classList.add('sel-first');
     sel.last.classList.add('sel-last');
-    document.getElementById('pp-dock-label').textContent = rowLabel(sel);
+    document.getElementById('twb-dock-label').textContent = rowLabel(sel);
     var count = covered.to - covered.from + 1;
-    document.getElementById('pp-dock-count').textContent = count + (count === 1 ? ' row' : ' rows');
-    var quote = document.getElementById('pp-dock-quote');
+    document.getElementById('twb-dock-count').textContent = count + (count === 1 ? ' row' : ' rows');
+    var quote = document.getElementById('twb-dock-quote');
     quote.hidden = !sel.quote;
     quote.textContent = sel.quote || '';
     dockText.value = sel.editing ? sel.editing.text : '';
     dockAdd.textContent = sel.editing ? 'Update' : 'Comment';
-    if (window.ppLive) window.ppLive.dockOpened();
+    if (window.twbLive) window.twbLive.dockOpened();
     updateDockState();
     dock.classList.add('is-open');
     dock.scrollIntoView({
@@ -330,7 +330,7 @@ __CONTENT__
     sel = null;
     window.getSelection().removeAllRanges();
     renderSel();
-    if (window.ppLive) window.ppLive.dockClosed();
+    if (window.twbLive) window.twbLive.dockClosed();
   }
 
   function selectRow(diff, wrap, extend) {
@@ -347,7 +347,7 @@ __CONTENT__
 
   document.addEventListener('mouseup', function (event) {
     if (frozen) return;
-    var chrome = '#pp-dock, .pp-comment, .pp-note, textarea, button, a, #pp-files, #pp-filebar';
+    var chrome = '#twb-dock, .twb-comment, .twb-note, textarea, button, a, #twb-files, #twb-filebar';
     if (event.target.closest(chrome)) return;
     var s = window.getSelection();
     if (s.rangeCount && !s.isCollapsed) {
@@ -357,8 +357,8 @@ __CONTENT__
       if (!first && r.startContainer.nodeType === 1) {
         first = wrapOf(r.startContainer.childNodes[r.startOffset]);
       }
-      var diff = first && first.closest('.pp-review-diff');
-      if (!diff || !last || last.closest('.pp-review-diff') !== diff) return;
+      var diff = first && first.closest('.twb-review-diff');
+      if (!diff || !last || last.closest('.twb-review-diff') !== diff) return;
       var ws = wrapsOf(diff), from = ws.indexOf(first), to = ws.indexOf(last);
       // A drag that ends at the very start of the next row, or starts at the very end of
       // a row, selected none of that row's text.
@@ -373,9 +373,9 @@ __CONTENT__
       });
       return;
     }
-    var wrap = event.target.closest('.pp-review-row-wrap');
+    var wrap = event.target.closest('.twb-review-row-wrap');
     if (wrap) {
-      selectRow(wrap.closest('.pp-review-diff'), wrap, event.shiftKey);
+      selectRow(wrap.closest('.twb-review-diff'), wrap, event.shiftKey);
     } else if (sel && dockText.value.trim() === '') {
       clearSel();
     }
@@ -383,16 +383,16 @@ __CONTENT__
   document.addEventListener('keydown', function (event) {
     if (frozen) return;
     if (event.key === 'Escape' && sel) { clearSel(); return; }
-    var row = event.target.classList && event.target.classList.contains('pp-review-row')
+    var row = event.target.classList && event.target.classList.contains('twb-review-row')
       ? event.target : null;
     if (row && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
-      var wrap = row.closest('.pp-review-row-wrap');
-      selectRow(wrap.closest('.pp-review-diff'), wrap, event.shiftKey);
+      var wrap = row.closest('.twb-review-row-wrap');
+      selectRow(wrap.closest('.twb-review-diff'), wrap, event.shiftKey);
     }
   });
   window.addEventListener('resize', function () { if (sel) placeDock(); });
-  document.addEventListener('pp-file-change', function () { if (sel) clearSel(); });
+  document.addEventListener('twb-file-change', function () { if (sel) clearSel(); });
 
   function markRows() {
     Array.prototype.forEach.call(document.querySelectorAll('.has-comment'), function (e) {
@@ -406,28 +406,28 @@ __CONTENT__
   }
   function renderComment(c) {
     var el = c.el || document.createElement('div');
-    el.className = 'pp-comment';
-    el.innerHTML = '<div class="pp-comment-head"><b></b><span class="pp-comment-actions">' +
+    el.className = 'twb-comment';
+    el.innerHTML = '<div class="twb-comment-head"><b></b><span class="twb-comment-actions">' +
       '<button type="button" data-act="edit">Edit</button>' +
       '<button type="button" data-act="delete">Delete</button></span></div>' +
-      '<span class="pp-comment-quote" hidden></span><div class="pp-comment-text"></div>';
+      '<span class="twb-comment-quote" hidden></span><div class="twb-comment-text"></div>';
     el.querySelector('b').textContent = rowLabel(c);
-    var quote = el.querySelector('.pp-comment-quote');
+    var quote = el.querySelector('.twb-comment-quote');
     quote.hidden = !c.quote;
     quote.textContent = c.quote || '';
-    el.querySelector('.pp-comment-text').textContent = c.text;
+    el.querySelector('.twb-comment-text').textContent = c.text;
     c.last.after(el);
     c.el = el;
-    if (window.ppLive) window.ppLive.decorate(c);
+    if (window.twbLive) window.twbLive.decorate(c);
   }
   function commentsChanged() {
     markRows();
-    var chip = document.getElementById('pp-chip-comments');
+    var chip = document.getElementById('twb-chip-comments');
     if (chip) {
       var n = comments.length;
       chip.innerHTML = '<b>' + n + '</b> comment' + (n === 1 ? '' : 's');
     }
-    document.dispatchEvent(new CustomEvent('pp-comments'));
+    document.dispatchEvent(new CustomEvent('twb-comments'));
     reportSoon();
   }
   function addComment() {
@@ -442,13 +442,13 @@ __CONTENT__
       };
       comments.push(c);
       renderComment(c);
-      if (window.ppLive) window.ppLive.added(c);
+      if (window.twbLive) window.twbLive.added(c);
     }
     clearSel();
     commentsChanged();
   }
   dockAdd.addEventListener('click', addComment);
-  document.getElementById('pp-dock-clear').addEventListener('click', clearSel);
+  document.getElementById('twb-dock-clear').addEventListener('click', clearSel);
   dockText.addEventListener('keydown', function (event) {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
@@ -457,9 +457,9 @@ __CONTENT__
     }
   });
   document.addEventListener('click', function (event) {
-    var button = event.target.closest('.pp-comment [data-act]');
+    var button = event.target.closest('.twb-comment [data-act]');
     if (!button || frozen) return;
-    var c = comments.filter(function (x) { return x.el === button.closest('.pp-comment'); })[0];
+    var c = comments.filter(function (x) { return x.el === button.closest('.twb-comment'); })[0];
     if (!c) return;
     if (button.dataset.act === 'delete') {
       c.el.remove();
@@ -474,7 +474,7 @@ __CONTENT__
   // Reply selects the note's rows so the dock opens on them. A note's last row is the wrap
   // just before it, its first row the one holding its chip.
   function noteMark(note) {
-    return note.parentNode.querySelector('.pp-note-mark[data-note="' + note.dataset.note + '"]');
+    return note.parentNode.querySelector('.twb-note-mark[data-note="' + note.dataset.note + '"]');
   }
   function foldNote(note, open) {
     note.classList.toggle('is-open', open);
@@ -482,39 +482,39 @@ __CONTENT__
     if (mark) { mark.classList.toggle('is-open', open); mark.setAttribute('aria-expanded', open); }
     // The bar above the diff says whether all, none or some of its notes are showing.
     var bar = note.parentNode.previousElementSibling;
-    if (bar && bar.classList.contains('pp-notes-bar')) {
-      var all = note.parentNode.querySelectorAll('.pp-note').length;
-      var shown = note.parentNode.querySelectorAll('.pp-note.is-open').length;
+    if (bar && bar.classList.contains('twb-notes-bar')) {
+      var all = note.parentNode.querySelectorAll('.twb-note').length;
+      var shown = note.parentNode.querySelectorAll('.twb-note.is-open').length;
       bar.dataset.state = shown === all ? 'shown' : shown === 0 ? 'hidden' : 'mixed';
     }
   }
   document.addEventListener('click', function (event) {
-    var mark = event.target.closest('.pp-note-mark');
+    var mark = event.target.closest('.twb-note-mark');
     if (mark) {
       event.stopPropagation();
       var n = mark.parentNode.parentNode.querySelector(
-        '.pp-note[data-note="' + mark.dataset.note + '"]');
+        '.twb-note[data-note="' + mark.dataset.note + '"]');
       if (n) foldNote(n, !n.classList.contains('is-open'));
       return;
     }
-    var all = event.target.closest('.pp-notes-bar [data-all]');
+    var all = event.target.closest('.twb-notes-bar [data-all]');
     if (all) {
-      var d = all.closest('.deck-slide').querySelector('.pp-review-diff');
-      Array.prototype.forEach.call(d.querySelectorAll('.pp-note'), function (x) {
+      var d = all.closest('.deck-slide').querySelector('.twb-review-diff');
+      Array.prototype.forEach.call(d.querySelectorAll('.twb-note'), function (x) {
         foldNote(x, all.dataset.all === '1');
       });
       return;
     }
-    var reply = event.target.closest('.pp-note [data-act="reply"]');
+    var reply = event.target.closest('.twb-note [data-act="reply"]');
     if (reply && !frozen) {
-      var note = reply.closest('.pp-note');
+      var note = reply.closest('.twb-note');
       var last = note.previousElementSibling;
-      while (last && !last.classList.contains('pp-review-row-wrap')) {
+      while (last && !last.classList.contains('twb-review-row-wrap')) {
         last = last.previousElementSibling;
       }
-      var m = noteMark(note), first = m && m.closest('.pp-review-row-wrap');
+      var m = noteMark(note), first = m && m.closest('.twb-review-row-wrap');
       if (!first || !last) return;
-      var diff = first.closest('.pp-review-diff');
+      var diff = first.closest('.twb-review-diff');
       anchor = { diff: diff, wrap: first };
       setSel({ diff: diff, first: first, last: last, quote: '', editing: null });
     }
@@ -526,28 +526,28 @@ __CONTENT__
   var GAP_STEP = 10;
   function makeRow(path, oldNo, newNo, text) {
     var wrap = document.createElement('div');
-    wrap.className = 'pp-review-row-wrap is-revealed';
+    wrap.className = 'twb-review-row-wrap is-revealed';
     wrap.dataset.path = path;
     wrap.dataset.side = 'new';
     wrap.dataset.line = newNo;
-    wrap.innerHTML = '<div class="pp-review-row ctx" role="button" tabindex="0" ' +
+    wrap.innerHTML = '<div class="twb-review-row ctx" role="button" tabindex="0" ' +
       'aria-label="Select this line to comment">' +
-      '<span class="pp-review-gutter"></span><span class="pp-review-gutter"></span>' +
-      '<span class="pp-review-text"></span>' +
-      '<span class="pp-review-comment-icon" aria-hidden="true">&#128172;</span></div>';
-    var gutters = wrap.querySelectorAll('.pp-review-gutter');
+      '<span class="twb-review-gutter"></span><span class="twb-review-gutter"></span>' +
+      '<span class="twb-review-text"></span>' +
+      '<span class="twb-review-comment-icon" aria-hidden="true">&#128172;</span></div>';
+    var gutters = wrap.querySelectorAll('.twb-review-gutter');
     gutters[0].textContent = oldNo;
     gutters[1].textContent = newNo;
-    wrap.querySelector('.pp-review-text').textContent = text || '\u00a0';
+    wrap.querySelector('.twb-review-text').textContent = text || '\u00a0';
     return wrap;
   }
   function updateGap(g) {
     var left = g.size - g.top - g.bottom;
     if (left <= 0) { g.el.remove(); return; }
-    var all = g.el.querySelector('.pp-gap-all');
+    var all = g.el.querySelector('.twb-gap-all');
     all.textContent = left + ' hidden line' + (left === 1 ? '' : 's');
     all.setAttribute('aria-label', 'Show all ' + left + ' hidden lines');
-    Array.prototype.forEach.call(g.el.querySelectorAll('.pp-gap-step'), function (b) {
+    Array.prototype.forEach.call(g.el.querySelectorAll('.twb-gap-step'), function (b) {
       var n = Math.min(GAP_STEP, left), down = b.dataset.step === 'down';
       b.hidden = left <= GAP_STEP;
       b.textContent = (down ? '\u2193 ' : '\u2191 ') + n;
@@ -576,11 +576,11 @@ __CONTENT__
     updateGap(g);
     updateDockState();
   }
-  Array.prototype.forEach.call(document.querySelectorAll('.pp-review-diff'), function (diff) {
-    var data = diff.querySelector('script.pp-review-lines');
+  Array.prototype.forEach.call(document.querySelectorAll('.twb-review-diff'), function (diff) {
+    var data = diff.querySelector('script.twb-review-lines');
     if (!data) return;
     var texts = JSON.parse(data.textContent);
-    Array.prototype.forEach.call(diff.querySelectorAll('.pp-review-gap'), function (el, i) {
+    Array.prototype.forEach.call(diff.querySelectorAll('.twb-review-gap'), function (el, i) {
       var first = parseInt(el.dataset.first, 10), last = parseInt(el.dataset.last, 10);
       el._gap = {
         diff: diff, el: el, lines: texts[i], first: first, last: last, size: last - first + 1,
@@ -590,10 +590,10 @@ __CONTENT__
     });
   });
   document.addEventListener('click', function (event) {
-    var button = event.target.closest('.pp-gap-all, .pp-gap-step');
-    var g = button && button.closest('.pp-review-gap')._gap;
+    var button = event.target.closest('.twb-gap-all, .twb-gap-step');
+    var g = button && button.closest('.twb-review-gap')._gap;
     if (!g) return;
-    if (button.classList.contains('pp-gap-step')) {
+    if (button.classList.contains('twb-gap-step')) {
       revealGap(g, GAP_STEP, button.dataset.step);
     } else {
       revealGap(g, g.size, g.position === 'end' ? 'down' : 'up');
@@ -624,10 +624,10 @@ __CONTENT__
   }
   // A comment the server kept across a reload (a live session's refresh), back on its rows.
   function restoreComment(s) {
-    var diff = document.querySelector('.pp-review-diff[data-path="' + CSS.escape(s.path) + '"]');
+    var diff = document.querySelector('.twb-review-diff[data-path="' + CSS.escape(s.path) + '"]');
     if (!diff) return;
     function row(side, line) {
-      return diff.querySelector('.pp-review-row-wrap[data-side="' + side + '"][data-line="' +
+      return diff.querySelector('.twb-review-row-wrap[data-side="' + side + '"][data-line="' +
         line + '"]');
     }
     var endSide = s.end_side || s.side, endLine = s.end_line || s.line;
@@ -642,12 +642,12 @@ __CONTENT__
     renderComment(c);
   }
 
-  var submitBtn = document.getElementById('pp-submit');
-  var cancelBtn = document.getElementById('pp-cancel');
-  var status = document.getElementById('pp-status');
-  var overallNote = document.getElementById('pp-overall-note');
+  var submitBtn = document.getElementById('twb-submit');
+  var cancelBtn = document.getElementById('twb-cancel');
+  var status = document.getElementById('twb-status');
+  var overallNote = document.getElementById('twb-overall-note');
 
-  var pageNotes = Array.prototype.slice.call(document.querySelectorAll('.pp-page-note'));
+  var pageNotes = Array.prototype.slice.call(document.querySelectorAll('.twb-page-note'));
   function collectPageNotes() {
     return pageNotes
       .map(function (t) { return { path: t.dataset.path, text: t.value.trim() }; })
@@ -669,8 +669,8 @@ __CONTENT__
     overallNote.readOnly = true;
     pageNotes.forEach(function (t) { t.readOnly = true; });
     frozen = true;
-    document.body.classList.add('pp-review-frozen');
-    if (window.ppLive) window.ppLive.frozen();
+    document.body.classList.add('twb-review-frozen');
+    if (window.twbLive) window.twbLive.frozen();
     clearSel();
     status.textContent = message;
     stopHeartbeat();
@@ -706,14 +706,14 @@ __CONTENT__
   pageNotes.forEach(function (t) { t.addEventListener('input', reportSoon); });
 
   function fallback(payload, reason, title) {
-    var box = document.getElementById('pp-fallback');
+    var box = document.getElementById('twb-fallback');
     var text = JSON.stringify(payload, null, 2);
     box.hidden = false;
     var textarea = box.querySelector('textarea');
     textarea.value = text;
-    document.getElementById('pp-fallback-reason').textContent =
+    document.getElementById('twb-fallback-reason').textContent =
       reason + ' \u2014 copy the text below and paste it to Claude Code.';
-    document.getElementById('pp-fallback-title').textContent =
+    document.getElementById('twb-fallback-title').textContent =
       title || "Couldn't reach Claude Code";
     textarea.select();
   }
@@ -791,7 +791,7 @@ __CONTENT__
     }
   });
 
-  window.ppReview = {
+  window.twbReview = {
     liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
     generation: GENERATION, comments: comments, send: send, collect: collect, spec: spec,
     restore: restoreComment, commentsChanged: commentsChanged, reportSoon: reportSoon,

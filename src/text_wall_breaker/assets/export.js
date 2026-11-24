@@ -3,10 +3,10 @@
 // breaks. Runs after the page script and reads its collect() hook; the page stays live
 // and nothing is sent.
 (function () {
-  var H = window.ppAsk || window.ppReview;
+  var H = window.twbAsk || window.twbReview;
   var main = document.querySelector('main');
   if (!H || !main) return;
-  var noun = window.ppAsk ? 'answer' : 'review';
+  var noun = window.twbAsk ? 'answer' : 'review';
   var ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
     'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/>' +
     '<path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>';
@@ -15,21 +15,21 @@
 
   var btn = document.createElement('button');
   btn.type = 'button';
-  btn.id = 'pp-export-btn';
+  btn.id = 'twb-export-btn';
   btn.title = 'Export my ' + noun;
   btn.setAttribute('aria-label', btn.title);
   btn.setAttribute('aria-expanded', 'false');
-  btn.setAttribute('aria-controls', 'pp-export');
+  btn.setAttribute('aria-controls', 'twb-export');
   btn.innerHTML = ICON;
 
   var box = document.createElement('div');
-  box.id = 'pp-export';
+  box.id = 'twb-export';
   box.hidden = true;
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-label', 'Your ' + noun + ' so far');
   box.innerHTML = '<strong></strong><p>The page stays open. If the connection to Claude Code ' +
     'breaks, paste this to it.</p><textarea readonly rows="7"></textarea>' +
-    '<div class="pp-export-row"><button type="button" data-act="close">Close</button>' +
+    '<div class="twb-export-row"><button type="button" data-act="close">Close</button>' +
     '<button type="button" class="primary" data-act="copy">Copy</button></div>';
   box.querySelector('strong').textContent = 'Your ' + noun + ' so far';
   var area = box.querySelector('textarea');

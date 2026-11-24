@@ -54,7 +54,7 @@ def test_deck_page_renders_one_section_per_slide_only_first_active():
 def test_deck_page_shows_progress_bar_and_nav_buttons():
     html = build_show_page(slides=["a", "b"])
     assert "Slide 1 of 2" in html
-    assert 'class="pp-progress-fill" id="pp-deck-progress-fill" style="width: 50%"' in html
+    assert 'class="twb-progress-fill" id="twb-deck-progress-fill" style="width: 50%"' in html
     assert "data-deck-prev" in html
     assert "data-deck-next" in html
 

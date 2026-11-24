@@ -207,7 +207,7 @@ def test_a_dropped_element_hides_nothing_after_it(dropped):
 
 def test_a_file_cannot_take_the_pages_ids_or_classes():
     cleaner = render_module._Cleaner([], "a.adoc", None, None)
-    cleaner.feed('<div id="pp-form" class="paragraph pp-option is-sel deck-slide">x</div>')
+    cleaner.feed('<div id="twb-form" class="paragraph twb-option is-sel deck-slide">x</div>')
     cleaner.close()
     assert "".join(cleaner.out) == '<div class="paragraph">x</div>'
 

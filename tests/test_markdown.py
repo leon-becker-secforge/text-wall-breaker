@@ -322,7 +322,7 @@ def test_a_list_item_with_a_pipe_stays_a_list_even_before_a_separator_line():
 def test_diff_block_classifies_added_and_removed_lines():
     out = render_markdown("```diff\n def f():\n-    old()\n+    new()\n```")
     assert out == (
-        '<div class="pp-diff">'
+        '<div class="twb-diff">'
         '<div class="line ctx">def f():</div>'
         '<div class="line del">    old()</div>'
         '<div class="line add">    new()</div>'

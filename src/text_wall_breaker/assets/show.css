@@ -1,7 +1,7 @@
 
 * { box-sizing: border-box; }
 :root {
-  --pp-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
+  --twb-font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", Consolas, monospace;
   --ntw-bg: #fafaf9;
   --ntw-bg-elevated: #ffffff;
   --ntw-fg: #0a0a0a;
@@ -39,14 +39,14 @@
 html { font-size: 18px; }
 body { margin: 0; padding: 20px 16px 40px; }
 main { max-width: 680px; margin: 0 auto; position: relative; }
-/* Same value and trigger condition as _ADDENDUM's main.pp-wide (_needs_wide_layout) —
+/* Same value and trigger condition as _ADDENDUM's main.twb-wide (_needs_wide_layout) —
    a ```diff/code fence or a table hits its own horizontal scrollbar well before an
    ordinary report would, at this width. */
-main.pp-wide { max-width: 920px; }
+main.twb-wide { max-width: 920px; }
 
-code { font-family: var(--pp-font-mono); font-size: 0.88em; background: var(--ntw-code-bg);
+code { font-family: var(--twb-font-mono); font-size: 0.88em; background: var(--ntw-code-bg);
   padding: 0.1em 0.35em; border-radius: 4px; }
-pre.code-block { font-family: var(--pp-font-mono); }
+pre.code-block { font-family: var(--twb-font-mono); }
 pre.code-block code { background: none; padding: 0; border-radius: 0; }
 
 /* Same reasoning as _ADDENDUM's pre.mermaid/pre.mermaid svg — see there. */
@@ -67,51 +67,51 @@ thead th { border-bottom: 2px solid var(--ntw-accent); color: var(--ntw-accent);
 tbody tr:last-child td { border-bottom: none; }
 
 main img { cursor: zoom-in; max-width: 100%; height: auto; border-radius: 6px; }
-.pp-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000;
+.twb-lightbox { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 1000;
   display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
-.pp-lightbox[hidden] { display: none; }
-.pp-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
+.twb-lightbox[hidden] { display: none; }
+.twb-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); }
 
-#pp-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
+#twb-theme { position: absolute; top: -4px; right: 0; width: 30px; height: 30px; border: none;
   background: transparent; color: var(--ntw-fg-muted); border-radius: 999px; cursor: pointer;
   font-size: 15px; line-height: 1; display: flex; align-items: center; justify-content: center; }
-#pp-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
+#twb-theme:hover { background: var(--ntw-border); color: var(--ntw-fg); }
 
-.pp-content > :first-child { margin-block-start: 0; }
-.pp-content > :last-child { margin-block-end: 0; }
+.twb-content > :first-child { margin-block-start: 0; }
+.twb-content > :last-child { margin-block-end: 0; }
 
-/* Same visual language as _MULTI_ADDENDUM's .pp-progress (ask's wizard), duplicated
+/* Same visual language as _MULTI_ADDENDUM's .twb-progress (ask's wizard), duplicated
    rather than shared for the same reason _SHOW_ADDENDUM as a whole is its own block —
    see the module docstring. Deck's equivalent of that wizard's per-question progress. */
-/* 40px right margin, not 0: clears #pp-theme (absolute, top-right) the same way
-   _MULTI_ADDENDUM's original .pp-progress already does — dropping it earlier caused
+/* 40px right margin, not 0: clears #twb-theme (absolute, top-right) the same way
+   _MULTI_ADDENDUM's original .twb-progress already does — dropping it earlier caused
    a real overlap with the theme toggle, caught in review. */
-.pp-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 16px 0; }
-.pp-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
-.pp-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
+.twb-progress { display: flex; align-items: center; gap: 10px; margin: 0 40px 16px 0; }
+.twb-progress-label { font-size: 0.8em; color: var(--ntw-fg-muted); white-space: nowrap; }
+.twb-progress-track { flex: 1; height: 4px; border-radius: 999px; background: var(--ntw-border);
   overflow: hidden; }
-.pp-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
+.twb-progress-fill { display: block; height: 100%; background: var(--ntw-accent);
   border-radius: 999px; transition: width .15s; }
 
-.pp-actions { margin-block-start: 22px; }
+.twb-actions { margin-block-start: 22px; }
 
-.pp-save-menu { position: absolute; top: 100%; left: 0; margin-block-start: 6px;
+.twb-save-menu { position: absolute; top: 100%; left: 0; margin-block-start: 6px;
   display: flex; flex-direction: column; gap: 2px; border: 1px solid var(--ntw-border);
   border-radius: 6px; background: var(--ntw-bg-elevated); padding: 4px; z-index: 10;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); }
-.pp-save-menu[hidden] { display: none; }
-.pp-save-menu button { border: none; background: none; text-align: left;
+.twb-save-menu[hidden] { display: none; }
+.twb-save-menu button { border: none; background: none; text-align: left;
   white-space: nowrap; }
-.pp-save-menu button:hover { background: var(--ntw-border); }
+.twb-save-menu button:hover { background: var(--ntw-border); }
 
-/* Same reasoning and colours as _ADDENDUM's #pp-fallback — see there. No textarea here:
+/* Same reasoning and colours as _ADDENDUM's #twb-fallback — see there. No textarea here:
    an acknowledgement that fails to send loses nothing the way a lost answer would for
    `ask`, since the report itself is still on screen. */
-#pp-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
+#twb-fallback { border: 1px solid var(--ntw-danger); border-radius: 6px;
   background: #fef2f2; padding: 12px 14px; margin-block-start: 12px; }
-#pp-fallback strong { color: var(--ntw-danger); }
+#twb-fallback strong { color: var(--ntw-danger); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) #pp-fallback { background: #3f1d1d; }
+  :root:not([data-theme="light"]) #twb-fallback { background: #3f1d1d; }
 }
-:root[data-theme="dark"] #pp-fallback { background: #3f1d1d; }
+:root[data-theme="dark"] #twb-fallback { background: #3f1d1d; }

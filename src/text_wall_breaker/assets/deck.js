@@ -1,7 +1,7 @@
 (function () {
   var slides = Array.prototype.slice.call(document.querySelectorAll('.deck-slide'));
-  var progressLabel = document.getElementById('pp-deck-progress-label');
-  var progressFill = document.getElementById('pp-deck-progress-fill');
+  var progressLabel = document.getElementById('twb-deck-progress-label');
+  var progressFill = document.getElementById('twb-deck-progress-fill');
   var index = 0;
   function show(next) {
     slides[index].classList.remove('is-active');
