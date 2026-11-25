@@ -6,7 +6,9 @@ from text_wall_breaker.config import Config, parse_args
 
 
 def test_no_arguments_give_the_defaults():
-    assert parse_args([]) == Config(opener=None, accent=None, log_level="info", glossary=True)
+    assert parse_args([]) == Config(
+        opener=None, accent=None, log_level="info", glossary=True, mermaid=True
+    )
 
 
 def test_every_option_is_parsed():
@@ -19,10 +21,15 @@ def test_every_option_is_parsed():
             "--log-level",
             "debug",
             "--no-glossary",
+            "--no-mermaid",
         ]
     )
     assert config == Config(
-        opener="firefox --new-tab", accent="#2563eb", log_level="debug", glossary=False
+        opener="firefox --new-tab",
+        accent="#2563eb",
+        log_level="debug",
+        glossary=False,
+        mermaid=False,
     )
 
 

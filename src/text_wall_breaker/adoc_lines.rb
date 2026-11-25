@@ -14,8 +14,9 @@ class LineConverter < Asciidoctor::Converter::Html5Converter
   # A diagram as GitLab and GitHub draw it: `[mermaid]` or `[source,mermaid]` on a listing.
   # Written as the element the page script draws; Asciidoctor itself drops the `mermaid`
   # style of a plain `[mermaid]` block, so the page could not tell it from a listing.
+  # render.py passes `no-mermaid` when the server runs with `--no-mermaid`: no diagram then.
   def mermaid?(node)
-    node.context == :listing &&
+    !ARGV.include?('no-mermaid') && node.context == :listing &&
       (node.style == 'mermaid' || (node.style == 'source' && node.attr('language') == 'mermaid'))
   end
 

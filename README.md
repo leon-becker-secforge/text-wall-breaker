@@ -99,6 +99,7 @@ checks above do. `text-wall-breaker-mcp --help` lists them.
 | `--accent #RRGGBB` | The pages' accent colour. See [Accent colour](#accent-colour). | green |
 | `--log-level LEVEL` | `debug`, `info`, `warning`, `error`, `critical`, or `off` for no log file. See [Log file](#log-file). | `info` |
 | `--no-glossary` | Don't define the project's glossary terms on `ask` pages. See [Glossary hints](docs/ask-tool.md#glossary-hints). | glossary on |
+| `--no-mermaid` | Don't draw mermaid diagrams: a mermaid fence shows as a code block, and no page loads the renderer from jsDelivr. See [Markdown subset](docs/markdown-subset.md). | diagrams on, loaded from jsDelivr |
 
 With `claude mcp add`, everything after `--` is the server's command line:
 

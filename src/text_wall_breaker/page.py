@@ -4,10 +4,11 @@ The page is otherwise self-contained: styles are inlined, and the only network t
 is the one POST back to the listener. The one deliberate exception is a page containing a
 ` ```mermaid ` fence (see `markdown.py`): it loads a pinned mermaid build from jsDelivr
 to render it, rather than vendoring the ~3.5MB bundle into this package — see
-`_MERMAID_SRC`/`_needs_mermaid`. Without that fence, nothing here ever reaches the
-network beyond the one POST. `base.css` is vendored verbatim from the
-no-text-wall skill (`assets/base.css`) for its `--ntw-*` colour tokens, which is the
-part that generalises across a long-form report and a one-question prompt. Its
+`_MERMAID_SRC`/`_needs_mermaid`. Without that fence, or with the server started with
+`--no-mermaid`, nothing here ever reaches the network beyond the one POST. `base.css` is
+vendored verbatim from the no-text-wall skill (`assets/base.css`) for its `--ntw-*` colour
+tokens, which is the part that generalises across a long-form report and a one-question
+prompt. Its
 *components* (`.card`, `.theme-toggle`, ...) do not: they are sized for report
 sections, and rendered oversized here on a first, un-reviewed pass. The addendum below
 defines text-wall-breaker's own compact components against the same tokens instead of
@@ -42,6 +43,7 @@ from .markdown import (
     WIDE_QUESTION_CHARS,
     bold_lead,
     first_paragraph,
+    mermaid_enabled,
     render_inline,
     render_markdown,
 )
@@ -860,10 +862,12 @@ def _document(template: str, values: dict[str, str]) -> str:
     if isinstance(submit_url, str):
         parts = urlsplit(submit_url)
         connect = f"{parts.scheme}://{parts.netloc}"
+    # The renderer's host is allowed only while it can be used.
+    script_src = f"script-src 'nonce-{nonce}'" + (f" {_MERMAID_SRC}" if mermaid_enabled() else "")
     policy = "; ".join(
         (
             "default-src 'none'",
-            f"script-src 'nonce-{nonce}' {_MERMAID_SRC}",
+            script_src,
             "style-src 'unsafe-inline'",
             "img-src 'self' data: blob: file:",
             f"connect-src {connect}",
@@ -1612,8 +1616,8 @@ def build_multi_page(
             "__STEP_COUNT__": str(total),
             "__STATUS_URL__": _js_string(status_url),
             "__GENERATION__": _js_string(generation),
-            "__MERMAID_SRC__": _js_string(_MERMAID_SRC),
-            "__MERMAID_INTEGRITY__": _js_string(_MERMAID_INTEGRITY),
+            "__MERMAID_SRC__": _js_string(_MERMAID_SRC if mermaid_enabled() else None),
+            "__MERMAID_INTEGRITY__": _js_string(_MERMAID_INTEGRITY if mermaid_enabled() else None),
             "__LIVE_MODE__": _js_string(live),
             "__LIVE_SCRIPT__": live_script,
             "__EXPORT_SCRIPT__": _export_script(),

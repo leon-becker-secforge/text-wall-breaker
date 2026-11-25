@@ -24,6 +24,7 @@ class Config:
     accent: str | None = None
     log_level: str = "info"
     glossary: bool = True
+    mermaid: bool = True
 
 
 # Read at call time as `config.current`, never imported by name: `server.main` replaces
@@ -71,6 +72,15 @@ def parser() -> argparse.ArgumentParser:
         action="store_false",
         help="don't define the project's glossary terms on ask pages",
     )
+    result.add_argument(
+        "--no-mermaid",
+        dest="mermaid",
+        action="store_false",
+        help=(
+            "don't draw mermaid diagrams: a mermaid fence shows as a plain code block, "
+            "and no page loads the renderer from a CDN"
+        ),
+    )
     return result
 
 
@@ -82,4 +92,5 @@ def parse_args(argv: Sequence[str] | None = None) -> Config:
         accent=namespace.accent,
         log_level=namespace.log_level,
         glossary=namespace.glossary,
+        mermaid=namespace.mermaid,
     )

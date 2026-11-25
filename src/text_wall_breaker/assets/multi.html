@@ -399,7 +399,8 @@ __STEPS__
   // Loaded on first use: a step with a diagram can arrive after the page, which only
   // loads mermaid itself when it had one from the start (see _mermaid_script).
   function renderMermaid(nodes) {
-    if (!nodes.length) return;
+    // MERMAID_SRC is null when the server runs with --no-mermaid.
+    if (!nodes.length || !MERMAID_SRC) return;
     function run() { nodes.forEach(function (el) { mermaid.run({ nodes: [el] }); }); }
     if (window.mermaid) { run(); return; }
     var script = document.createElement('script');

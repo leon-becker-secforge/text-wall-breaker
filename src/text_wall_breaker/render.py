@@ -8,7 +8,8 @@ The text is untrusted file content shown in the operator's browser: raw HTML is 
 a remote image is replaced by its alt text (opening a review makes no network request),
 and a local image is shown only if it resolves to a file inside the repository. A mermaid
 fence is the one exception to the network rule: it becomes a `<pre class="mermaid">`, and
-the page then loads the pinned renderer the way `markdown.py` describes.
+the page then loads the pinned renderer the way `markdown.py` describes. With the server
+started with `--no-mermaid` it is an ordinary code block.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ from markdown_it.renderer import RendererHTML
 from markdown_it.token import Token
 from markdown_it.utils import EnvType, OptionsDict
 
-from .markdown import image_src
+from .markdown import image_src, mermaid_enabled
 
 __all__ = ["Block", "is_renderable", "rendered_view", "split_blocks"]
 
@@ -119,7 +120,7 @@ def _mermaid_fence(
     click on the diagram still comments on the fence.
     """
     token = tokens[idx]
-    if token.info.split(maxsplit=1)[:1] != ["mermaid"]:
+    if token.info.split(maxsplit=1)[:1] != ["mermaid"] or not mermaid_enabled():
         return renderer.fence(tokens, idx, options, env)
     token.attrJoin("class", "mermaid")
     return f"<pre{renderer.renderAttrs(token)}>{escape(token.content)}</pre>\n"
@@ -277,7 +278,8 @@ def _asciidoc(
         return None
     try:
         done = subprocess.run(  # noqa: S603
-            [ruby, "-e", _ADOC_SCRIPT],
+            # The word after the script is the script's ARGV: it leaves `[mermaid]` a listing.
+            [ruby, "-e", _ADOC_SCRIPT, *([] if mermaid_enabled() else ["no-mermaid"])],
             input="\n".join(lines) + "\n",
             capture_output=True,
             text=True,

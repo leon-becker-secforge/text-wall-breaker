@@ -21,4 +21,6 @@ Before the repository is made public:
 
 - Scan the full history again: `gitleaks git .`.
 - Read `CLAUDE.md`, `docs/adr/` and `CONTEXT.md` for internal names and paths.
-- Decide whether rendering `mermaid` diagrams from a CDN is acceptable for outside users.
+- Check that the README's Options table still says `mermaid` diagrams load from jsDelivr
+  and that `--no-mermaid` turns that off. That settles whether the CDN is acceptable for
+  outside users: they can switch it off.

@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from text_wall_breaker import render as render_module
+from text_wall_breaker.config import Config
 from text_wall_breaker.render import is_renderable, rendered_view
 
 PNG = bytes.fromhex(
@@ -222,6 +223,13 @@ def test_a_mermaid_fence_in_markdown_is_a_diagram_block_with_its_lines():
     assert 'class="language-python"' in html and html.count('class="mermaid"') == 1
 
 
+def test_without_mermaid_a_markdown_fence_is_a_code_block(monkeypatch):
+    monkeypatch.setattr("text_wall_breaker.config.current", Config(mermaid=False))
+    html = _view(MERMAID_MD)
+    assert 'class="mermaid"' not in html
+    assert 'data-first="3" data-last="6" class="language-mermaid">graph TD\n  A--&gt;B\n' in html
+
+
 MERMAID_ADOC = (
     "= T\n\n[mermaid]\n----\ngraph TD\n  A-->B\n----\n\n[source,mermaid]\n----\ngraph TD\n"
     "  C-->D\n----\n\n[source,python]\n----\nprint(1)\n----"
@@ -234,6 +242,16 @@ def test_both_asciidoc_mermaid_forms_are_diagram_blocks_with_their_lines():
     assert html.count('<pre class="mermaid"') == 2
     assert 'class="mermaid" data-first="3" data-last="7">graph TD\n  A--&gt;B</pre>' in html
     assert 'class="mermaid" data-first="9" data-last="13">graph TD\n  C--&gt;D</pre>' in html
+    assert 'class="language-python"' in html
+
+
+@needs_asciidoctor
+def test_without_mermaid_both_asciidoc_forms_stay_listings(monkeypatch):
+    monkeypatch.setattr("text_wall_breaker.config.current", Config(mermaid=False))
+    html = _view(MERMAID_ADOC, "docs/a.adoc")
+    assert 'class="mermaid"' not in html
+    assert "<pre>graph TD\n  A--&gt;B</pre>" in html  # `[mermaid]` is a plain listing
+    assert 'class="language-mermaid">graph TD\n  C--&gt;D' in html  # `[source,mermaid]`
     assert 'class="language-python"' in html
 
 

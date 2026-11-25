@@ -7,6 +7,9 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ### Added
 
+- `--no-mermaid` turns diagram rendering off. A mermaid fence (and `[mermaid]` or
+  `[source,mermaid]` in AsciiDoc) is then an ordinary code block, no page loads the
+  renderer from jsDelivr, and no page's Content Security Policy names that host.
 - On a live-capable `ask` page, each row of a ranking question's ordered list and each
   tier chip has a thought bubble, in the gutter beside the row (on the corner of a chip).
   A press opens the discussion about that option, as it does for a choice option.

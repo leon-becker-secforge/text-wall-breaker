@@ -18,6 +18,7 @@ A ` ```mermaid ` fence is the one exception to "no network fetch but the one POS
 page.py's module docstring): it's escaped and wrapped the same way any other fence is
 here, but page.py loads a mermaid renderer from a CDN — not vendored — to draw it. See
 `page.py`'s `_needs_mermaid`/`_MERMAID_SRC` for why and the tradeoff that came with it.
+With the server started with `--no-mermaid` the fence is an ordinary code block.
 
 Raw HTML in the source is never passed through — every run of source text is escaped
 before any tag this module emits is added, so a `<script>` in a question becomes visible
@@ -560,6 +561,14 @@ def _render_block(blocks: _Blocks, lines: list[str], index: int) -> int:
     return index + 1
 
 
+def mermaid_enabled() -> bool:
+    """False when the server runs with `--no-mermaid`: a mermaid fence is then a code block."""
+    # Imported here: config imports page, which imports this module.
+    from . import config
+
+    return config.current.mermaid
+
+
 def _render_fence(language: str, body: list[str], asset_base_url: str | None) -> str:
     if language == "diff":
         return _render_diff_block(body)
@@ -568,7 +577,7 @@ def _render_fence(language: str, body: list[str], asset_base_url: str | None) ->
         # `[data-role="verdict"]` style.
         inner = "<br>".join(render_inline(line, asset_base_url=asset_base_url) for line in body)
         return f'<div data-role="verdict">{inner}</div>'
-    if language == "mermaid":
+    if language == "mermaid" and mermaid_enabled():
         # Drawn client-side by page.py's mermaid loader, which only a page with one of
         # these gets (see _needs_mermaid there). mermaid.run() reads the escaped source
         # back through .textContent, which un-escapes it.

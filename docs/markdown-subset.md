@@ -25,10 +25,15 @@ page's own resolved theme, at load; it does not follow the in-page toggle afterw
 A diagram is drawn when it is first on screen, so one on a page or slide that starts
 hidden is not drawn until it is shown.
 
+Start the server with `--no-mermaid` to turn diagrams off. A mermaid fence is then an
+ordinary code block, no page loads the renderer, and no page's Content Security Policy
+names jsDelivr.
+
 The rendered view of a Markdown or AsciiDoc file in `review` draws diagrams the same way:
 a ` ```mermaid ` fence in Markdown, and `[mermaid]` or `[source,mermaid]` on a listing in
 AsciiDoc, the forms GitLab and GitHub draw. A comment on a diagram lands on the lines of
-its fence. A review page without such a diagram still makes no network request.
+its fence. A review page without such a diagram still makes no network request. With
+`--no-mermaid` both forms are plain listings there too.
 
 Raw HTML is never passed through. Every run of source text is escaped before any tag is
 added, so a `<script>` in a question appears as visible text. Rendering happens in Python

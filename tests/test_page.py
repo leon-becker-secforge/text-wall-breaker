@@ -10,7 +10,9 @@ from importlib import resources
 
 import pytest
 
+from text_wall_breaker import config
 from text_wall_breaker import page as page_module
+from text_wall_breaker.config import Config
 from text_wall_breaker.page import (
     InvalidAccent,
     ReviewNote,
@@ -1089,6 +1091,20 @@ def test_mermaid_is_loaded_with_subresource_integrity(name):
     assert tag
     assert 'integrity="sha384-' in tag.group(0)
     assert 'crossorigin="anonymous"' in tag.group(0)
+
+
+@pytest.mark.parametrize("name", ["ask", "multi", "show", "deck", "review"])
+def test_without_mermaid_no_page_names_the_renderer_host_or_draws_a_diagram(name, monkeypatch):
+    monkeypatch.setattr(config, "current", Config(mermaid=False))
+    html = _every_page()[name]
+    assert "jsdelivr" not in html and "<script" in html  # the page script is still there
+    assert 'class="mermaid"' not in html
+    assert (
+        "script-src 'nonce-" in _csp(html)
+        and "http" not in _csp(html).split("script-src")[1].split(";")[0]
+    )
+    if name != "review":  # a review page shows a diff of a.md, not the fence
+        assert 'data-language="mermaid"' in html
 
 
 def test_the_wizard_loads_mermaid_with_subresource_integrity_too():
