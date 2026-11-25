@@ -5,6 +5,8 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-25
+
 ### Fixed
 
 - Ctrl/Cmd+Enter in the live panel's input no longer also moves the wizard to the next
