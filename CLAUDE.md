@@ -7,8 +7,8 @@ Calling `mcp__text-wall-breaker__ask`/`show` again after an edit still exercises
 code.
 
 To check the *current* state of the code without restarting the MCP connection, and
-without publishing anything externally (no Artifact tool — see memory
-`feedback-no-artifact-uploads`):
+without publishing anything externally (never upload local content to an outside service,
+Artifact tool included, unless Operator asks for a shareable page):
 
 1. Run a **fresh subprocess** against the venv, not the running MCP server:
    ```bash
