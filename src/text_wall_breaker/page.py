@@ -368,8 +368,9 @@ def _render_review_row(
     return (
         f'<div class="twb-review-row-wrap" data-path="{escaped_path}" '
         f'data-side="{side}" data-line="{line}">'
+        # No aria-label: the row's name is its own text, so it matches what is visible.
         f'<div class="twb-review-row {row.kind}" role="button" tabindex="0" '
-        'aria-label="Select this line to comment">'
+        'aria-description="Select this line to comment">'
         f'<span class="twb-review-gutter">{old}</span>'
         f'<span class="twb-review-gutter">{new}</span>'
         f'<span class="twb-review-text">{text_html}</span>'
@@ -1343,7 +1344,12 @@ def build_page(
 def _question_html(question: str, asset_base_url: str | None) -> tuple[str, str]:
     """The question's HTML and the class marking a long one, so only its lead stays bold."""
     if len(first_paragraph(question)) <= LONG_QUESTION_CHARS:
-        return render_markdown(question, asset_base_url=asset_base_url), ""
+        rendered = render_markdown(question, asset_base_url=asset_base_url)
+        # ask.css already styles a short question's first block as its title; this makes
+        # it one for a screen reader's heading navigation.
+        if rendered.startswith("<p>"):
+            rendered = '<p role="heading" aria-level="1">' + rendered[3:]
+        return rendered, ""
     leading = bold_lead(question) or question
     return render_markdown(leading, asset_base_url=asset_base_url), " twb-long"
 
@@ -1394,8 +1400,10 @@ def _render_step(index: int, spec: dict[str, object], asset_base_url: str | None
 
 
 _RANK_MOVES = (
-    '<button type="button" class="twb-rank-move" data-move="-1" aria-label="{up}">&#8593;</button>'
-    '<button type="button" class="twb-rank-move" data-move="1" aria-label="{down}">&#8595;</button>'
+    '<button type="button" class="twb-rank-move" data-move="-1" '
+    'aria-label="{up}"{by}>&#8593;</button>'
+    '<button type="button" class="twb-rank-move" data-move="1" '
+    'aria-label="{down}"{by}>&#8595;</button>'
 )
 
 
@@ -1417,6 +1425,13 @@ def _render_rank(
     def label(option_id: str) -> str:
         # Inline Markdown, as an option label of a pick question renders.
         return render_inline(str(by_id[option_id].get("label", "")), asset_base_url=asset_base_url)
+
+    def label_id(option_id: str) -> str:
+        return f"twb-rk{index}-{ids.index(option_id)}"
+
+    def moves(option_id: str, up: str, down: str) -> str:
+        # The buttons are named "Move up"; the item's label, their description, says which.
+        return _RANK_MOVES.format(up=up, down=down, by=f' aria-describedby="{label_id(option_id)}"')
 
     if not isinstance(rank, list):
         sent = prefill.get("order")
@@ -1456,9 +1471,10 @@ def _render_rank(
                 f'data-option-id="{html.escape(option_id, quote=True)}">'
                 '<span class="twb-rank-grip" aria-hidden="true">&#10303;</span>'
                 '<span class="twb-rank-pos" aria-hidden="true"></span>'
-                f'<div class="twb-rank-text"><div class="twb-option-label">{label(option_id)}</div>'
-                f"{body_html}{caveat_html}</div>"
-                + _RANK_MOVES.format(up="Move up", down="Move down")
+                '<div class="twb-rank-text">'
+                f'<div class="twb-option-label" id="{label_id(option_id)}">'
+                f"{label(option_id)}</div>{body_html}{caveat_html}</div>"
+                + moves(option_id, "Move up", "Move down")
                 + "</li>"
             )
         return f'  <ol class="twb-rank" data-step="{index}">\n' + "\n".join(items) + "\n  </ol>"
@@ -1480,8 +1496,8 @@ def _render_rank(
         chips = "".join(
             f'<span class="twb-tier-chip" draggable="true" '
             f'data-option-id="{html.escape(option_id, quote=True)}">'
-            f'<span class="twb-option-label">{label(option_id)}</span>'
-            + _RANK_MOVES.format(up="Move up a tier", down="Move down a tier")
+            f'<span class="twb-option-label" id="{label_id(option_id)}">{label(option_id)}</span>'
+            + moves(option_id, "Move up a tier", "Move down a tier")
             + "</span>"
             for option_id in members[name]
         )

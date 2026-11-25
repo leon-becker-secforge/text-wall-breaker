@@ -37,6 +37,9 @@ details.twb-header[open] > summary::before { transform: rotate(90deg); }
 .twb-step.twb-step-active { display: block; }
 .twb-step .twb-question { margin: 0 0 10px; }
 .twb-step .twb-free-text { margin: 10px 0 16px; }
+/* Text for a screen reader only; out of the layout. */
+.twb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+  white-space: nowrap; }
 
 /* Rank questions (page.py's _render_rank). Ordered list: a row per option, numbered by
    a counter so a move only reorders nodes. Tiers: a row per tier, chips inside. A list

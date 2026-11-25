@@ -14,7 +14,10 @@ __CSS__
 
 __HEADER__
   <div class="twb-progress">
-    <span class="twb-progress-label" id="twb-progress-label">__INITIAL_LABEL__</span>
+    <span class="twb-progress-label" id="twb-progress-label" role="progressbar"
+          aria-label="Progress" aria-valuemin="1" aria-valuemax="__STEP_COUNT__"
+          aria-valuenow="1" aria-valuetext="__INITIAL_LABEL__">__INITIAL_LABEL__</span>
+    <span class="twb-sr" id="twb-announce" role="status"></span>
     <span class="twb-segments" id="twb-segments">__SEGMENTS__</span>
   </div>
 
@@ -25,7 +28,7 @@ __STEPS__
       <button type="button" id="twb-stop">Stop here</button>
       <button type="button" id="twb-stop-undo" hidden>never mind</button>
       <div class="twb-actions-end">
-        <span id="twb-status"></span>
+        <span id="twb-status" role="status"></span>
         <button type="button" id="twb-stop-send" hidden disabled>Stop and send</button>
         <button type="button" id="twb-back" disabled>Back</button>
         <button type="button" id="twb-next" disabled>__INITIAL_NEXT_LABEL__</button>
@@ -170,6 +173,19 @@ __STEPS__
     // What moves: an option, or an ordered list's cut line, which moves like a row.
     var MOVABLE = tiered ? '[data-option-id]' : '.twb-rank-item, .twb-rank-cut';
     var dragged = null;
+    // A move is spoken: the new position is a CSS counter, which a screen reader never reads.
+    var announce = document.getElementById('twb-announce');
+    function describeMove(item) {
+      var name = item.classList.contains('twb-rank-cut')
+        ? 'Cut line' : item.querySelector('.twb-option-label').textContent.trim();
+      if (tiered) return name + ' moved to ' + (item.closest('.twb-tier').dataset.tier || 'Unsorted');
+      var rows = Array.prototype.slice.call(widget.children);
+      var cut = rows.findIndex(function (r) { return r.classList.contains('twb-rank-cut'); });
+      var at = rows.indexOf(item);
+      if (item === rows[cut]) return name + ' moved: ' + cut + ' kept, ' + (rows.length - cut - 1) + ' left out';
+      if (at > cut) return name + ' moved below the cut line, left out';
+      return name + ' moved to position ' + (at + 1) + ' of ' + cut;
+    }
     function clearDrop() {
       widget.querySelectorAll('.twb-drop').forEach(function (n) { n.classList.remove('twb-drop'); });
     }
@@ -193,6 +209,7 @@ __STEPS__
       var shown = getComputedStyle(same);
       if (shown.visibility !== 'hidden' && shown.display !== 'none') same.focus();
       else item.querySelector('.twb-rank-move:not([data-move="' + btn.dataset.move + '"])').focus();
+      announce.textContent = describeMove(item);
       refresh();
     });
     widget.addEventListener('dragstart', function (e) {
@@ -377,6 +394,8 @@ __STEPS__
     if (frozen) return;
     var last = current === STEP_COUNT - 1;
     progressLabel.textContent = 'Question ' + (current + 1) + ' of ' + STEP_COUNT;
+    progressLabel.setAttribute('aria-valuenow', current + 1);
+    progressLabel.setAttribute('aria-valuetext', progressLabel.textContent);
     syncSegments();
     var skipping = !stepAnswered(current);
     nextBtn.textContent = last ? (skipping ? 'Skip and send' : 'Send answers')

@@ -422,7 +422,44 @@ def test_a_rank_label_renders_inline_markdown_like_a_pick_label():
         questions=[{"question": "q", "rank": True, "options": [{"id": "a", "label": "`x` **y**"}]}],
         submit_url=_SUBMIT,
     )
-    assert '<div class="twb-option-label"><code>x</code> <strong>y</strong></div>' in html
+    assert (
+        '<div class="twb-option-label" id="twb-rk0-0"><code>x</code> <strong>y</strong></div>'
+        in html
+    )
+
+
+def test_a_rank_move_button_is_described_by_its_items_label():
+    options = [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]
+    html = build_multi_page(
+        questions=[
+            {"question": "q", "rank": True, "options": options},
+            {"question": "q", "rank": ["Now"], "options": options},
+        ],
+        submit_url=_SUBMIT,
+    )
+    # Row "b" of the ordered list (question 0) and chip "a" of the tiers (question 1).
+    assert 'id="twb-rk0-1"' in html and 'aria-label="Move up" aria-describedby="twb-rk0-1"' in html
+    assert 'id="twb-rk1-0"' in html and 'aria-describedby="twb-rk1-0"' in html
+
+
+def test_a_short_question_leads_with_a_heading_and_a_long_one_does_not():
+    def ask(question: str) -> str:
+        return build_page(
+            question=question,
+            options=[],
+            multi_select=False,
+            allow_free_text=True,
+            submit_url=_SUBMIT,
+        )
+
+    short = ask("**Pick one**")
+    assert '<p role="heading" aria-level="1"><strong>Pick one</strong></p>' in short
+    assert 'role="heading"' not in ask("Which of these should we do first, given the cost? " * 10)
+
+
+def test_the_status_text_is_a_live_region_on_every_page():
+    for html in (_page(), _multi_page(), build_show_page(content="x"), _every_page()["review"]):
+        assert '<span id="twb-status" role="status">' in html
 
 
 def test_caveat_comes_before_a_short_inline_body():
@@ -461,7 +498,10 @@ def test_multi_page_renders_every_question():
 
 def test_multi_page_shows_a_shared_progress_label_and_one_segment_per_question():
     body = _body(_multi_page())
-    assert 'id="twb-progress-label">Question 1 of 2<' in body
+    assert 'id="twb-progress-label" role="progressbar"' in body
+    assert (
+        'aria-valuemax="2"' in body and 'aria-valuetext="Question 1 of 2">Question 1 of 2<' in body
+    )
     # Starts on question 1: its segment is current, and none is enabled (going back needs
     # a question to go back to).
     assert body.count('<button type="button" class="twb-seg') == 2

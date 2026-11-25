@@ -20,6 +20,14 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
   about this option.`, and the `re: <label>` chip is gone from the chat and above the
   input, where a long label overflowed it. The `live` tool's `option` and `question`
   fields are unchanged.
+- Screen-reader fixes after a Lighthouse audit; no page looks different:
+  - A diff row in `review` is named by its own text and described by "Select this line to
+    comment", instead of every row sharing that label.
+  - A ranking item's move buttons are described by the item's label, and a move is
+    announced ("Option A moved to position 2 of 3", "... moved to Later").
+  - A short question's first line is a heading.
+  - The status text beside the buttons is a live region, and the wizard's "Question 1 of 3"
+    is a progress bar.
 
 ## [0.23.0] - 2026-11-24
 
