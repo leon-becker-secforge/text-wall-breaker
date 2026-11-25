@@ -78,18 +78,42 @@ def test_a_message_about_an_option_reaches_the_agent_with_the_option():
 def test_a_message_naming_an_unknown_option_is_kept_without_it():
     _, live = make()
     chat(live, "hm", {"question": 0, "option": "zzz"})
-    chat(live, "hm", {"question": 7, "option": "a"})
     chat(live, "hm", "not a dict")
-    assert call(live)["messages"] == [{"chat": "hm"}] * 3
+    assert call(live)["messages"] == [{"chat": "hm"}] * 2
+
+
+def test_a_message_naming_an_unknown_question_is_rejected():
+    _, live = make()
+    assert chat(live, "hm", {"question": 7, "option": "a"})[0] == 400
+    _, several = make([("first", {"a"}), (None, {"b"})])
+    assert chat(several, "hm")[0] == 400
+    assert chat(several, "hm", {"option": "a"})[0] == 400
 
 
 def test_with_several_questions_the_agent_gets_the_id_or_the_position():
     _, live = make([("first", {"a"}), (None, {"b"})])
     chat(live, "x", {"question": 0, "option": "a"})
     chat(live, "y", {"question": 1, "option": "b"})
+    chat(live, "z", {"question": 1})
     assert call(live)["messages"] == [
         {"chat": "x", "option": "a", "question": "first"},
         {"chat": "y", "option": "b", "question": 1},
+        {"chat": "z", "question": 1},
+    ]
+
+
+def test_the_page_poll_binds_each_message_to_its_question_and_keeps_the_label():
+    _, live = make([("first", {"a"}), (None, {"b"})])
+    chat(live, "x", {"question": 1, "option": "b", "label": " Bee "})
+    call(
+        live,
+        replies=[Reply(to="1", text="ok"), Reply(to="first", text="hi")],
+        wait=False,
+    )
+    assert [(m["from"], m["q"], m.get("label")) for m in live.poll(restore=False)["chat"]] == [
+        ("operator", 1, "Bee"),
+        ("agent", 1, None),
+        ("agent", 0, None),
     ]
 
 
@@ -111,6 +135,14 @@ def test_replies_appear_in_the_page_poll_and_only_the_chat_is_addressable():
         call(live, replies=[Reply(to="t1", text="x")], wait=False)
 
 
+def test_with_several_questions_a_reply_names_its_question():
+    _, live = make([("first", {"a"}), (None, {"b"})])
+    for to in ("chat", "t1", "2"):
+        with pytest.raises(LiveError, match="per question"):
+            call(live, replies=[Reply(to=to, text="x")], wait=False)
+    assert live.poll(restore=False)["chat"] == []
+
+
 def test_the_session_ends_with_the_ask_result_and_the_transcript():
     session, live = make(build_result=lambda submission: {"kind": submission.kind})
     chat(live, "q?")
@@ -121,6 +153,23 @@ def test_the_session_ends_with_the_ask_result_and_the_transcript():
     assert session_module.live_for(live.id) is None
     with pytest.raises(LiveError, match="ended or never existed"):
         call(live)
+
+
+def test_the_transcript_of_several_questions_is_grouped_by_question():
+    _, live = make([("first", {"a"}), (None, {"b"}), ("quiet", {"c"})])
+    chat(live, "y", {"question": 1, "option": "b"})
+    call(live, replies=[Reply(to="1", text="ok"), Reply(to="first", text="hi")], wait=False)
+    live.on_submission(Submission(kind="submit", data={}))
+    assert call(live)["chat"] == [
+        {"question": "first", "messages": [{"from": "agent", "text": "hi"}]},
+        {
+            "question": 1,
+            "messages": [
+                {"from": "operator", "text": "y", "option": "b"},
+                {"from": "agent", "text": "ok"},
+            ],
+        },
+    ]
 
 
 def test_a_silent_tab_ends_the_session_as_abandoned():

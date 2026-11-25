@@ -5,6 +5,11 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+### Fixed
+
+- Ctrl/Cmd+Enter in the live panel's input no longer also moves the wizard to the next
+  question or sends the answer.
+
 ### Added
 
 - `--no-mermaid` turns diagram rendering off. A mermaid fence (and `[mermaid]` or
@@ -16,6 +21,19 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ### Changed
 
+- A live `ask` has one chat per question. The panel shows the chat of the question on
+  screen, switches with the step, names that question and its step in the header, and
+  keeps what was typed for each. A message from the input names its question, not only
+  one from a bubble. With `questions`, a `live` message always carries `question`, a
+  reply goes `to` a question's `id` (its position from 0 when it has none) and `"chat"`
+  stays for a single question, and the result's `chat` is a list of
+  `{"question", "messages"}`, one per question that has messages. A message about an
+  option the agent has since replaced stays in its chat, with the option quoted struck
+  through.
+- The live panel is redrawn: chat bubbles (yours right, the agent's left), typing dots
+  while the agent works on your last message, an input that grows with its text with an
+  icon send button, Enter to send and Shift+Enter for a new line. Its text says "the
+  agent" instead of "Claude".
 - The thought bubble's first message is `Tell me about “<label>”.` instead of `Tell me
   about this option.`, and the `re: <label>` chip is gone from the chat and above the
   input, where a long label overflowed it. The `live` tool's `option` and `question`

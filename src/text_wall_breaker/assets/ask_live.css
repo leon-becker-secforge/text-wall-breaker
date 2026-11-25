@@ -53,8 +53,12 @@
   #twb-live-panel { position: static; width: auto; margin-top: 16px; }
   .twb-live-list { max-height: 260px; }
 }
-.twb-live-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+.twb-live-head { display: flex; align-items: center; gap: 8px; padding: 9px 12px 2px;
   font-weight: 600; cursor: pointer; user-select: none; }
+.twb-live-step { margin-left: auto; font-weight: 400; font-size: .85em; color: var(--ntw-fg-muted); }
+/* The question the thread belongs to; one line, the full text on hover. */
+.twb-live-subject { padding: 0 12px 6px; color: var(--ntw-fg-muted); font-size: .88em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .twb-live-ring { width: 10px; height: 10px; border-radius: 50%; flex: none; box-sizing: border-box;
   border: 2px solid var(--ntw-accent); animation: twb-live-pulse 1.2s ease-in-out infinite; }
 @keyframes twb-live-pulse { 50% { opacity: .25; } }
@@ -65,24 +69,54 @@
 #twb-live-panel[data-state="ended"] .twb-live-ring { animation: none; border-color: var(--ntw-fg-muted); }
 .twb-live-status { padding: 0 12px 8px; color: var(--ntw-fg-muted); font-size: .92em; }
 #twb-live-panel[data-state="silent"] .twb-live-status { color: var(--twb-live-amber); }
-.twb-live-list { flex: 1; min-height: 40px; overflow: auto; padding: 4px 12px;
-  border-top: 1px solid var(--ntw-border); }
-.twb-live-msg { padding: 7px 0; border-top: 1px solid var(--ntw-border); }
-.twb-live-msg:first-child { border-top: 0; }
-.twb-live-who { font-weight: 600; font-size: .85em; }
-.twb-live-who.agent { color: var(--ntw-accent); }
+.twb-live-list { flex: 1; min-height: 40px; overflow: auto; padding: 10px 12px;
+  border-top: 1px solid var(--ntw-border); display: flex; flex-direction: column; gap: 10px; }
+/* Chat bubbles: the operator's on the right in the accent colour, the agent's on the left. */
+.twb-live-msg { max-width: 86%; }
+.twb-live-msg.op { align-self: flex-end; }
+.twb-live-msg.ag { align-self: flex-start; }
+.twb-live-who { font-size: .75em; color: var(--ntw-fg-muted); margin: 0 4px 2px; }
+.twb-live-msg.op .twb-live-who { text-align: right; }
+.twb-live-bubble { padding: 8px 12px; border-radius: 14px; }
+.twb-live-msg.op .twb-live-bubble { background: var(--ntw-accent); color: var(--ntw-accent-contrast);
+  border-bottom-right-radius: 4px; }
+.twb-live-msg.ag .twb-live-bubble { background: var(--ntw-verdict-bg); border: 1px solid var(--ntw-border);
+  border-bottom-left-radius: 4px; }
+/* An option the agent has replaced since the message was sent, quoted struck through. */
+.twb-live-gone { display: flex; gap: 6px; align-items: baseline; margin-bottom: 4px; font-size: .8em;
+  opacity: .85; min-width: 0; }
+.twb-live-gone s { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .twb-live-text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .twb-live-text.md { white-space: normal; }
 .twb-live-text.md > :first-child { margin-top: 0; }
 .twb-live-text.md > :last-child { margin-bottom: 0; }
-.twb-live-in { display: flex; gap: 6px; padding: 8px 12px 12px; }
-.twb-live-in textarea { flex: 1; font: inherit; min-height: 2.4em; padding: 6px 8px;
-  border-radius: 6px; border: 1px solid var(--ntw-border); background: var(--ntw-bg);
-  color: var(--ntw-fg); resize: vertical; }
-.twb-live-send { align-self: flex-end; height: 2.1em; padding: 0 12px; border-radius: 6px;
-  cursor: pointer; font: inherit; font-size: .85em; border: 1px solid var(--ntw-accent);
-  background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
-.twb-live-send:disabled { opacity: .5; cursor: default; }
-#twb-live-panel.is-folded .twb-live-status, #twb-live-panel.is-folded .twb-live-list,
-#twb-live-panel.is-folded .twb-live-in { display: none; }
+.twb-live-dots { display: inline-flex; gap: 4px; align-items: center; height: 1.2em; }
+.twb-live-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--ntw-fg-muted);
+  animation: twb-live-dot 1.2s ease-in-out infinite; }
+.twb-live-dots i:nth-child(2) { animation-delay: .15s; }
+.twb-live-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes twb-live-dot { 0%, 60%, 100% { opacity: .25; transform: none; }
+  30% { opacity: 1; transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) {
+  .twb-live-dots i, .twb-live-ring { animation: none; }
+}
+/* Composer: a prompt line with a square icon button; the field grows with its text. */
+.twb-live-in { display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-top: 1px solid var(--ntw-border); }
+.twb-live-in:focus-within { box-shadow: inset 0 2px 0 var(--ntw-accent); }
+.twb-live-prompt { color: var(--ntw-accent); font: 700 1.2em ui-monospace, monospace; }
+.twb-live-in textarea { flex: 1; min-width: 0; font: inherit; color: var(--ntw-fg); background: transparent;
+  border: 0; outline: 0; resize: none; padding: 5px 0; max-height: 120px; box-sizing: border-box; }
+.twb-live-in textarea::placeholder { color: var(--ntw-fg-muted); }
+.twb-live-send { flex: none; width: 30px; height: 30px; padding: 0; border-radius: 6px; cursor: pointer;
+  display: grid; place-items: center; border: 1px solid var(--ntw-border); background: var(--ntw-bg-elevated);
+  color: var(--ntw-accent); }
+.twb-live-send:not(:disabled):hover, .twb-live-send:focus-visible { background: var(--ntw-accent);
+  color: var(--ntw-accent-contrast); }
+.twb-live-send:disabled { opacity: .35; cursor: default; }
+.twb-live-hint { padding: 0 12px 10px; font-size: .78em; color: var(--ntw-fg-muted); }
+#twb-live-panel.is-folded .twb-live-subject, #twb-live-panel.is-folded .twb-live-status,
+#twb-live-panel.is-folded .twb-live-list, #twb-live-panel.is-folded .twb-live-in,
+#twb-live-panel.is-folded .twb-live-hint { display: none; }
+#twb-live-panel.is-folded .twb-live-head { padding-bottom: 9px; }
 @media (min-width: 1672px) { #twb-live-panel.is-folded { bottom: auto; } }

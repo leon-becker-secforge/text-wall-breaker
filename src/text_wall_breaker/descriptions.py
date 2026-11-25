@@ -138,14 +138,15 @@ Returns `{"messages": [...]}`, what the user sent since your last call:
   - `{"thread": id, "path", "side", "line", "context", "text"}`: a new thread on lines
     (same fields as a review comment); `{"thread": id, "text"}`: a reply in it.
   - `{"chat": text}`: a request about the whole change; in an `ask` session also
-    `option`, and `question` (its `id`, else position from 0, with `questions`), when the
-    user asked about one option.
+    `option` when the user asked about one option, and with `questions` always `question`
+    (its `id`, else position from 0).
   - `{"resolved": id}` / `{"reopened": id}`.
 With `wait=false` it posts and returns at once: `{"posted": true, "messages": [...]}`.
 Acknowledge a request that way, do the work, then call again.
 
 Review sessions only: `refresh`, `git_range`, `paths`, `pages` and `notes` as on `review`.
-Reply to a thread id or to "chat"; an `ask` session has the chat only. An `ask` session
+Reply to a thread id or to "chat"; an `ask` session has one chat per question: "chat" for
+one question, else the question's `id` (or position from 0). An `ask` session
 with one question can replace `question` and `options`: the page reloads, and the result
 has `"refreshed": {"dropped_picks": [...]}`, the option ids the user had picked that are
 gone.

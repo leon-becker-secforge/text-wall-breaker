@@ -3,7 +3,7 @@
 See ADR 0005 and CONTEXT.md's "Live session". The page talks to this through its own
 `SessionListener` (`POST /submit` with kind "live", `GET /live`), the agent through `live`
 calls, each running `LiveAsk.call` in a worker thread. The chat is the only exchange: one
-per page, each message optionally about one option. The operator ends the session by
+per question, each message optionally about one option. The operator ends the session by
 sending the answer, cancelling or closing the tab, and the call that sees the end returns
 the result a plain `ask` returns.
 """
@@ -32,11 +32,13 @@ __all__ = ["ASK_ATTACH_INSTRUCTION", "LiveAsk"]
 
 ASK_ATTACH_INSTRUCTION = (
     "Live ask: call live(session) now and keep calling it until it returns the answer. "
-    "Each call returns the operator's new messages; answer with replies to chat. Use "
-    "wait=false to acknowledge before long work."
+    "Each call returns the operator's new messages; answer with replies to chat (with "
+    "several questions, to the question's id or position). Use wait=false to acknowledge "
+    "before long work."
 )
 
 _MAX_MESSAGE_CHARS = 20_000
+_MAX_LABEL_CHARS = 200
 
 # What `LiveAsk` needs to republish the page after the agent replaced the question or its
 # options: given the new question and options (None: unchanged), it returns the page
@@ -115,32 +117,42 @@ class LiveAsk(LiveBase):
                 return 400, {"error": "empty message"}
             text = text.strip()[:_MAX_MESSAGE_CHARS]
             ref = self._reference(data.get("ref"))
-            self._chat.append({"from": "operator", "text": text, **ref})
-            self._inbox.append({"chat": text, **ref})
+            if ref is None:
+                return 400, {"error": "unknown question"}
+            index, option, label = ref
+            entry: dict[str, Any] = {"from": "operator", "text": text, "q": index}
+            inbox: dict[str, Any] = {"chat": text}
+            if option is not None:
+                entry["option"] = inbox["option"] = option
+                if label:
+                    entry["label"] = label
+            if len(self._questions) > 1:
+                inbox["question"] = self._questions[index][0] or index
+            self._chat.append(entry)
+            self._inbox.append(inbox)
             self._version += 1
             self._cond.notify_all()
             return 200, {}
 
-    def _reference(self, raw: object) -> dict[str, Any]:
-        """The option a message is about, if the page named a known one.
-
-        The page names the question by its position. With several questions the agent
-        gets the question's id, or its position (from 0) when it has none.
-        """
+    def _reference(self, raw: object) -> tuple[int, str | None, str] | None:
+        """The question a message belongs to, the option it is about (if the page named a
+        known one) and that option's label as the page showed it; None for an unknown
+        question. The page names the question by its position. A single-question ask
+        needs no reference: its one question is the default. The agent gets the question's
+        id, or its position (from 0) when it has none, only with several questions."""
+        single = len(self._questions) == 1
         if not isinstance(raw, dict):
-            return {}
-        index = raw.get("question", 0)
-        option = raw.get("option")
+            return (0, None, "") if single else None
+        index = raw.get("question", 0 if single else None)
         if not isinstance(index, int) or isinstance(index, bool):
-            return {}
-        if not 0 <= index < len(self._questions) or not isinstance(option, str):
-            return {}
-        question_id, option_ids = self._questions[index]
-        if option not in option_ids:
-            return {}
-        if len(self._questions) == 1:
-            return {"option": option}
-        return {"option": option, "question": question_id or index}
+            return None
+        if not 0 <= index < len(self._questions):
+            return None
+        option = raw.get("option")
+        if not isinstance(option, str) or option not in self._questions[index][1]:
+            return index, None, ""
+        label = raw.get("label")
+        return index, option, label.strip()[:_MAX_LABEL_CHARS] if isinstance(label, str) else ""
 
     def on_progress(self, data: dict[str, Any]) -> None:
         """The listener keeps the answers so far for `resume`; nothing more to do here."""
@@ -176,10 +188,9 @@ class LiveAsk(LiveBase):
                 raise LiveError("another live call is already waiting on this session")
             if self._final is not None or self._abandoned:
                 return self._finish(refresh_dropped=update is not None)
-            for reply in request.replies:
-                self._check_reply(reply)
-            for reply in request.replies:
-                self._post(reply)
+            targets = [self._reply_target(reply) for reply in request.replies]
+            for reply, index in zip(request.replies, targets, strict=True):
+                self._post(reply, index)
             self._busy = True
             self._since = time.monotonic()
             self._version += 1
@@ -207,25 +218,52 @@ class LiveAsk(LiveBase):
             self._version += 1
         return dropped
 
-    @staticmethod
-    def _check_reply(reply: Reply) -> None:
+    def _reply_target(self, reply: Reply) -> int:
+        """The question a reply answers: its id or position, or "chat" with one question."""
         if not reply.text.strip():
             raise LiveError("a reply needs text")
-        if reply.to != "chat":
-            raise LiveError('a live ask has one chat: reply to "chat"')
+        if len(self._questions) == 1:
+            if reply.to != "chat":
+                raise LiveError('a live ask with one question has one chat: reply to "chat"')
+            return 0
+        for index, (question_id, _) in enumerate(self._questions):
+            if reply.to == question_id:
+                return index
+        if reply.to.isdecimal() and int(reply.to) < len(self._questions):
+            return int(reply.to)
+        raise LiveError(
+            "a live ask has one chat per question: reply to a question's id, or its "
+            "position from 0 when it has none"
+        )
 
-    def _post(self, reply: Reply) -> None:
+    def _post(self, reply: Reply, index: int) -> None:
         text = reply.text.strip()
-        self._chat.append({"from": "agent", "text": text, "html": render_markdown(text)})
+        self._chat.append(
+            {"from": "agent", "text": text, "html": render_markdown(text), "q": index}
+        )
+
+    def _transcript(self) -> list[dict[str, Any]]:
+        """Every message, without the page's own fields: flat for one question, grouped
+        by question (its id, else position) for several."""
+        flat = [
+            {k: v for k, v in message.items() if k not in ("html", "q", "label")}
+            for message in self._chat
+        ]
+        if len(self._questions) == 1:
+            return flat
+        groups: list[dict[str, Any]] = []
+        for index, (question_id, _) in enumerate(self._questions):
+            messages = [m for m, raw in zip(flat, self._chat, strict=True) if raw["q"] == index]
+            if messages:
+                groups.append({"question": question_id or index, "messages": messages})
+        return groups
 
     def _finish(self, *, refresh_dropped: bool = False) -> dict[str, Any]:
         result = self._build_result(self._final)
         if refresh_dropped:
             result["refresh_dropped"] = True
         if self._chat:
-            result["chat"] = [
-                {k: v for k, v in message.items() if k != "html"} for message in self._chat
-            ]
+            result["chat"] = self._transcript()
         self._done = True
         self._session.live = None
         self._session.end_question()

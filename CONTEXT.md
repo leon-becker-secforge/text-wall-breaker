@@ -147,8 +147,8 @@ _Avoid_: question (belongs to `ask`), query, discussion
 
 **Chat**:
 The one exchange of a live session not tied to a line, for requests about the whole
-change. In a live `ask` it is the only exchange: one per page, and a message may name the
-option it is about.
+change. In a live `ask` it is the only exchange: one per question, and a message may name
+the option it is about.
 _Avoid_: overall note (the report's remark, written once)
 
 **Reply**:

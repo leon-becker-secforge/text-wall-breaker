@@ -77,9 +77,14 @@ Each option has a thought bubble, shown while the pointer is over the option or 
 has focus (always on a touch screen). So has each row of a ranking question's ordered list
 and each of its tier chips; the question keeps its own bubble for the order as a whole. A
 question without options has one beside the question. A press is the question: it opens a
-side panel with one chat and sends `Tell me about “<label>”.` (or `Tell me about this
+side panel with the question's chat and sends `Tell me about “<label>”.` (or `Tell me about this
 question.`) at once, so the agent answers without the user typing. What the user types
-afterwards is a follow-up; it names no option. The user still sends the answer with the page's own buttons.
+afterwards is a follow-up to the question on screen; it names no option. Enter sends it and
+Shift+Enter starts a new line; neither moves the wizard on. The user still sends the answer
+with the page's own buttons.
+
+Each question has its own chat. The panel shows the chat of the question on screen, names
+that question and its step in the header, and switches when the user changes step.
 
 A session starts in one of two ways, as for a review:
 
@@ -88,28 +93,31 @@ A session starts in one of two ways, as for a review:
 - The agent passes `live: true` to `ask`, which returns the same as soon as the page has
   loaded.
 
-The agent then calls `live` in a loop, with `replies` addressed to `"chat"`. A call
-returns what the user sent since the last one:
+The agent then calls `live` in a loop, with `replies` addressed to `"chat"`. With
+`questions`, a reply goes `to` a question's `id`, or its position from 0 when it has none,
+and `"chat"` is refused. A call returns what the user sent since the last one:
 
 ```json
 {"messages": [{"chat": "Does B survive a crash?", "option": "b"}]}
 ```
 
 In this example, `chat` is the user's message and `option` is the option it is about.
-`option` is absent when the user writes to the chat without naming one. With `questions`, a message about an option also
-has `question`: the question's `id`, or its position from 0 when it has none.
+`option` is absent when the user writes to the chat without naming one. With `questions`,
+every message has `question`: the question's `id`, or its position from 0 when it has none.
 
 Only the user ends a session, by sending the answer, cancelling or closing the tab. The
 call that receives the end returns the `ask` result (`cancelled` and `abandoned` as
 above), plus `chat`: every message of the session, each
-`{"from": "operator" | "agent", "text"}`. A call that had to open its own tab cannot be
+`{"from": "operator" | "agent", "text"}`. With `questions`, `chat` is a list of
+`{"question", "messages"}`, one per question that has messages. A call that had to open its own tab cannot be
 live: its page has no bubble, and `live: true` fails.
 
 An ask with one question can change its options while the session runs. A `live` call
 with `options` (all of them, replacing the old ones) and optionally a new `question`
 reloads the page. The user's pick and typed text stay where the option id still exists. The
 call returns `"refreshed": {"dropped_picks": ["a"]}`, in this example the option id `a`
-was picked and no longer exists. `question` and `options` fail for an ask with
+was picked and no longer exists. The chat stays; a message about an option that no longer
+exists shows it as quoted and struck through. `question` and `options` fail for an ask with
 `questions`.
 
 The panel uses the page's text size. On a viewport 1672 px wide or more, it sits in the

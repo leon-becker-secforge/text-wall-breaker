@@ -457,6 +457,8 @@ __FREE_TEXT__
   });
 
   document.addEventListener('keydown', function (event) {
+    // The live discussion's box sends its message with Enter; it never submits the answer.
+    if (event.target.closest && event.target.closest('[data-twb-no-shortcuts]')) return;
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
       form.requestSubmit();
@@ -474,7 +476,7 @@ __FREE_TEXT__
   window.twbAsk = {
     liveMode: __LIVE_MODE__, submitUrl: SUBMIT_URL, statusUrl: STATUS_URL,
     collect: collect, send: send, isFrozen: function () { return frozen; }, liveStarted: false,
-    generation: GENERATION
+    generation: GENERATION, currentStep: function () { return 0; }, stepCount: 1, onStep: null
   };
 }());
 </script>
