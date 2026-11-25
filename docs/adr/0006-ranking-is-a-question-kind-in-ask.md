@@ -37,8 +37,9 @@ Consequences:
   sorted into a tier, or free text.
 - `multi_select`, `selected` and `recommended` are rejected on a ranking question,
   since they have no meaning there.
-- A live discussion cannot be started from a ranking item: the thought bubble sits on
-  choice options only.
+- A live discussion can be started from a ranking row or a tier chip: each carries a
+  thought bubble, as a choice option does, and the message the bubble sends names the
+  option.
 
 Rejected:
 

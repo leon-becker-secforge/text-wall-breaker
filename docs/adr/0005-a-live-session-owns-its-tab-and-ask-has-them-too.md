@@ -40,6 +40,6 @@ Rejected:
 
 - **One live session at a time, as for review.** A discussion would hold the shared tab
   and block other calls.
-- **Threads per option, as a review has per line.** One chat with an option chip carries
-  the same information with less to manage.
+- **Threads per option, as a review has per line.** One chat whose bubble message names
+  the option carries the same information with less to manage.
 - **Letting the agent end the session.** An answer is always the operator's own.

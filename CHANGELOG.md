@@ -5,6 +5,19 @@ documented here. The format follows [Keep a Changelog](https://keepachangelog.co
 
 ## [Unreleased]
 
+### Added
+
+- On a live-capable `ask` page, each row of a ranking question's ordered list and each
+  tier chip has a thought bubble, in the gutter beside the row (on the corner of a chip).
+  A press opens the discussion about that option, as it does for a choice option.
+
+### Changed
+
+- The thought bubble's first message is `Tell me about “<label>”.` instead of `Tell me
+  about this option.`, and the `re: <label>` chip is gone from the chat and above the
+  input, where a long label overflowed it. The `live` tool's `option` and `question`
+  fields are unchanged.
+
 ## [0.23.0] - 2026-11-24
 
 ### Changed

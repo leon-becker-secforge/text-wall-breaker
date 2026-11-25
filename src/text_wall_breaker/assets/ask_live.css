@@ -8,19 +8,33 @@
 .twb-live-ask svg { width: 1.5em; height: 1.5em; }
 .twb-live-ask:hover { background: var(--ntw-border); }
 .twb-option:hover .twb-live-ask, .twb-option:focus-within .twb-live-ask,
+.twb-rank-item:hover > .twb-live-ask, .twb-rank-item:focus-within > .twb-live-ask,
+.twb-tier-chip:hover > .twb-live-ask, .twb-tier-chip:focus-within > .twb-live-ask,
 .twb-live-ask:focus-visible, .twb-question:hover .twb-live-ask { opacity: 1; }
 @media (hover: none) { .twb-live-ask { opacity: 1; } }
-.twb-option { position: relative; }
+.twb-option, .twb-rank-item, .twb-tier-chip { position: relative; }
 /* Beside the card, in the gutter where the question's bubble is, so the row's right edge
    stays the Recommended tag's and the Details pill's. The strip keeps the card hovered
    while the pointer crosses the gap to the bubble. A narrow window has no gutter: the
    bubble then takes a slot inside the row. */
 @media (min-width: 700px) {
   .twb-option .twb-live-ask { right: -38px; top: 4px; z-index: 1; }  /* above the strip */
-  .twb-option::after { content: ""; position: absolute; top: 0; bottom: 0; right: -44px;
-    width: 44px; }
+  /* Lower than an option's bubble: below the question's own bubble, which a one-line
+     question would otherwise touch. */
+  .twb-rank-item > .twb-live-ask { right: -38px; top: 9px; z-index: 1; }
+  .twb-option::after, .twb-rank-item::after { content: ""; position: absolute; top: 0;
+    bottom: 0; right: -44px; width: 44px; }
 }
-@media (max-width: 699px) { .twb-option .twb-option-select { padding-right: 40px; } }
+@media (max-width: 699px) {
+  .twb-option .twb-option-select, .twb-rank-item { padding-right: 40px; }
+}
+/* A tier chip has no gutter: its bubble sits on the chip's top-left corner, round, so it
+   reads as part of the chip and does not widen the row of chips. The right corner is
+   the move arrow's. .twb-tier clips overflow and .twb-tier-items pads 8px, so the bubble
+   may stick out of the chip by less than that. */
+.twb-tier-chip > .twb-live-ask { top: -6px; left: -8px; right: auto; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--ntw-bg-elevated); border: 1px solid var(--ntw-border);
+  z-index: 1; }
 .twb-question { position: relative; }
 /* Below the theme toggle and the export icon, which fill the corner above it. */
 .twb-question .twb-live-ask { top: 30px; right: -36px; }
@@ -61,10 +75,6 @@
 .twb-live-text.md { white-space: normal; }
 .twb-live-text.md > :first-child { margin-top: 0; }
 .twb-live-text.md > :last-child { margin-bottom: 0; }
-.twb-live-chip { display: inline-block; margin: 0 0 3px; padding: 0 7px; border-radius: 999px;
-  font-size: .7em; border: 1px solid var(--ntw-accent); color: var(--ntw-accent); }
-.twb-live-ref { padding: 8px 12px 0; border-top: 1px solid var(--ntw-border); }
-.twb-live-ref .twb-live-chip { cursor: pointer; }
 .twb-live-in { display: flex; gap: 6px; padding: 8px 12px 12px; }
 .twb-live-in textarea { flex: 1; font: inherit; min-height: 2.4em; padding: 6px 8px;
   border-radius: 6px; border: 1px solid var(--ntw-border); background: var(--ntw-bg);
@@ -74,5 +84,5 @@
   background: var(--ntw-accent); color: var(--ntw-accent-contrast); }
 .twb-live-send:disabled { opacity: .5; cursor: default; }
 #twb-live-panel.is-folded .twb-live-status, #twb-live-panel.is-folded .twb-live-list,
-#twb-live-panel.is-folded .twb-live-ref, #twb-live-panel.is-folded .twb-live-in { display: none; }
+#twb-live-panel.is-folded .twb-live-in { display: none; }
 @media (min-width: 1672px) { #twb-live-panel.is-folded { bottom: auto; } }

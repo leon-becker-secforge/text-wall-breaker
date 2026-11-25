@@ -404,6 +404,22 @@ def test_the_multi_question_page_is_live_too():
     assert "twb-live-panel" in html and 'liveMode: "offer"' in html and "__LIVE" not in html
 
 
+def test_a_live_ranking_page_has_a_bubble_on_rows_and_chips_and_no_option_chip():
+    options = [{"id": "a", "label": "A"}, {"id": "b", "label": "B"}]
+    html = build_multi_page(
+        questions=[
+            {"question": "q", "options": options, "rank": True},
+            {"question": "q", "options": options, "rank": ["Now", "Later"]},
+        ],
+        submit_url="http://127.0.0.1:1/submit?t=x",
+        status_url="http://127.0.0.1:1/status?t=x",
+        live="offer",
+    )
+    assert "'.twb-rank-item, .twb-tier-chip'" in html and ".twb-rank-item > .twb-live-ask" in html
+    # The first message names the option itself; no "re:" chip repeats it.
+    assert "twb-live-chip" not in html and "twb-live-ref" not in html and "'re: '" not in html
+
+
 @pytest.mark.parametrize(
     "extra", [{"refresh": True}, {"git_range": "HEAD"}, {"paths": []}, {"pages": []}, {"notes": []}]
 )

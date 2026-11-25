@@ -74,11 +74,12 @@ applied and the result contains `"refresh_dropped": true`.
 
 A live `ask` lets the user question the agent before answering, with the page kept open.
 Each option has a thought bubble, shown while the pointer is over the option or the option
-has focus (always on a touch screen). A question without options has one beside the
-question. A press is the question: it opens a side panel with one chat and sends "Tell me
-about this option." (or "...this question.") at once, so the agent answers without the user
-typing. What the user types afterwards is a follow-up. The user still sends the answer with
-the page's own buttons.
+has focus (always on a touch screen). So has each row of a ranking question's ordered list
+and each of its tier chips; the question keeps its own bubble for the order as a whole. A
+question without options has one beside the question. A press is the question: it opens a
+side panel with one chat and sends `Tell me about “<label>”.` (or `Tell me about this
+question.`) at once, so the agent answers without the user typing. What the user types
+afterwards is a follow-up; it names no option. The user still sends the answer with the page's own buttons.
 
 A session starts in one of two ways, as for a review:
 

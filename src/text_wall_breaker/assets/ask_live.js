@@ -15,7 +15,6 @@
   var joinedOnce = false;
   var timer = null;
   var queue = [];         // messages typed before the session existed
-  var ref = null;         // {question, option, label}, what the next message is about
 
   function el(tag, cls, text) {
     var e = document.createElement(tag);
@@ -35,8 +34,6 @@
   var status = el('div', 'twb-live-status');
   var list = el('div', 'twb-live-list');
   list.setAttribute('aria-live', 'polite');
-  var refBox = el('div', 'twb-live-ref');
-  refBox.hidden = true;
   var inRow = el('div', 'twb-live-in');
   var box = el('textarea');
   box.rows = 2;
@@ -45,7 +42,7 @@
   sendBtn.type = 'button';
   inRow.appendChild(box);
   inRow.appendChild(sendBtn);
-  [head, status, list, refBox, inRow].forEach(function (n) { panel.appendChild(n); });
+  [head, status, list, inRow].forEach(function (n) { panel.appendChild(n); });
   // Inside <main>: on a narrow viewport the panel flows under the form, in its column.
   (document.querySelector('main') || document.body).appendChild(panel);
   head.addEventListener('click', function () { panel.classList.toggle('is-folded'); });
@@ -69,7 +66,6 @@
     var wrap = el('div', 'twb-live-msg');
     wrap.appendChild(el('div', 'twb-live-who' + (m.from === 'agent' ? ' agent' : ''),
       m.from === 'agent' ? 'Claude' : 'You'));
-    if (m.label) wrap.appendChild(el('span', 'twb-live-chip', 're: ' + m.label));
     var text = el('div', 'twb-live-text' + (m.html ? ' md' : ''));
     if (m.html) text.innerHTML = m.html; else text.textContent = m.text;
     wrap.appendChild(text);
@@ -105,7 +101,7 @@
   // exists; the next poll brings the server's copy, and `pending` drops this one.
   function enqueue(text, target) {
     var entry = {
-      from: 'operator', text: text, label: target ? target.label : null,
+      from: 'operator', text: text,
       ref: target ? { question: target.question, option: target.option } : null
     };
     pending.push(entry);
@@ -130,25 +126,13 @@
   function submitMessage() {
     var text = box.value.trim();
     if (!text || state === 'ended') return;
-    enqueue(text, ref);
+    enqueue(text, null);
     box.value = '';
-    clearRef();
   }
   sendBtn.addEventListener('click', submitMessage);
   box.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitMessage(); }
   });
-
-  function setRef(next) {
-    ref = next;
-    refBox.hidden = false;
-    refBox.textContent = '';
-    var chip = el('span', 'twb-live-chip', 're: ' + next.label + ' ×');
-    chip.title = 'Click to remove';
-    chip.addEventListener('click', clearRef);
-    refBox.appendChild(chip);
-  }
-  function clearRef() { ref = null; refBox.hidden = true; }
 
   // ---- polling ----
   async function poll() {
@@ -164,9 +148,7 @@
     if (!body || !body.session) return;
     if (body.generation !== A.generation) { reloadForRefresh(); return; }
     ready = true;
-    render((body.chat || []).map(function (m) {
-      return m.from === 'operator' ? Object.assign({ label: labelFor(m) }, m) : m;
-    }));
+    render(body.chat || []);
     flush();
     if (body.ended) { setState('ended'); stop(); return; }
     if (body.agent.waiting) { joinedOnce = true; setState('joined'); }
@@ -202,44 +184,37 @@
     if (free && draft.free_text) { free.value = draft.free_text; free.dispatchEvent(new Event('input', { bubbles: true })); }
     box.value = draft.typed || '';
   }
-  function labelFor(m) {
-    // The server names the option by id; the page shows the option's own label.
-    if (!m.option) return null;
-    var input = document.querySelector('input[data-option-id="' + CSS.escape(m.option) + '"]');
-    return input ? labelOf(input) : m.option;
-  }
   function start() { if (timer === null) { poll(); timer = setInterval(poll, POLL_MS); } }
   function stop() { if (timer !== null) { clearInterval(timer); timer = null; } }
 
-  function open(next) {
+  function open() {
     panel.hidden = false;
     panel.classList.remove('is-folded');
-    if (next) setRef(next);
     box.focus();
   }
 
   // ---- entry: the bubble ----
-  function labelOf(input) {
-    var row = input.closest('.twb-option');
-    var label = row && row.querySelector('.twb-option-label');
-    if (!label) return input.dataset.optionId;
+  // `node` is an option row, a ranking row or a tier chip: whatever holds the label. The
+  // whole label goes into the message, so two options sharing a prefix stay apart in the chat.
+  function labelOf(node, id) {
+    var label = node.querySelector('.twb-option-label');
     // The label holds the Recommended tag and Details pill; their text is not the name.
     var text = label.cloneNode(true);
     var tags = text.querySelector('.twb-option-tags');
     if (tags) tags.remove();
-    return text.textContent.trim().split(':')[0];
+    return text.textContent.trim() || id;  // an image-only label has no text
   }
   // A press on a bubble is the question: it sends one at once, so the agent answers
-  // without the operator typing. What is typed afterwards is a follow-up on the same option.
+  // without the operator typing. The text names the option, since the chat has no other
+  // marker of what it is about; the server gets the option's id in `ref`.
   function askNow(next) {
-    enqueue(next ? 'Tell me about this option.' : 'Tell me about this question.', next);
-    clearRef();  // the sent message carries the "re:" chip; a second one would repeat it
+    enqueue(next ? 'Tell me about “' + next.label + '”.' : 'Tell me about this question.', next);
   }
   async function begin(next) {
-    if (state !== 'offer') { open(next); askNow(next); return; }
+    if (state !== 'offer') { open(); askNow(next); return; }
     A.liveStarted = true;
     setState('calling');
-    open(next);
+    open();
     askNow(next);  // drawn now, sent once the session exists
     if (!(await A.send('live_start', A.collect()))) {
       A.liveStarted = false;
@@ -268,9 +243,18 @@
     Array.prototype.forEach.call(rows, function (row) {
       var input = row.querySelector('input[data-option-id]');
       if (!input) return;
-      var label = labelOf(input);
+      var label = labelOf(row, input.dataset.optionId);
       row.appendChild(bubble(function () {
         begin({ question: index, option: input.dataset.optionId, label: label });
+      }, 'Ask Claude about ' + label));
+    });
+    // A ranking row or tier chip carries its option id itself; the question keeps its own
+    // bubble too, for the order as a whole.
+    var ranked = scope.querySelectorAll('.twb-rank-item, .twb-tier-chip');
+    Array.prototype.forEach.call(ranked, function (node) {
+      var label = labelOf(node, node.dataset.optionId);
+      node.appendChild(bubble(function () {
+        begin({ question: index, option: node.dataset.optionId, label: label });
       }, 'Ask Claude about ' + label));
     });
     // A question without options has no row to hang the bubble on.
@@ -284,7 +268,7 @@
   if (A.liveMode === 'on') {
     A.liveStarted = true;
     setState('calling');
-    open(null);
+    open();
     start();
   } else {
     setState('offer');
