@@ -37,11 +37,11 @@ Three more documents cover what applies to several tools and to the project:
 
 - [Markdown subset](docs/markdown-subset.md): what a page renders and how images and links resolve.
 - [How a call works](docs/how-a-call-works.md): the loopback listener, the shared tab and timeouts.
-- [Developing](docs/developing.md): running the tests and the checks before going public.
+- [Developing](docs/developing.md): running the tests.
 
 ## Installing
 
-Both ways below run it with [uv](https://docs.astral.sh/uv/), which also fetches a fitting
+Every way below runs it with [uv](https://docs.astral.sh/uv/), which also fetches a fitting
 Python: 3.13.6 or newer, since older releases have CVE-2025-6069 (a slowdown in the HTML
 parser that renders `review`'s AsciiDoc view). A checkout runs on the version in
 `.python-version`, the newest stable one. `review` with `repo` needs git 2.40 or newer.
@@ -56,8 +56,21 @@ Or straight from the Git repository, with no checkout (a tag pins a release):
 
 ```bash
 claude mcp add text-wall-breaker \
-  -- uvx --from git+ssh://git@github.com/leon-becker-secforge/text-wall-breaker.git@v0.24.0 text-wall-breaker-mcp
+  -- uvx --from git+https://github.com/leon-becker-secforge/text-wall-breaker.git@v0.24.0 text-wall-breaker-mcp
 ```
+
+Or from the wheel attached to the
+[release](https://github.com/leon-becker-secforge/text-wall-breaker/releases/tag/v0.24.0),
+which installs the build CI made and needs no git:
+
+```bash
+claude mcp add text-wall-breaker \
+  -- uvx --from https://github.com/leon-becker-secforge/text-wall-breaker/releases/download/v0.24.0/text_wall_breaker-0.24.0-py3-none-any.whl text-wall-breaker-mcp
+```
+
+With an SSH key registered on GitHub,
+`git+ssh://git@github.com/leon-becker-secforge/text-wall-breaker.git` works in
+place of the `git+https` address.
 
 It is not published to PyPI: the name `text-wall-breaker` is not reserved there for this
 project.
@@ -165,3 +178,11 @@ The server writes `text-wall-breaker.log` under `$XDG_STATE_HOME/text-wall-break
 the opener's command and exit status, each page's delivery and each timeout, and a
 `not_delivered` result names it. It is rotated at server start once past 1 MB, keeping two backups.
 `--log-level` sets how much it records; `--log-level off` keeps no log.
+
+## Contributing
+
+The project welcomes bug reports and ideas as
+[issues](https://github.com/leon-becker-secforge/text-wall-breaker/issues). A report
+should name the text-wall-breaker version, the operating system and the browser.
+The repository has pull requests turned off. Report a security issue privately, as
+described in [SECURITY.md](SECURITY.md).

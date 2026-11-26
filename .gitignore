@@ -14,3 +14,6 @@ htmlcov/
 
 # Local-only: points at an absolute, machine-specific path under dist/.
 .mcp.json
+
+# Personal agent instructions; CLAUDE.md holds the shared ones.
+CLAUDE.local.md
